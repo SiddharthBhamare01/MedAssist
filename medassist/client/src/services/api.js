@@ -5,9 +5,17 @@ const api = axios.create({
   timeout: 120000, // 2 min — agents can take time
 });
 
-// Attach JWT to every request if available
+// Attach JWT to every request from localStorage
 api.interceptors.request.use((config) => {
-  // Token stored in AuthContext — passed via custom header by callers
+  try {
+    const stored = localStorage.getItem('medassist_auth');
+    if (stored) {
+      const { token } = JSON.parse(stored);
+      if (token) config.headers.Authorization = `Bearer ${token}`;
+    }
+  } catch {
+    // ignore parse errors
+  }
   return config;
 });
 
