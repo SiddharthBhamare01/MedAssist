@@ -35,26 +35,25 @@
 > Goal: Full working login/register with JWT and role-based redirect
 
 **Backend**
-- [ ] `server/controllers/authController.js` — `register()` function (hash password, insert user + profile, return JWT)
-- [ ] `server/controllers/authController.js` — `login()` function (verify email/password, return JWT)
-- [ ] `server/middleware/auth.js` — JWT verification middleware (`req.user`)
-- [ ] `server/routes/auth.js` — wire up POST `/register` and POST `/login`
-- [ ] `server/models/queries.js` — `createUser()`, `findUserByEmail()`, `createPatientProfile()`, `createDoctorProfile()`
-- [ ] Test register (patient) with Postman → verify JWT returned
-- [ ] Test register (doctor) with Postman → verify doctor profile saved
-- [ ] Test login with wrong password → verify 401 returned
+- [ ] `server/controllers/authController.js` — `register()` + `login()` functions (logic placed directly in routes instead of a separate controller file)
+- [x] `server/middleware/auth.js` — JWT verification middleware (`req.user`) ✅
+- [x] `server/routes/auth.js` — wire up POST `/register` and POST `/login` ✅
+- [ ] `server/models/queries.js` — `createPatientProfile()`, `createDoctorProfile()` (created `models/User.js` with `findByEmail()` + `createUser()` instead; profile creation deferred to Day 3)
+- [x] Test register (patient) with curl → JWT returned, user saved to Supabase ✅
+- [ ] Test register (doctor) → doctor profile saved (doctor profile creation not yet implemented)
+- [x] Test login with wrong password → 401 returned ✅
 
 **Frontend**
-- [ ] `client/src/pages/Auth/Register.jsx` — full form: name, email, password, role toggle (Patient/Doctor), doctor-only fields (specialization, hospital, city)
-- [ ] `client/src/pages/Auth/Login.jsx` — email + password form
-- [ ] `client/src/services/authService.js` — `register()`, `login()` API calls
-- [ ] Update `AuthContext.jsx` — store `{ token, userId, role, name }` on login
-- [ ] Update Axios interceptor in `api.js` — attach `Authorization: Bearer <token>` header
-- [ ] `PrivateRoute.jsx` — redirect to `/login` if no token or wrong role
-- [ ] Login redirects: patient → `/patient/intake`, doctor → `/doctor/dashboard`
-- [ ] Logout clears auth state and redirects to `/login`
-- [ ] Form validation with inline error messages
-- [ ] Test: register → login → redirect works for both roles
+- [x] `client/src/pages/Auth/Register.jsx` — full form: name, email, password, role toggle (Patient/Doctor) ✅ (doctor-only fields like specialization/hospital deferred to Day 3/10)
+- [x] `client/src/pages/Auth/Login.jsx` — email + password form ✅
+- [ ] `client/src/services/authService.js` — API calls made directly from components; separate service file not created
+- [x] Update `AuthContext.jsx` — store `{ token, id, email, role, name }` + localStorage persistence ✅
+- [x] Update Axios interceptor in `api.js` — attach `Authorization: Bearer <token>` header ✅
+- [x] `PrivateRoute.jsx` — redirect to `/login` if no token or wrong role ✅ (was scaffolded Day 1, verified working)
+- [x] Login redirects: patient → `/patient/intake`, doctor → `/doctor/dashboard` ✅
+- [x] Logout clears auth state and redirects to `/login` ✅
+- [x] Form validation with inline error messages (HTML5 + react-hot-toast) ✅
+- [x] Test: register → login → redirect works for both roles ✅
 
 ---
 
@@ -350,7 +349,7 @@
 | Day | Focus | Done |
 |-----|-------|------|
 | 1 | Scaffold + DB | 20/20 DONE |
-| 2 | Auth system | 0/14 |
+| 2 | Auth system | 11/14 ✅ (3 deferred: authController, doctor profile, authService.js) |
 | 3 | Symptom intake | 0/11 |
 | 4 | Diagnostic Agent | 0/13 |
 | 5 | Results + SSE UI | 0/11 |
