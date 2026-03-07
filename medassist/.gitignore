@@ -1,0 +1,71 @@
+# ===========================
+# Dependencies
+# ===========================
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# ===========================
+# Environment & Secrets (NEVER commit)
+# ===========================
+.env
+.env.local
+.env.production
+server/.env
+server/.env.local
+client/.env
+client/.env.local
+
+# ===========================
+# User Uploads (blood report images)
+# ===========================
+server/uploads/*
+!server/uploads/.gitkeep
+
+# ===========================
+# Build Outputs
+# ===========================
+client/dist/
+client/build/
+
+# ===========================
+# Logs
+# ===========================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+
+# ===========================
+# OS Files
+# ===========================
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ===========================
+# IDE & Editor
+# ===========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*.suo
+.project
+
+# ===========================
+# Package Lock (keep one, ignore the other)
+# ===========================
+# Uncomment if using yarn:
+# package-lock.json
+
+# ===========================
+# Misc
+# ===========================
+.cache/
+.parcel-cache/
+*.tsbuildinfo

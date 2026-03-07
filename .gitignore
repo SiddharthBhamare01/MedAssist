@@ -1,0 +1,35 @@
+# ===========================
+# Project Root Ignores
+# ===========================
+
+# Word/temp files (from project proposal docs)
+~$*.doc
+~$*.docx
+~$*.xlsx
+details.txt
+
+# Dependencies
+node_modules/
+medassist/client/node_modules/
+medassist/server/node_modules/
+
+# Environment & Secrets
+.env
+*.env
+medassist/server/.env
+medassist/client/.env
+
+# Build outputs
+medassist/client/dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
