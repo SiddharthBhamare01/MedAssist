@@ -485,8 +485,10 @@ export default function Intake() {
     setLoading(true);
     try {
       const { data } = await api.post('/disease/predict', { symptoms });
-      toast.success('Symptoms submitted! Running diagnosis…');
-      navigate('/patient/results', { state: { sessionId: data.sessionId } });
+      toast.success('Diagnosis complete!');
+      navigate('/patient/results', {
+        state: { sessionId: data.sessionId, diseases: data.diseases, turns: data.turns },
+      });
     } catch (err) {
       toast.error(err.message);
     } finally {
