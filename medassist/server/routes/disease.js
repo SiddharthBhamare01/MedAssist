@@ -1,8 +1,9 @@
 const router = require('express').Router();
 const verifyToken = require('../middleware/auth');
-const { createSymptomSession } = require('../models/patientQueries');
+const { createSymptomSession, getPatientProfile } = require('../models/patientQueries');
+const { runDiagnosticAgent } = require('../agents/diagnosticAgent');
 
-// POST /api/disease/predict — saves session; real Diagnostic Agent added Day 4
+// POST /api/disease/predict — runs Gemini Diagnostic Agent
 router.post('/predict', verifyToken, async (req, res) => {
   const { symptoms } = req.body;
 
@@ -11,16 +12,24 @@ router.post('/predict', verifyToken, async (req, res) => {
   }
 
   try {
+    // Create session first so we have an ID
     const session = await createSymptomSession(req.user.userId, symptoms);
-    // Day 4 will run the Gemini Diagnostic Agent here and return real diseases
-    res.json({
-      sessionId: session.id,
-      status: 'pending',
-      message: 'Session created. Diagnostic Agent coming Day 4.',
+    const sessionId = session.id;
+
+    // Fetch patient profile for personalised diagnosis
+    const patientProfile = await getPatientProfile(req.user.userId);
+
+    // Run Diagnostic Agent (Gemini multi-turn with ICD tool calls)
+    const { diseases, steps, turns } = await runDiagnosticAgent({
+      sessionId,
+      symptoms,
+      patientProfile,
     });
+
+    res.json({ sessionId, diseases, agentSteps: steps, turns });
   } catch (err) {
-    console.error('Predict error:', err);
-    res.status(500).json({ error: 'Failed to create session' });
+    console.error('Diagnostic agent error:', err);
+    res.status(500).json({ error: 'Diagnostic agent failed. Please try again.' });
   }
 });
 

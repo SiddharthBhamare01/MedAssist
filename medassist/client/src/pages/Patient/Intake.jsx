@@ -126,7 +126,8 @@ function TagInput({ label, tags, onChange, placeholder }) {
 
 // ── Step 1: Basic Info ────────────────────────────────────────────────────────
 function Step1({ onNext, defaultValues }) {
-  const { register, handleSubmit, formState: { errors } } = useForm({ defaultValues });
+  const { register, handleSubmit, formState: { errors }, watch } = useForm({ defaultValues });
+  const selectedBloodGroup = watch('bloodGroup');
 
   return (
     <form onSubmit={handleSubmit(onNext)} className="space-y-5">
@@ -187,14 +188,15 @@ function Step1({ onNext, defaultValues }) {
           {BLOOD_GROUPS.map((bg) => (
             <label key={bg} className="cursor-pointer">
               <input type="radio" value={bg} {...register('bloodGroup')} className="sr-only" />
-              <span className={`px-3 py-1.5 border-2 rounded-lg text-sm font-medium transition-colors cursor-pointer
-                peer-checked:border-blue-600`}>
+              <span className={`px-3 py-1.5 border-2 rounded-lg text-sm font-medium transition-all cursor-pointer select-none
+                ${selectedBloodGroup === bg
+                  ? 'border-blue-600 bg-blue-600 text-white'
+                  : 'border-gray-200 text-gray-600 hover:border-blue-400 hover:text-blue-600'}`}>
                 {bg}
               </span>
             </label>
           ))}
         </div>
-        {/* blood group radio — use watch for highlight; simple version without watch */}
       </div>
 
       <div className="flex justify-end pt-2">

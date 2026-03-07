@@ -68,4 +68,23 @@ async function getSymptomSession(sessionId) {
   return rows[0] || null;
 }
 
-module.exports = { getPatientProfile, upsertPatientProfile, createSymptomSession, getSymptomSession };
+async function updateSessionDiseases(sessionId, diseases) {
+  await pool.query(
+    'UPDATE symptom_sessions SET predicted_diseases = $1 WHERE id = $2',
+    [JSON.stringify(diseases), sessionId]
+  );
+}
+
+async function saveAgentLog({ sessionId, agentName, steps, totalTurns }) {
+  await pool.query(
+    `INSERT INTO agent_logs (session_id, agent_name, steps, total_turns)
+     VALUES ($1, $2, $3, $4)`,
+    [sessionId, agentName, JSON.stringify(steps), totalTurns]
+  );
+}
+
+module.exports = {
+  getPatientProfile, upsertPatientProfile,
+  createSymptomSession, getSymptomSession,
+  updateSessionDiseases, saveAgentLog,
+};
