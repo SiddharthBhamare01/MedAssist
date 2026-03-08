@@ -45,4 +45,22 @@ router.put('/profile', verifyToken, async (req, res) => {
   }
 });
 
+// GET /api/patient/sessions — recent symptom sessions for the logged-in patient
+router.get('/sessions', verifyToken, async (req, res) => {
+  try {
+    const { rows } = await require('../db/pool').query(
+      `SELECT id, symptoms, predicted_diseases, selected_disease, recommended_tests, created_at
+       FROM symptom_sessions
+       WHERE patient_id = $1
+       ORDER BY created_at DESC
+       LIMIT 10`,
+      [req.user.userId]
+    );
+    res.json({ sessions: rows });
+  } catch (err) {
+    console.error('Get sessions error:', err);
+    res.status(500).json({ error: 'Failed to fetch sessions' });
+  }
+});
+
 module.exports = router;

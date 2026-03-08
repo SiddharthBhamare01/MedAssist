@@ -95,17 +95,20 @@ Please analyse these symptoms, look up ICD-10 codes for each suspected disease, 
   }
 
   // Save diseases to symptom_sessions
-  await pool.query(
-    'UPDATE symptom_sessions SET predicted_diseases = $1 WHERE id = $2',
-    [JSON.stringify(diseases), sessionId]
-  );
-
-  // Save agent audit log
-  await pool.query(
-    `INSERT INTO agent_logs (session_id, agent_name, steps, total_turns)
-     VALUES ($1, $2, $3, $4)`,
-    [sessionId, 'diagnosticAgent', JSON.stringify(steps), turns]
-  );
+  try {
+    await pool.query(
+      'UPDATE symptom_sessions SET predicted_diseases = $1 WHERE id = $2',
+      [JSON.stringify(diseases), sessionId]
+    );
+    await pool.query(
+      `INSERT INTO agent_logs (session_id, agent_name, steps, total_turns)
+       VALUES ($1, $2, $3, $4)`,
+      [sessionId, 'diagnosticAgent', JSON.stringify(steps), turns]
+    );
+  } catch (dbErr) {
+    console.error('[diagnosticAgent] DB save error:', dbErr.message);
+    // Don't throw — agent result is still valid even if DB write fails
+  }
 
   emitter.emit('done', { diseases });
   return { diseases, steps, turns };

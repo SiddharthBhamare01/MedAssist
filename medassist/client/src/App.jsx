@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
 import Navbar from './components/Layout/Navbar';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Auth pages
 import Login from './pages/Auth/Login';
@@ -23,13 +24,20 @@ import DoctorAssist from './pages/Doctor/Assist';
 function Layout({ children }) {
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Skip-to-content for keyboard users */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:bg-blue-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:text-sm focus:font-semibold"
+      >
+        Skip to main content
+      </a>
       <Navbar />
-      <div className="max-w-6xl mx-auto px-4 py-6">
-        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800 text-center">
+      <main id="main-content" className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800 text-center" role="note">
           This application is an educational CS 595 project and is NOT a substitute for professional medical advice.
         </div>
-        {children}
-      </div>
+        <ErrorBoundary>{children}</ErrorBoundary>
+      </main>
     </div>
   );
 }

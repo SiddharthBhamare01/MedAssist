@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS symptom_sessions (
   symptoms JSONB NOT NULL,
   predicted_diseases JSONB,
   selected_disease VARCHAR(255),
-  recommended_tests TEXT[],
+  recommended_tests JSONB,
   created_at TIMESTAMP DEFAULT NOW()
 );
 

@@ -57,28 +57,32 @@ export default function Register() {
 
         <h2 className="text-xl font-semibold text-gray-800 mb-6">Create your account</h2>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" aria-label="Create account form">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+            <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
             <input
+              id="fullName"
               type="text"
               name="fullName"
               value={form.fullName}
               onChange={handleChange}
               required
+              autoComplete="name"
               placeholder="John Doe"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label htmlFor="regEmail" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input
+              id="regEmail"
               type="email"
               name="email"
               value={form.email}
               onChange={handleChange}
               required
+              autoComplete="email"
               placeholder="you@example.com"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
@@ -111,27 +115,31 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <label htmlFor="regPassword" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <input
+              id="regPassword"
               type="password"
               name="password"
               value={form.password}
               onChange={handleChange}
               required
               minLength={6}
+              autoComplete="new-password"
               placeholder="Min. 6 characters"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
             <input
+              id="confirmPassword"
               type="password"
               name="confirmPassword"
               value={form.confirmPassword}
               onChange={handleChange}
               required
+              autoComplete="new-password"
               placeholder="••••••••"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
@@ -140,6 +148,7 @@ export default function Register() {
           <button
             type="submit"
             disabled={loading}
+            aria-busy={loading}
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-lg transition-colors mt-2"
           >
             {loading ? 'Creating account…' : 'Create Account'}

@@ -83,8 +83,15 @@ async function saveAgentLog({ sessionId, agentName, steps, totalTurns }) {
   );
 }
 
+async function updateSessionTests(sessionId, tests) {
+  await pool.query(
+    'UPDATE symptom_sessions SET recommended_tests = $1::jsonb WHERE id = $2',
+    [JSON.stringify(tests), sessionId]
+  );
+}
+
 module.exports = {
   getPatientProfile, upsertPatientProfile,
   createSymptomSession, getSymptomSession,
-  updateSessionDiseases, saveAgentLog,
+  updateSessionDiseases, saveAgentLog, updateSessionTests,
 };

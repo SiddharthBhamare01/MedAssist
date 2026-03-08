@@ -48,6 +48,15 @@ export default function Results() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      {/* Breadcrumb */}
+      <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-gray-400">
+        <button onClick={() => navigate('/patient/intake')} className="hover:text-blue-600 transition-colors">
+          Symptom Intake
+        </button>
+        <span>›</span>
+        <span className="text-gray-600 font-medium">Diagnostic Results</span>
+      </nav>
+
       {/* Header */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
