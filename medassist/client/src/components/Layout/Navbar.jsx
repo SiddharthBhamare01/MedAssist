@@ -3,8 +3,9 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 const PATIENT_LINKS = [
-  { to: '/patient/intake',   label: 'Diagnosis' },
-  { to: '/patient/doctors',  label: 'Find Doctors' },
+  { to: '/patient/dashboard', label: 'My Sessions' },
+  { to: '/patient/intake',    label: 'New Assessment' },
+  { to: '/patient/doctors',   label: 'Find Doctors' },
 ];
 
 const DOCTOR_LINKS = [

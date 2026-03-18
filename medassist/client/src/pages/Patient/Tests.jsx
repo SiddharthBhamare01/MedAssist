@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 
 const URGENCY_STYLE = {
-  essential:    { badge: 'bg-red-100 text-red-700',    bar: 'bg-red-500',    label: 'Essential' },
-  recommended:  { badge: 'bg-blue-100 text-blue-700',  bar: 'bg-blue-500',   label: 'Recommended' },
-  optional:     { badge: 'bg-gray-100 text-gray-600',  bar: 'bg-gray-400',   label: 'Optional' },
+  essential:    { badge: 'bg-red-100 text-red-700',    label: 'Essential' },
+  recommended:  { badge: 'bg-blue-100 text-blue-700',  label: 'Recommended' },
+  optional:     { badge: 'bg-gray-100 text-gray-600',  label: 'Optional' },
 };
 
 function TestCard({ test, index }) {
@@ -14,7 +14,6 @@ function TestCard({ test, index }) {
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 print:shadow-none print:border print:break-inside-avoid">
-      {/* Header row */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-3">
           <span className="w-8 h-8 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-sm shrink-0">
@@ -32,10 +31,8 @@ function TestCard({ test, index }) {
         </span>
       </div>
 
-      {/* Reason */}
       <p className="text-sm text-gray-600 mb-3">{test.reason}</p>
 
-      {/* Normal range */}
       {test.normal_range && (
         <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
           <span className="font-medium text-gray-700">Normal range:</span>
@@ -43,7 +40,6 @@ function TestCard({ test, index }) {
         </div>
       )}
 
-      {/* Patient note */}
       {test.what_to_expect && (
         <p className="text-xs text-gray-400 italic border-t border-gray-50 pt-2 mt-2">
           {test.what_to_expect}
@@ -55,14 +51,35 @@ function TestCard({ test, index }) {
 
 export default function Tests() {
   const { state } = useLocation();
+  const { sessionId: paramSessionId } = useParams();
   const navigate = useNavigate();
-  const { sessionId, disease } = state || {};
 
-  const [tests, setTests] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [fetched, setFetched] = useState(false);
+  // sessionId comes from URL param (resume) or from navigation state (fresh flow)
+  const sessionId = paramSessionId || state?.sessionId;
 
-  // Update document title for print / browser tab
+  const [disease, setDisease]   = useState(state?.disease || null);
+  const [tests, setTests]       = useState([]);
+  const [loading, setLoading]   = useState(false);
+  const [loadingDb, setLoadingDb] = useState(false);
+  const [fetched, setFetched]   = useState(false);
+
+  // No session at all
+  if (!sessionId) {
+    return (
+      <div className="max-w-2xl mx-auto text-center py-20">
+        <div className="text-5xl mb-4">🧪</div>
+        <p className="text-gray-500 mb-4">No session found. Please start from your dashboard.</p>
+        <button
+          onClick={() => navigate('/patient/dashboard')}
+          className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-blue-700"
+        >
+          Go to My Sessions
+        </button>
+      </div>
+    );
+  }
+
+  // Update document title for print
   useEffect(() => {
     if (disease?.disease) {
       document.title = `Blood Tests — ${disease.disease} | MedAssist AI`;
@@ -70,32 +87,41 @@ export default function Tests() {
     }
   }, [disease]);
 
-  // No state — came here directly
-  if (!sessionId || !disease) {
-    return (
-      <div className="max-w-2xl mx-auto text-center py-20">
-        <div className="text-5xl mb-4">🧪</div>
-        <p className="text-gray-500 mb-4">No disease selected. Please start from symptom intake.</p>
-        <button
-          onClick={() => navigate('/patient/intake')}
-          className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-blue-700"
-        >
-          Start Symptom Intake
-        </button>
-      </div>
-    );
-  }
-
+  // Phase 1: if we have no disease context (resume path), load it from DB
   useEffect(() => {
-    if (fetched) return;
+    if (disease || fetched) return;
+    setLoadingDb(true);
+    api.get(`/patient/sessions/${sessionId}`)
+      .then((res) => {
+        const session = res.data.session;
+
+        // Restore selected disease from DB
+        if (session?.selected_disease_data) {
+          setDisease(session.selected_disease_data);
+        } else if (session?.selected_disease) {
+          setDisease({ disease: session.selected_disease });
+        }
+
+        // If tests are already cached in DB, use them directly
+        if (Array.isArray(session?.recommended_tests) && session.recommended_tests.length > 0) {
+          setTests(session.recommended_tests);
+          setFetched(true);
+        }
+      })
+      .catch(() => toast.error('Failed to load session data.'))
+      .finally(() => setLoadingDb(false));
+  }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Phase 2: once we have a disease and no cached tests, call the AI API
+  useEffect(() => {
+    if (fetched || loading || !disease || loadingDb) return;
     setLoading(true);
     setFetched(true);
-
     api.post('/disease/tests', { sessionId, disease })
       .then((res) => setTests(res.data.tests || []))
       .catch(() => toast.error('Failed to load blood test recommendations'))
       .finally(() => setLoading(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [disease, loadingDb]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const essential   = tests.filter((t) => t.urgency === 'essential');
   const recommended = tests.filter((t) => t.urgency === 'recommended');
@@ -105,11 +131,11 @@ export default function Tests() {
     <div className="max-w-3xl mx-auto space-y-6 print:space-y-4">
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-gray-400 print:hidden">
-        <button onClick={() => navigate('/patient/intake')} className="hover:text-blue-600 transition-colors">
-          Symptom Intake
+        <button onClick={() => navigate('/patient/dashboard')} className="hover:text-blue-600 transition-colors">
+          My Sessions
         </button>
         <span>›</span>
-        <button onClick={() => navigate(-1)} className="hover:text-blue-600 transition-colors">
+        <button onClick={() => navigate(`/patient/results/${sessionId}`)} className="hover:text-blue-600 transition-colors">
           Diagnostic Results
         </button>
         <span>›</span>
@@ -121,12 +147,14 @@ export default function Tests() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-xl font-bold text-gray-800">Recommended Blood Tests</h1>
-            <p className="text-sm text-gray-500 mt-0.5">
-              For: <span className="font-medium text-blue-600">{disease.disease}</span>
-              {disease.icd_code && (
-                <span className="text-xs text-gray-400 ml-2 font-mono">({disease.icd_code})</span>
-              )}
-            </p>
+            {disease && (
+              <p className="text-sm text-gray-500 mt-0.5">
+                For: <span className="font-medium text-blue-600">{disease.disease}</span>
+                {disease.icd_code && (
+                  <span className="text-xs text-gray-400 ml-2 font-mono">({disease.icd_code})</span>
+                )}
+              </p>
+            )}
           </div>
           {!loading && tests.length > 0 && (
             <button
@@ -137,32 +165,35 @@ export default function Tests() {
             </button>
           )}
         </div>
-
         <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
-          ⚠️ Educational use only. These recommendations are AI-generated. Always consult a qualified doctor before ordering any tests.
+          ⚠️ Educational use only. AI-generated recommendations — always consult a qualified doctor before ordering any tests.
         </div>
       </div>
 
-      {/* Loading state */}
-      {loading && (
+      {/* Loading states */}
+      {(loadingDb || loading) && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 flex flex-col items-center gap-4">
           <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
           <div className="text-center">
-            <p className="font-medium text-gray-700">AI is generating your test recommendations...</p>
-            <p className="text-sm text-gray-400 mt-1">Analysing {disease.disease} with your patient profile</p>
+            <p className="font-medium text-gray-700">
+              {loadingDb ? 'Loading your session…' : 'AI is generating your test recommendations…'}
+            </p>
+            {disease && !loadingDb && (
+              <p className="text-sm text-gray-400 mt-1">Analysing {disease.disease} with your patient profile</p>
+            )}
           </div>
         </div>
       )}
 
       {/* Results */}
-      {!loading && tests.length > 0 && (
+      {!loading && !loadingDb && tests.length > 0 && (
         <>
           {/* Summary strip */}
           <div className="grid grid-cols-3 gap-3 print:hidden">
             {[
-              { label: 'Essential', count: essential.length, color: 'text-red-600 bg-red-50 border-red-100' },
+              { label: 'Essential',    count: essential.length,   color: 'text-red-600 bg-red-50 border-red-100' },
               { label: 'Recommended', count: recommended.length, color: 'text-blue-600 bg-blue-50 border-blue-100' },
-              { label: 'Optional', count: optional.length, color: 'text-gray-600 bg-gray-50 border-gray-100' },
+              { label: 'Optional',    count: optional.length,    color: 'text-gray-600 bg-gray-50 border-gray-100' },
             ].map(({ label, count, color }) => (
               <div key={label} className={`rounded-xl border p-3 text-center ${color}`}>
                 <p className="text-2xl font-bold">{count}</p>
@@ -185,7 +216,9 @@ export default function Tests() {
               <p className="text-xs text-gray-400">Upload your blood test report for AI analysis</p>
             </div>
             <button
-              onClick={() => navigate('/patient/upload-report', { state: { sessionId, disease, tests } })}
+              onClick={() => navigate(`/patient/upload-report/${sessionId}`, {
+                state: { sessionId, disease, tests },
+              })}
               className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors whitespace-nowrap"
             >
               Upload Report →
@@ -195,7 +228,7 @@ export default function Tests() {
       )}
 
       {/* Empty state */}
-      {!loading && fetched && tests.length === 0 && (
+      {!loading && !loadingDb && fetched && tests.length === 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center">
           <div className="text-5xl mb-3">😕</div>
           <p className="text-gray-500">No test recommendations returned. Please try again.</p>

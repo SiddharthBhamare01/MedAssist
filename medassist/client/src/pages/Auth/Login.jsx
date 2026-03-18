@@ -22,7 +22,7 @@ export default function Login() {
       if (data.user.role === 'doctor') {
         navigate('/doctor/dashboard');
       } else {
-        navigate('/patient/intake');
+        navigate('/patient/dashboard');
       }
     } catch (err) {
       toast.error(err.message);

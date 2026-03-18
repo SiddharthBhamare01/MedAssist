@@ -4,7 +4,7 @@ const verifyToken = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const { extractBloodValuesFromImage } = require('../services/geminiService');
 const { runBloodReportAgent } = require('../agents/bloodReportAgent');
-const { getPatientProfile } = require('../models/patientQueries');
+const { getPatientProfile, updateSessionStatus } = require('../models/patientQueries');
 const pool = require('../db/pool');
 
 // POST /api/blood-report/upload
@@ -33,6 +33,13 @@ router.post('/upload', verifyToken, upload.single('report'), async (req, res) =>
        RETURNING id`,
       [sessionId || null, patientId, relativePath, JSON.stringify(extractedValues)]
     );
+
+    // Advance session status if a sessionId was provided
+    if (sessionId) {
+      await updateSessionStatus(sessionId, 'report_uploaded').catch((e) =>
+        console.warn('[bloodReport] Could not update session status:', e.message)
+      );
+    }
 
     return res.json({
       reportId: rows[0].id,
@@ -96,6 +103,13 @@ router.post('/analyze', verifyToken, async (req, res) => {
 
     const { analysis, tabletRecommendations, doctorReferralNeeded, steps, turns } =
       await runBloodReportAgent({ reportId, extractedValues, patientProfile: patientProfile || null });
+
+    // Advance session status if this report is linked to a session
+    if (report.session_id) {
+      await updateSessionStatus(report.session_id, 'analyzed').catch((e) =>
+        console.warn('[bloodReport] Could not update session status:', e.message)
+      );
+    }
 
     return res.json({
       reportId,

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import AgentStatusPanel from '../../components/AgentStatus/AgentStatusPanel';
@@ -32,8 +32,12 @@ function Section({ title, children }) {
 
 export default function Analysis() {
   const { state } = useLocation();
+  const { reportId: paramReportId } = useParams();
   const navigate = useNavigate();
-  const { reportId, extractedValues, sessionId, disease } = state || {};
+
+  // reportId from URL param (resume) takes precedence over navigation state
+  const { extractedValues, sessionId, disease } = state || {};
+  const reportId = paramReportId || state?.reportId;
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -72,13 +76,17 @@ export default function Analysis() {
     <div className="max-w-3xl mx-auto space-y-6">
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-gray-400">
-        <button onClick={() => navigate('/patient/intake')} className="hover:text-blue-600 transition-colors">
-          Symptom Intake
+        <button onClick={() => navigate('/patient/dashboard')} className="hover:text-blue-600 transition-colors">
+          My Sessions
         </button>
-        <span>›</span>
-        <button onClick={() => navigate(-1)} className="hover:text-blue-600 transition-colors">
-          Upload Report
-        </button>
+        {sessionId && (
+          <>
+            <span>›</span>
+            <button onClick={() => navigate(`/patient/upload-report/${sessionId}`)} className="hover:text-blue-600 transition-colors">
+              Upload Report
+            </button>
+          </>
+        )}
         <span>›</span>
         <span className="text-gray-600 font-medium">Analysis</span>
       </nav>

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 
@@ -11,23 +11,47 @@ const PROBABILITY_COLOR = (p) => {
 
 export default function Results() {
   const { state } = useLocation();
+  const { sessionId: paramSessionId } = useParams();
   const navigate = useNavigate();
-  const { sessionId, diseases = [], turns } = state || {};
 
-  const [selected, setSelected] = useState(null);
-  const [loading, setLoading] = useState(false);
+  // sessionId comes either from URL param (resume) or from navigation state (fresh flow)
+  const sessionId = paramSessionId || state?.sessionId;
 
-  // No data — came here directly without submitting
-  if (!sessionId || diseases.length === 0) {
+  const [diseases, setDiseases]   = useState(state?.diseases || []);
+  const [turns, setTurns]         = useState(state?.turns || null);
+  const [selected, setSelected]   = useState(null);
+  const [loadingDb, setLoadingDb] = useState(false);
+  const [saving, setSaving]       = useState(false);
+
+  // If we don't have diseases in state (resume path), fetch from DB
+  useEffect(() => {
+    if (diseases.length > 0 || !sessionId) return;
+    setLoadingDb(true);
+    api.get(`/patient/sessions/${sessionId}`)
+      .then((res) => {
+        const session = res.data.session;
+        const dbDiseases = session?.predicted_diseases;
+        if (Array.isArray(dbDiseases) && dbDiseases.length > 0) {
+          setDiseases(dbDiseases);
+        } else {
+          toast.error('No diagnosis data found for this session.');
+        }
+      })
+      .catch(() => toast.error('Failed to load session data.'))
+      .finally(() => setLoadingDb(false));
+  }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // No session at all — came here directly
+  if (!sessionId) {
     return (
       <div className="max-w-2xl mx-auto text-center py-20">
         <div className="text-5xl mb-4">🔍</div>
-        <p className="text-gray-500 mb-4">No diagnosis results found.</p>
+        <p className="text-gray-500 mb-4">No diagnosis session found.</p>
         <button
-          onClick={() => navigate('/patient/intake')}
+          onClick={() => navigate('/patient/dashboard')}
           className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-blue-700"
         >
-          Start Symptom Intake
+          Go to My Sessions
         </button>
       </div>
     );
@@ -38,20 +62,48 @@ export default function Results() {
       toast.error('Please select a disease first');
       return;
     }
-    setLoading(true);
+    setSaving(true);
     try {
-      navigate('/patient/tests', { state: { sessionId, disease: selected } });
+      // Persist selected disease to DB so resume from Tests page works
+      await api.put(`/patient/sessions/${sessionId}/disease`, { disease: selected });
+      navigate(`/patient/tests/${sessionId}`, { state: { sessionId, disease: selected } });
+    } catch {
+      toast.error('Failed to save selection. Please try again.');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
+
+  if (loadingDb) {
+    return (
+      <div className="max-w-2xl mx-auto text-center py-20">
+        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-gray-500">Loading your diagnosis results…</p>
+      </div>
+    );
+  }
+
+  if (!loadingDb && diseases.length === 0) {
+    return (
+      <div className="max-w-2xl mx-auto text-center py-20">
+        <div className="text-5xl mb-4">🔍</div>
+        <p className="text-gray-500 mb-4">No diagnosis results found for this session.</p>
+        <button
+          onClick={() => navigate('/patient/dashboard')}
+          className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-blue-700"
+        >
+          Back to My Sessions
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-gray-400">
-        <button onClick={() => navigate('/patient/intake')} className="hover:text-blue-600 transition-colors">
-          Symptom Intake
+        <button onClick={() => navigate('/patient/dashboard')} className="hover:text-blue-600 transition-colors">
+          My Sessions
         </button>
         <span>›</span>
         <span className="text-gray-600 font-medium">Diagnostic Results</span>
@@ -62,23 +114,23 @@ export default function Results() {
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-xl font-bold text-gray-800">Diagnostic Results</h1>
-            <p className="text-sm text-gray-500 mt-0.5">
-              AI analysed your symptoms in{' '}
-              <span className="font-medium text-blue-600">{turns} reasoning turn{turns !== 1 ? 's' : ''}</span>
-              {' '}using ICD-10 clinical database
-            </p>
+            {turns && (
+              <p className="text-sm text-gray-500 mt-0.5">
+                AI analysed your symptoms in{' '}
+                <span className="font-medium text-blue-600">{turns} reasoning turn{turns !== 1 ? 's' : ''}</span>
+                {' '}using ICD-10 clinical database
+              </p>
+            )}
           </div>
           <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
             ✓ {diseases.length} diseases found
           </span>
         </div>
-
         <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
           ⚠️ Educational use only. These are AI predictions — not a medical diagnosis. Always consult a qualified doctor.
         </div>
       </div>
 
-      {/* Instruction */}
       <p className="text-sm text-gray-500 px-1">
         Select the disease that best matches your condition, then get personalised blood test recommendations.
       </p>
@@ -133,12 +185,10 @@ export default function Results() {
                 </div>
               </div>
 
-              {/* Description */}
               {disease.description && (
                 <p className="text-sm text-gray-600 mb-3">{disease.description}</p>
               )}
 
-              {/* Matched symptoms */}
               {disease.matched_symptoms?.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {disease.matched_symptoms.map((s) => (
@@ -149,7 +199,6 @@ export default function Results() {
                 </div>
               )}
 
-              {/* Reasoning */}
               {disease.reasoning && (
                 <p className="text-xs text-gray-400 italic border-t border-gray-50 pt-2">
                   {disease.reasoning}
@@ -179,11 +228,12 @@ export default function Results() {
         </div>
         <button
           onClick={handleGetTests}
-          disabled={!selected || loading}
+          disabled={!selected || saving}
+          aria-busy={saving}
           className="bg-green-600 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed
             text-white font-semibold px-6 py-2.5 rounded-lg transition-colors whitespace-nowrap"
         >
-          Get Blood Tests →
+          {saving ? 'Saving…' : 'Get Blood Tests →'}
         </button>
       </div>
     </div>

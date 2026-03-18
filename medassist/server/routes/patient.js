@@ -1,6 +1,12 @@
 const router = require('express').Router();
 const verifyToken = require('../middleware/auth');
-const { getPatientProfile, upsertPatientProfile } = require('../models/patientQueries');
+const {
+  getPatientProfile,
+  upsertPatientProfile,
+  getPatientSessions,
+  getSessionById,
+  updateSelectedDisease,
+} = require('../models/patientQueries');
 
 // GET /api/patient/profile
 router.get('/profile', verifyToken, async (req, res) => {
@@ -45,21 +51,50 @@ router.put('/profile', verifyToken, async (req, res) => {
   }
 });
 
-// GET /api/patient/sessions — recent symptom sessions for the logged-in patient
+// GET /api/patient/sessions — list recent sessions with status + report linkage
 router.get('/sessions', verifyToken, async (req, res) => {
   try {
-    const { rows } = await require('../db/pool').query(
-      `SELECT id, symptoms, predicted_diseases, selected_disease, recommended_tests, created_at
-       FROM symptom_sessions
-       WHERE patient_id = $1
-       ORDER BY created_at DESC
-       LIMIT 10`,
-      [req.user.userId]
-    );
-    res.json({ sessions: rows });
+    const sessions = await getPatientSessions(req.user.userId);
+    res.json({ sessions });
   } catch (err) {
     console.error('Get sessions error:', err);
     res.status(500).json({ error: 'Failed to fetch sessions' });
+  }
+});
+
+// GET /api/patient/sessions/:id — get a single session (ownership checked)
+router.get('/sessions/:id', verifyToken, async (req, res) => {
+  try {
+    const session = await getSessionById(req.params.id, req.user.userId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    res.json({ session });
+  } catch (err) {
+    console.error('Get session by id error:', err);
+    res.status(500).json({ error: 'Failed to fetch session' });
+  }
+});
+
+// PUT /api/patient/sessions/:id/disease — save selected disease + advance status
+router.put('/sessions/:id/disease', verifyToken, async (req, res) => {
+  const { disease } = req.body;
+  if (!disease || !disease.disease) {
+    return res.status(400).json({ error: 'disease object with disease name is required' });
+  }
+
+  try {
+    // Verify session belongs to this patient before writing
+    const existing = await getSessionById(req.params.id, req.user.userId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    await updateSelectedDisease(req.params.id, disease);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Update selected disease error:', err);
+    res.status(500).json({ error: 'Failed to save selected disease' });
   }
 });
 

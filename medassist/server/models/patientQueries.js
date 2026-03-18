@@ -90,8 +90,77 @@ async function updateSessionTests(sessionId, tests) {
   );
 }
 
+// Update session progress status
+// Valid values: 'pending' | 'diagnosed' | 'tests_ready' | 'report_uploaded' | 'analyzed'
+async function updateSessionStatus(sessionId, status) {
+  await pool.query(
+    'UPDATE symptom_sessions SET status = $1 WHERE id = $2',
+    [status, sessionId]
+  );
+}
+
+// Save the full selected disease object + update status to tests_ready
+async function updateSelectedDisease(sessionId, disease) {
+  await pool.query(
+    `UPDATE symptom_sessions
+     SET selected_disease      = $1,
+         selected_disease_data = $2::jsonb,
+         status                = 'tests_ready'
+     WHERE id = $3`,
+    [
+      disease.disease || String(disease),
+      JSON.stringify(disease),
+      sessionId,
+    ]
+  );
+}
+
+// Fetch a single session with ownership check + linked report_id
+async function getSessionById(sessionId, patientId) {
+  const { rows } = await pool.query(
+    `SELECT s.*,
+            (SELECT br.id
+               FROM blood_reports br
+              WHERE br.session_id = s.id
+              ORDER BY br.created_at DESC
+              LIMIT 1) AS report_id
+       FROM symptom_sessions s
+      WHERE s.id = $1
+        AND s.patient_id = $2`,
+    [sessionId, patientId]
+  );
+  return rows[0] || null;
+}
+
+// List recent sessions for a patient (includes status + report linkage)
+async function getPatientSessions(patientId, limit = 10) {
+  const { rows } = await pool.query(
+    `SELECT s.id,
+            s.symptoms,
+            s.predicted_diseases,
+            s.selected_disease,
+            s.selected_disease_data,
+            s.recommended_tests,
+            s.status,
+            s.created_at,
+            (SELECT br.id
+               FROM blood_reports br
+              WHERE br.session_id = s.id
+              ORDER BY br.created_at DESC
+              LIMIT 1) AS report_id
+       FROM symptom_sessions s
+      WHERE s.patient_id = $1
+      ORDER BY s.created_at DESC
+      LIMIT $2`,
+    [patientId, limit]
+  );
+  return rows;
+}
+
 module.exports = {
   getPatientProfile, upsertPatientProfile,
   createSymptomSession, getSymptomSession,
   updateSessionDiseases, saveAgentLog, updateSessionTests,
+  updateSessionStatus, updateSelectedDisease,
+  getSessionById, getPatientSessions,
 };

@@ -10,6 +10,7 @@ import Login from './pages/Auth/Login';
 import Register from './pages/Auth/Register';
 
 // Patient pages
+import PatientDashboard from './pages/Patient/PatientDashboard';
 import Intake from './pages/Patient/Intake';
 import Results from './pages/Patient/Results';
 import Tests from './pages/Patient/Tests';
@@ -42,6 +43,14 @@ function Layout({ children }) {
   );
 }
 
+// Shorthand wrappers to reduce repetition
+function P({ children }) {
+  return <PrivateRoute role="patient"><Layout>{children}</Layout></PrivateRoute>;
+}
+function D({ children }) {
+  return <PrivateRoute role="doctor"><Layout>{children}</Layout></PrivateRoute>;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -49,36 +58,29 @@ export default function App() {
         <Toaster position="top-right" />
         <Routes>
           {/* Public */}
-          <Route path="/login" element={<Login />} />
+          <Route path="/login"    element={<Login />} />
           <Route path="/register" element={<Register />} />
 
-          {/* Patient */}
-          <Route path="/patient/intake" element={
-            <PrivateRoute role="patient"><Layout><Intake /></Layout></PrivateRoute>
-          } />
-          <Route path="/patient/results" element={
-            <PrivateRoute role="patient"><Layout><Results /></Layout></PrivateRoute>
-          } />
-          <Route path="/patient/tests" element={
-            <PrivateRoute role="patient"><Layout><Tests /></Layout></PrivateRoute>
-          } />
-          <Route path="/patient/upload-report" element={
-            <PrivateRoute role="patient"><Layout><UploadReport /></Layout></PrivateRoute>
-          } />
-          <Route path="/patient/analysis" element={
-            <PrivateRoute role="patient"><Layout><Analysis /></Layout></PrivateRoute>
-          } />
-          <Route path="/patient/doctors" element={
-            <PrivateRoute role="patient"><Layout><Doctors /></Layout></PrivateRoute>
-          } />
+          {/* Patient — dashboard is the new home after login */}
+          <Route path="/patient/dashboard" element={<P><PatientDashboard /></P>} />
+          <Route path="/patient/intake"    element={<P><Intake /></P>} />
+
+          {/* Patient — URL-param routes (bookmarkable, resumable) */}
+          <Route path="/patient/results/:sessionId"       element={<P><Results /></P>} />
+          <Route path="/patient/tests/:sessionId"         element={<P><Tests /></P>} />
+          <Route path="/patient/upload-report/:sessionId" element={<P><UploadReport /></P>} />
+          <Route path="/patient/analysis/:reportId"       element={<P><Analysis /></P>} />
+
+          {/* Patient — flat routes (backward compat / state-based fresh flows) */}
+          <Route path="/patient/results"       element={<P><Results /></P>} />
+          <Route path="/patient/tests"         element={<P><Tests /></P>} />
+          <Route path="/patient/upload-report" element={<P><UploadReport /></P>} />
+          <Route path="/patient/analysis"      element={<P><Analysis /></P>} />
+          <Route path="/patient/doctors"       element={<P><Doctors /></P>} />
 
           {/* Doctor */}
-          <Route path="/doctor/dashboard" element={
-            <PrivateRoute role="doctor"><Layout><DoctorDashboard /></Layout></PrivateRoute>
-          } />
-          <Route path="/doctor/assist" element={
-            <PrivateRoute role="doctor"><Layout><DoctorAssist /></Layout></PrivateRoute>
-          } />
+          <Route path="/doctor/dashboard" element={<D><DoctorDashboard /></D>} />
+          <Route path="/doctor/assist"    element={<D><DoctorAssist /></D>} />
 
           {/* Default */}
           <Route path="/" element={<Navigate to="/login" replace />} />

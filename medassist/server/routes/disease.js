@@ -1,6 +1,11 @@
 const router = require('express').Router();
 const verifyToken = require('../middleware/auth');
-const { createSymptomSession, getPatientProfile, updateSessionTests } = require('../models/patientQueries');
+const {
+  createSymptomSession,
+  getPatientProfile,
+  updateSessionTests,
+  updateSessionStatus,
+} = require('../models/patientQueries');
 const { runDiagnosticAgent } = require('../agents/diagnosticAgent');
 const { getRecommendedBloodTests } = require('../services/groqService');
 
@@ -20,12 +25,14 @@ router.post('/predict', verifyToken, async (req, res) => {
     // Fetch patient profile for personalised diagnosis
     const patientProfile = await getPatientProfile(req.user.userId);
 
-    // Run Diagnostic Agent (Gemini multi-turn with ICD tool calls)
     const { diseases, steps, turns } = await runDiagnosticAgent({
       sessionId,
       symptoms,
       patientProfile,
     });
+
+    // Advance status — agent completed successfully
+    await updateSessionStatus(sessionId, 'diagnosed');
 
     res.json({ sessionId, diseases, agentSteps: steps, turns });
   } catch (err) {
@@ -46,8 +53,9 @@ router.post('/tests', verifyToken, async (req, res) => {
     const patientProfile = await getPatientProfile(req.user.userId);
     const tests = await getRecommendedBloodTests(disease, patientProfile);
 
-    // Persist to DB
+    // Persist tests + advance status
     await updateSessionTests(sessionId, tests);
+    await updateSessionStatus(sessionId, 'tests_ready');
 
     res.json({ sessionId, disease: disease.disease, tests });
   } catch (err) {

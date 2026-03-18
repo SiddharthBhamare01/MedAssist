@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 
@@ -8,18 +8,18 @@ const MAX_MB = 10;
 
 function StatusBadge({ status }) {
   const map = {
-    normal:       'bg-green-100 text-green-700',
-    low:          'bg-yellow-100 text-yellow-700',
-    high:         'bg-orange-100 text-orange-700',
-    critical_low: 'bg-red-100 text-red-700',
-    critical_high:'bg-red-200 text-red-800',
+    normal:        'bg-green-100 text-green-700',
+    low:           'bg-yellow-100 text-yellow-700',
+    high:          'bg-orange-100 text-orange-700',
+    critical_low:  'bg-red-100 text-red-700',
+    critical_high: 'bg-red-200 text-red-800',
   };
   const label = {
-    normal:       'Normal',
-    low:          'Low',
-    high:         'High',
-    critical_low: 'Critical Low',
-    critical_high:'Critical High',
+    normal:        'Normal',
+    low:           'Low',
+    high:          'High',
+    critical_low:  'Critical Low',
+    critical_high: 'Critical High',
   };
   return (
     <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${map[status] || 'bg-gray-100 text-gray-600'}`}>
@@ -30,16 +30,39 @@ function StatusBadge({ status }) {
 
 export default function UploadReport() {
   const { state } = useLocation();
+  const { sessionId: paramSessionId } = useParams();
   const navigate = useNavigate();
-  const { sessionId, disease, tests } = state || {};
 
-  const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState(null); // data-URL for images
+  // sessionId from URL param (resume) or navigation state (fresh flow)
+  const sessionId = paramSessionId || state?.sessionId;
+
+  const [disease, setDisease]     = useState(state?.disease || null);
+  const [loadingDb, setLoadingDb] = useState(false);
+
+  const [file, setFile]         = useState(null);
+  const [preview, setPreview]   = useState(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [result, setResult] = useState(null); // extracted values from OCR
+  const [result, setResult]     = useState(null);
   const inputRef = useRef();
+
+  // If no disease context (resume path), load from DB
+  useEffect(() => {
+    if (disease || !sessionId) return;
+    setLoadingDb(true);
+    api.get(`/patient/sessions/${sessionId}`)
+      .then((res) => {
+        const session = res.data.session;
+        if (session?.selected_disease_data) {
+          setDisease(session.selected_disease_data);
+        } else if (session?.selected_disease) {
+          setDisease({ disease: session.selected_disease });
+        }
+      })
+      .catch(() => toast.error('Failed to load session data.'))
+      .finally(() => setLoadingDb(false));
+  }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFile = (f) => {
     if (!f) return;
@@ -69,7 +92,7 @@ export default function UploadReport() {
     handleFile(e.dataTransfer.files[0]);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const onDragOver = (e) => { e.preventDefault(); setDragging(true); };
+  const onDragOver  = (e) => { e.preventDefault(); setDragging(true); };
   const onDragLeave = () => setDragging(false);
 
   const handleUpload = async () => {
@@ -91,34 +114,43 @@ export default function UploadReport() {
       setResult(res.data);
       toast.success(`Extracted ${res.data.count} blood parameters`);
     } catch (err) {
-      const msg = err.response?.data?.error || 'Upload or OCR failed';
-      toast.error(msg);
+      toast.error(err.response?.data?.error || 'Upload or OCR failed');
     } finally {
       setUploading(false);
     }
   };
 
   const handleProceed = () => {
-    navigate('/patient/analysis', {
-      state: {
-        sessionId,
-        disease,
-        tests,
-        reportId: result.reportId,
-        extractedValues: result.extractedValues,
-      },
+    navigate(`/patient/analysis/${result.reportId}`, {
+      state: { sessionId, disease, reportId: result.reportId, extractedValues: result.extractedValues },
     });
   };
+
+  // No session — came here directly without context
+  if (!sessionId) {
+    return (
+      <div className="max-w-2xl mx-auto text-center py-20">
+        <div className="text-5xl mb-4">📄</div>
+        <p className="text-gray-500 mb-4">No session found. Please start from your dashboard.</p>
+        <button
+          onClick={() => navigate('/patient/dashboard')}
+          className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-blue-700"
+        >
+          Go to My Sessions
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-gray-400">
-        <button onClick={() => navigate('/patient/intake')} className="hover:text-blue-600 transition-colors">
-          Symptom Intake
+        <button onClick={() => navigate('/patient/dashboard')} className="hover:text-blue-600 transition-colors">
+          My Sessions
         </button>
         <span>›</span>
-        <button onClick={() => navigate(-1)} className="hover:text-blue-600 transition-colors">
+        <button onClick={() => navigate(`/patient/tests/${sessionId}`)} className="hover:text-blue-600 transition-colors">
           Blood Tests
         </button>
         <span>›</span>
@@ -131,6 +163,9 @@ export default function UploadReport() {
         <p className="text-sm text-gray-500 mt-1">
           Upload your lab report and our AI will extract all values for analysis.
         </p>
+        {loadingDb && (
+          <p className="text-xs text-gray-400 mt-1 animate-pulse">Loading session context…</p>
+        )}
         {disease && (
           <p className="text-xs text-blue-600 mt-1 font-medium">
             For: {disease.disease}
@@ -180,9 +215,7 @@ export default function UploadReport() {
               )}
               <div>
                 <p className="font-semibold text-gray-800">{file.name}</p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {(file.size / 1024 / 1024).toFixed(2)} MB
-                </p>
+                <p className="text-xs text-gray-400 mt-0.5">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
               </div>
               <button
                 onClick={(e) => { e.stopPropagation(); setFile(null); setPreview(null); }}
@@ -201,9 +234,7 @@ export default function UploadReport() {
           <div className="flex items-center gap-3">
             <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin shrink-0" />
             <p className="font-medium text-gray-700">
-              {progress < 100
-                ? `Uploading… ${progress}%`
-                : 'Our AI is analyzing your report…'}
+              {progress < 100 ? `Uploading… ${progress}%` : 'AI is extracting values from your report…'}
             </p>
           </div>
           <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
@@ -268,16 +299,13 @@ export default function UploadReport() {
                       {v.value} <span className="text-gray-400 font-normal">{v.unit}</span>
                     </td>
                     <td className="py-2 pr-4 text-gray-500 font-mono text-xs">{v.normal_range}</td>
-                    <td className="py-2">
-                      <StatusBadge status={v.status} />
-                    </td>
+                    <td className="py-2"><StatusBadge status={v.status} /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          {/* Proceed to analysis */}
           <div className="pt-4 border-t border-gray-100 flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-gray-700">Next step</p>
