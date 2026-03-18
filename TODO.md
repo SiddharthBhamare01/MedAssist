@@ -350,66 +350,203 @@
 ## DAY 14 — Documentation
 > Goal: All required docs for course submission complete
 
-- [ ] `docs/ai-prompts.md` — document all prompts:
-  - [ ] Diagnostic Agent system prompt
-  - [ ] Blood Report Agent system prompt
-  - [ ] Doctor Assist Agent system prompt
-  - [ ] Gemini Vision OCR prompt
-  - [ ] Blood test recommendation prompt
-  - [ ] All 5 tool definitions with descriptions
-- [ ] `README.md` (project root) — add:
-  - [ ] Architecture diagram (Mermaid)
-  - [ ] Setup instructions (clone → install → env → run)
-  - [ ] Docker Compose instructions
+**AI Prompts Documentation**
+- [ ] Create `docs/` folder at project root
+- [ ] `docs/ai-prompts.md` — document all agent system prompts verbatim:
+  - [ ] Diagnostic Agent full system prompt (role, output format, DIAGNOSIS_COMPLETE sentinel)
+  - [ ] Blood Report Agent Phase 1 system prompt (tool-use phase)
+  - [ ] Blood Report Agent Phase 2a system prompt (medical JSON output)
+  - [ ] Blood Report Agent Phase 2b system prompt (lifestyle JSON output)
+  - [ ] Doctor Assist Agent system prompt (missing tests + ICD-10)
+  - [ ] Gemini Vision OCR prompt (lab value extraction schema)
+  - [ ] Blood test recommendation single-turn prompt
+- [ ] `docs/ai-prompts.md` — document all 5 tool definitions:
+  - [ ] `lookup_icd_code` — schema + NIH ClinicalTables endpoint
+  - [ ] `get_lab_reference_range` — schema + 40-parameter table explanation
+  - [ ] `search_drug_by_condition` — schema + OpenFDA endpoint
+  - [ ] `get_drug_details` — schema + OpenFDA label endpoint
+  - [ ] `check_drug_interactions` — schema + RxNorm endpoint
+
+**API & Architecture Documentation**
+- [ ] `docs/api-reference.md` — full API contract:
+  - [ ] Auth endpoints (POST /register, POST /login) with request/response examples
+  - [ ] Patient endpoints (GET/PUT /profile, GET /sessions)
+  - [ ] Disease endpoints (POST /predict, POST /tests)
+  - [ ] Blood report endpoints (POST /upload, POST /analyze, GET /:id)
+  - [ ] Doctor assist endpoints (POST /suggest-tests, GET /sessions, GET/PUT /profile)
+  - [ ] SSE endpoint (GET /agent-status/stream/:sessionId) with event format
+  - [ ] Agent logs endpoint (GET /agent-logs/:sessionId)
+  - [ ] Nearby doctors endpoint (GET /nearby-doctors?city=&state=)
+- [ ] `docs/architecture.md` — architecture narrative:
+  - [ ] Data flow diagram: Patient symptom → Diagnostic Agent → Disease results → Tests → OCR → Blood Agent → Analysis
+  - [ ] Data flow diagram: Doctor case input → Doctor Assist Agent → Missing tests
+  - [ ] SSE streaming architecture explanation (EventEmitter map, session lifecycle)
+  - [ ] Database schema rationale (why 7 tables, JSONB fields, cascades)
+  - [ ] Rate-limiting strategy (Groq 12k TPM, 2s delays, 429 retry)
+
+**Course Submission Docs**
+- [ ] `docs/user-stories.md`:
+  - [ ] Patient user stories (registration through analysis flow — 8+ stories)
+  - [ ] Doctor user stories (login through session history — 5+ stories)
+  - [ ] Acceptance criteria for each story
+- [ ] `docs/functional-requirements.md`:
+  - [ ] FR-1 through FR-20 numbered requirements
+  - [ ] Non-functional requirements (performance, security, accessibility)
+  - [ ] LOF Pillar mapping: Patient Engagement, Clinical Decision Support
 - [ ] Fill out `CS595_2026_Project_Info_Template.docx`:
-  - [ ] LOF Pillar: Patient Engagement
-  - [ ] Architecture diagram
-  - [ ] Functional requirements list
-  - [ ] User stories (patient + doctor)
-  - [ ] Sprint history (15-day breakdown)
-  - [ ] AI tools used section
-- [ ] Push all code to GitHub
-- [ ] Verify `.gitignore` excludes `.env`, `uploads/`, `node_modules/`
-- [ ] Verify repo is clean (no secrets committed)
+  - [ ] LOF Pillar: Patient Engagement + Clinical Decision Support
+  - [ ] Architecture diagram (copy from docs/architecture.md)
+  - [ ] Functional requirements list (copy from docs/)
+  - [ ] User stories table (patient + doctor flows)
+  - [ ] Sprint history — 15-day breakdown with dates (Mar 7–21, 2026)
+  - [ ] AI tools used: Groq llama-3.3-70b, Gemini Vision, tool-calling pattern
+  - [ ] Free APIs used: OpenFDA, RxNorm, NIH ClinicalTables, OSM Nominatim
+  - [ ] Known limitations section (Groq TPM, Gemini Vision quota, no real appointment booking)
+
+**GitHub Setup**
+- [ ] Verify `.gitignore` excludes `.env`, `uploads/`, `node_modules/`, `.claude/`
+- [ ] Verify no secrets committed (`git log --all --full-history -- "**/.env"`)
+- [ ] Add `server/.env.example` with all keys blanked out
+- [ ] Create day-wise git commits for Days 5–13 (see Git Commit Plan below)
+- [ ] Final Day 14 commit: `docs: add ai-prompts, api-reference, architecture, user-stories`
+- [ ] Push to GitHub: `git push origin main`
+- [ ] Verify GitHub repo is public and all files visible
 
 ---
 
 ## DAY 15 — Demo Prep & Submission
-> Goal: Demo-ready, everything submitted
+> Goal: Demo-ready, everything polished and submitted
 
-- [ ] Reset DB and re-run seed data for clean demo state
-- [ ] Create 2 clean demo accounts (patient + doctor) with memorable passwords
-- [ ] Prepare 5–7 min demo script:
-  - [ ] Patient registration
-  - [ ] Symptom form → live agent steps
-  - [ ] Disease results with ICD codes
-  - [ ] Blood report upload → FDA API calls live
-  - [ ] Analysis page with personalized dosages
-  - [ ] Doctor referral → map
-  - [ ] Doctor account → Assist Agent
-  - [ ] Agent log viewer (show professor the tool call audit trail)
-- [ ] Record demo video (OBS or Loom, screen + mic)
-- [ ] Final GitHub push — clean commit history
-- [ ] Submit: GitHub URL + video link + Project Info Template
+**Database Reset for Demo**
+- [ ] Run `server/db/seed.sql` against Supabase to reset demo data
+- [ ] Create 2 clean demo accounts manually or via seed:
+  - [ ] Patient: `patient@demo.com` / `Demo1234!` — pre-filled profile (age 45, M, diabetic history)
+  - [ ] Doctor: `doctor@demo.com` / `Demo1234!` — specialization: Internal Medicine, Phoenix AZ
+- [ ] Verify all 7 DB tables clean and seeded
+- [ ] Test full patient flow end-to-end from fresh login
+
+**Demo Script (7–10 min)**
+- [ ] Slide 1 (30s): Project overview — what MedAssist AI does, two roles, tech stack
+- [ ] Scene 1 — Patient Registration (45s):
+  - [ ] Register new patient account live
+  - [ ] Show role selection (Patient / Doctor toggle)
+- [ ] Scene 2 — Symptom Intake (90s):
+  - [ ] Fill Step 1: age 35, male, 80kg, 175cm, O+
+  - [ ] Fill Step 2: add "Diabetes" existing condition, "Penicillin" allergy tag
+  - [ ] Fill Step 3: select fatigue (7/10 severity), increased thirst, frequent urination (all 1-week onset)
+  - [ ] Submit and show progress bar
+- [ ] Scene 3 — Live Agent Steps + Results (60s):
+  - [ ] Show AgentStatusPanel pulsing with ICD tool calls in real time
+  - [ ] Results page: 5 disease cards with ICD codes and probability bars
+  - [ ] Expand agent log modal — show tool call audit trail (professor key moment)
+- [ ] Scene 4 — Blood Test Recommendations (30s):
+  - [ ] Select top diagnosis → "Get Blood Tests"
+  - [ ] Show test cards with urgency badges (critical/urgent/routine)
+- [ ] Scene 5 — Blood Report Upload + Analysis (90s):
+  - [ ] Upload real PDF blood report (have file ready on desktop)
+  - [ ] Show OCR extraction table (all values, status flags)
+  - [ ] Click "Get AI Analysis" → show agent steps (FDA API calls live)
+  - [ ] Walk through 5 tabs: Summary, Findings, Treatment, Tablets, Diet
+  - [ ] Show doctor referral banner → "Find a Doctor"
+- [ ] Scene 6 — Doctor Finder Map (30s):
+  - [ ] Allow geolocation in browser
+  - [ ] Show live OSM pins, sidebar list, click marker for popup
+- [ ] Scene 7 — Doctor Account + Assist Agent (90s):
+  - [ ] Log in as doctor demo account
+  - [ ] Show dashboard: stats, recent sessions
+  - [ ] Submit new patient case (45M, chest pain, existing ECG + CBC)
+  - [ ] Show agent finding missing tests with urgency levels
+  - [ ] Show "Copy to Clipboard" output
+- [ ] Close (30s): mention tech stack, free APIs, LOF pillar
+
+**Final QA Checklist Before Recording**
+- [ ] Server starts clean: `cd medassist/server && npm run dev`
+- [ ] Client starts clean: `cd medassist/client && npm run dev`
+- [ ] No console errors on any page
+- [ ] All 29 integration tests pass: `node tests/integration.js`
+- [ ] Mobile view: resize to 375px — hamburger nav works on all pages
+- [ ] Print test: open Tests page → Ctrl+P → check layout
+- [ ] SSE test: run agent → confirm steps appear in panel
+
+**Recording & Submission**
+- [ ] Record demo video (OBS Studio or Loom — screen + mic)
+  - [ ] Resolution: 1920×1080 minimum
+  - [ ] Show browser address bar (proves it's localhost, not static mockup)
+  - [ ] Keep recording under 10 minutes
+- [ ] Upload video to YouTube (unlisted) or Google Drive
+- [ ] Final GitHub commit: `chore: Day 15 - demo prep, seed reset, final submission`
+- [ ] Push: `git push origin main`
+- [ ] Submit to course portal:
+  - [ ] GitHub repo URL
+  - [ ] Demo video link
+  - [ ] `CS595_2026_Project_Info_Template.docx` filled out
+
+---
+
+## GIT COMMIT PLAN — Day-wise History
+> Days 1–4 already have clean commits. Days 5–13 need individual commits retroactively.
+> Use interactive rebase or cherry-pick strategy, OR create new commits for each day's work summary.
+
+**Commits to create (in order):**
+```
+feat: Day 5 - disease results page + live SSE agent status UI
+feat: Day 6 - blood report upload UI + PDF OCR with pdf-parse + Groq
+feat: Day 7 - blood report agent with OpenFDA + RxNorm tool calls
+feat: Day 8 - full blood report analysis dashboard (6 tabs)
+feat: Day 9 - doctor finder map with Leaflet + OpenStreetMap live data
+feat: Day 10 - doctor dashboard + doctor assist agent
+feat: Day 11 - agent log modal + error handling + rate limiting
+feat: Day 12 - responsive UI polish + ARIA accessibility + print CSS
+feat: Day 13 - 29 E2E integration tests + bug fixes
+docs: Day 14 - ai-prompts, api-reference, architecture, user-stories docs
+chore: Day 15 - demo prep, seed reset, final submission
+```
+
+**Steps to create day-wise commits:**
+1. `git log --oneline` — identify current HEAD
+2. For each day's work, create a tagged commit with the message above
+3. Push: `git push origin main`
+
+---
+
+## END-TO-END HEALTHCARE FLOW — Gap Analysis
+> These are stretch goals for completeness beyond the 15-day plan
+
+**Patient Journey Gaps (nice to have)**
+- [ ] Health history timeline — show all past sessions in a timeline view
+- [ ] Symptom trend tracking — compare symptom severity across multiple sessions
+- [ ] Export medical summary as PDF (patient takes to real doctor)
+- [ ] Medication reminder UI — show prescribed tablets with "Add to Calendar" option
+
+**Doctor Journey Gaps (nice to have)**
+- [ ] View patient's blood report directly in doctor dashboard (patient shares reportId)
+- [ ] Doctor can annotate/add notes to a patient's diagnosis session
+- [ ] Cross-patient analytics — aggregate stats (common diagnoses, avg urgency)
+
+**Platform Gaps (important for production)**
+- [ ] Rate limit feedback — show user "Agent is throttled, retry in Xs" when Groq 429 hits
+- [ ] Session expiry UX — show "Your session expired, please log in again" instead of silent 401
+- [ ] Password reset flow (email-based)
+- [ ] HTTPS + environment variable validation on server startup
 
 ---
 
 ## Summary Progress
 
-| Day | Focus | Done |
-|-----|-------|------|
-| 1 | Scaffold + DB | 20/20 DONE |
-| 2 | Auth system | 11/14 ✅ (3 deferred: authController, doctor profile, authService.js) |
-| 3 | Symptom intake | 16/16 ✅ (inc. 2 bug fixes) |
-| 4 | Diagnostic Agent | 13/14 ✅ (no separate controller file) |
-| 5 | Results + SSE UI | 11/11 ✅ |
-| 6 | Upload + OCR | 14/14 ✅ COMPLETE |
-| 7 | Blood Report Agent | 13/13 ✅ COMPLETE (pending live test) |
-| 8 | Analysis page | 7/7 ✅ COMPLETE (built in Day 7) |
-| 9 | Doctor map | 16/16 ✅ COMPLETE |
-| 10 | Doctor Assist Agent | 13/14 ✅ (pending live test) |
-| 11 | Logs + error handling | 11/11 ✅ COMPLETE |
-| 12 | UI polish | 0/10 |
-| 13 | E2E testing | 0/17 |
-| 14 | Documentation | 0/12 |
-| 15 | Demo + submission | 0/10 |
+| Day | Focus | Status |
+|-----|-------|--------|
+| 1 | Scaffold + DB | ✅ 20/20 DONE |
+| 2 | Auth system | ✅ 11/14 (3 deferred, acceptable) |
+| 3 | Symptom intake | ✅ 16/16 DONE |
+| 4 | Diagnostic Agent | ✅ 13/14 DONE |
+| 5 | Results + SSE UI | ✅ 11/11 DONE |
+| 6 | Upload + OCR | ✅ 14/14 DONE |
+| 7 | Blood Report Agent | ✅ 13/13 DONE |
+| 8 | Analysis page | ✅ 7/7 DONE (built Day 7) |
+| 9 | Doctor map | ✅ 16/16 DONE |
+| 10 | Doctor Assist Agent | ✅ 13/14 DONE |
+| 11 | Logs + error handling | ✅ 11/11 DONE |
+| 12 | UI polish | ✅ 11/11 DONE |
+| 13 | E2E testing | ✅ 25+ tests DONE |
+| 14 | Documentation | ⏳ 0/28 TODO |
+| 15 | Demo + submission | ⏳ 0/22 TODO |
