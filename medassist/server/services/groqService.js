@@ -1,4 +1,4 @@
-const { client: groq, MODEL } = require('../utils/aiClient');
+const { runEnsembleWithConsensus } = require('../agents/ensembleRunner');
 
 const SYSTEM_PROMPT = `You are a medical informatics AI assistant for an educational platform (CS 595).
 Given a diagnosed disease and patient profile, recommend the most important blood tests a doctor would order.
@@ -25,6 +25,7 @@ Rules:
 
 /**
  * Get recommended blood tests for a given disease.
+ * Runs across all available AI providers and merges into a consensus list.
  * @param {object} disease  - { disease, icd_code, description, ... }
  * @param {object} profile  - patient_profiles row (may be null)
  * @returns {Array} tests array
@@ -52,25 +53,21 @@ Patient Profile: ${profileText}
 
 List the key blood tests a doctor would order to confirm and monitor this condition.`;
 
-  const response = await groq.chat.completions.create({
-    model: MODEL,
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: userMessage },
-    ],
-    temperature: 0.3,
-    max_tokens: 1500,
-  });
+  const { consensusRaw, agentCount } = await runEnsembleWithConsensus(
+    SYSTEM_PROMPT,
+    userMessage,
+    'test_recommendations',
+    1500
+  );
 
-  const text = response.choices[0]?.message?.content || '[]';
+  console.log(`[groqService] Blood test consensus from ${agentCount} provider(s)`);
 
   let tests = [];
   try {
-    const clean = text.replace(/```json\n?|\n?```/g, '').trim();
-    const parsed = JSON.parse(clean);
+    const parsed = JSON.parse(consensusRaw);
     tests = Array.isArray(parsed) ? parsed.slice(0, 8) : [];
   } catch {
-    const match = text.match(/\[[\s\S]*\]/);
+    const match = consensusRaw.match(/\[[\s\S]*\]/);
     if (match) {
       try { tests = JSON.parse(match[0]).slice(0, 8); } catch { tests = []; }
     }

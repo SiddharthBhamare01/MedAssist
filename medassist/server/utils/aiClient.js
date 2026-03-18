@@ -1,17 +1,22 @@
 /**
- * aiClient.js — shared AI client
+ * aiClient.js — backward-compatible primary AI client
  *
- * To switch to Gemini (testing):
- *   const OpenAI = require('openai');
- *   const client = new OpenAI({ apiKey: process.env.GEMINI_API_KEY, baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/' });
- *   const MODEL = 'gemini-2.0-flash';
+ * Automatically picks the best available provider based on which keys are in .env:
+ *   CEREBRAS_API_KEY  → Cerebras llama-3.3-70b  (fastest, most generous free tier)
+ *   GITHUB_TOKEN      → GitHub Models gpt-4o-mini
+ *   GEMINI_API_KEY    → Gemini 2.0 Flash (fallback — quota=0 in some regions)
+ *
+ * All existing agents import { client, MODEL } from this file and work unchanged.
  */
-const Groq = require('groq-sdk');
 
-const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const { getPrimaryProvider } = require('./aiClients');
 
-// llama-3.3-70b-versatile: 12,000 TPM on Groq free tier
-// llama-3.1-8b-instant only gets 6,000 TPM — worse for multi-turn agents.
-const MODEL = 'llama-3.3-70b-versatile';
+// Resolve at first require (after dotenv has already loaded .env)
+const primary = getPrimaryProvider();
+
+const client = primary.client;
+const MODEL = primary.model;
+
+console.log(`[aiClient] Primary provider: ${primary.name} (${MODEL})`);
 
 module.exports = { client, MODEL };

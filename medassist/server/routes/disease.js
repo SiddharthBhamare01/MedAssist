@@ -41,6 +41,43 @@ router.post('/predict', verifyToken, async (req, res) => {
   }
 });
 
+// POST /api/disease/predict/retry/:sessionId — re-run agent for a stale pending session
+router.post('/predict/retry/:sessionId', verifyToken, async (req, res) => {
+  const { sessionId } = req.params;
+  try {
+    // Load existing session (ownership check via patient_id)
+    const { rows } = await require('../db/pool').query(
+      'SELECT * FROM symptom_sessions WHERE id = $1 AND patient_id = $2',
+      [sessionId, req.user.userId]
+    );
+    const session = rows[0];
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (session.status !== 'pending') {
+      return res.status(400).json({ error: 'Session is not in pending state', status: session.status });
+    }
+
+    const symptoms = Array.isArray(session.symptoms)
+      ? session.symptoms
+      : JSON.parse(session.symptoms || '[]');
+
+    if (!symptoms.length) return res.status(400).json({ error: 'No symptoms found in session' });
+
+    const patientProfile = await getPatientProfile(req.user.userId);
+
+    const { diseases, steps, turns } = await runDiagnosticAgent({
+      sessionId,
+      symptoms,
+      patientProfile,
+    });
+
+    await updateSessionStatus(sessionId, 'diagnosed');
+    res.json({ sessionId, diseases, agentSteps: steps, turns });
+  } catch (err) {
+    console.error('Retry diagnostic agent error:', err);
+    res.status(500).json({ error: 'Diagnostic agent failed. Please try again.' });
+  }
+});
+
 // POST /api/disease/tests — get recommended blood tests for selected disease
 router.post('/tests', verifyToken, async (req, res) => {
   const { sessionId, disease } = req.body;

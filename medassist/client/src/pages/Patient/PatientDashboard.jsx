@@ -31,6 +31,8 @@ function ProgressBar({ status }) {
 
 function getResumeTarget(session) {
   switch (session.status) {
+    case 'pending':
+      return { path: `/patient/results/${session.id}`, label: 'View Progress' };
     case 'diagnosed':
       return { path: `/patient/results/${session.id}`, label: 'View Diseases' };
     case 'tests_ready':
@@ -44,7 +46,7 @@ function getResumeTarget(session) {
         ? { path: `/patient/analysis/${session.report_id}`, label: 'View Analysis' }
         : null;
     default:
-      return null; // pending — agent still running, nothing to resume
+      return null;
   }
 }
 
@@ -66,12 +68,25 @@ function SessionCard({ session, onResume }) {
   });
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow">
+    <div
+      className={`bg-white rounded-2xl border border-gray-100 shadow-sm p-5 transition-shadow
+        ${resume ? 'hover:shadow-md hover:border-blue-200 cursor-pointer' : ''}`}
+      onClick={resume ? () => onResume(resume.path) : undefined}
+      role={resume ? 'button' : undefined}
+      tabIndex={resume ? 0 : undefined}
+      onKeyDown={resume ? (e) => e.key === 'Enter' && onResume(resume.path) : undefined}
+    >
       {/* Header row */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${meta.color}`}>
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${meta.color}`}>
+              {session.status === 'pending' && (
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gray-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-gray-500" />
+                </span>
+              )}
               {meta.label}
             </span>
             <span className="text-xs text-gray-400">{date}</span>
@@ -91,16 +106,14 @@ function SessionCard({ session, onResume }) {
         </div>
 
         {/* Resume button */}
-        {resume ? (
+        {resume && (
           <button
-            onClick={() => onResume(resume.path)}
+            onClick={(e) => { e.stopPropagation(); onResume(resume.path); }}
             className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold
                        px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
           >
             {resume.label} →
           </button>
-        ) : (
-          <span className="shrink-0 text-xs text-gray-400 italic self-center">In progress…</span>
         )}
       </div>
 

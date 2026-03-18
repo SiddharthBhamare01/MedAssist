@@ -1,7 +1,7 @@
-const { client: defaultClient, MODEL } = require('../utils/aiClient');
+const { getPrimaryProvider } = require('../utils/aiClients');
 
-const MAX_TURNS = 6;           // Each turn = 1 Groq API call; keep low to avoid RPM burnout
-const INTER_TURN_DELAY_MS = 2000; // 2s between turns → max ~18 Groq calls/min per agent
+const MAX_TURNS = 6;
+const INTER_TURN_DELAY_MS = 500; // Small delay between turns; reduce from 2s since Cerebras/GitHub have higher limits
 
 /** Sleep for ms milliseconds */
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -46,8 +46,10 @@ async function groqCreateWithRetry(groq, params, maxRetries = 2) {
  * @param {number}   [opts.maxTokens]        - Max tokens per Groq call (default 2000)
  * @returns {{ text: string, steps: Array, turns: number }}
  */
-async function runAgent({ systemInstruction, userMessage, tools, toolHandlers, onStep, maxTokens = 1500 }) {
-  const groq = defaultClient;
+async function runAgent({ systemInstruction, userMessage, tools, toolHandlers, onStep, maxTokens = 1500, client: clientOverride, model: modelOverride }) {
+  const primary = getPrimaryProvider();
+  const groq = clientOverride || primary.client;
+  const MODEL = modelOverride || primary.model;
 
   const messages = [
     { role: 'system', content: systemInstruction },
@@ -151,8 +153,7 @@ async function runAgent({ systemInstruction, userMessage, tools, toolHandlers, o
       });
     }
 
-    // Throttle between turns — Groq free tier: 30 RPM.
-    // Waiting 2s here means at most ~30 Groq calls/min across all concurrent requests.
+    // Small delay between turns to avoid burst rate limits
     await sleep(INTER_TURN_DELAY_MS);
   }
 

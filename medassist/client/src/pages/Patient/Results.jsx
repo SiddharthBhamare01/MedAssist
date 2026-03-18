@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
@@ -17,29 +17,83 @@ export default function Results() {
   // sessionId comes either from URL param (resume) or from navigation state (fresh flow)
   const sessionId = paramSessionId || state?.sessionId;
 
-  const [diseases, setDiseases]   = useState(state?.diseases || []);
-  const [turns, setTurns]         = useState(state?.turns || null);
-  const [selected, setSelected]   = useState(null);
-  const [loadingDb, setLoadingDb] = useState(false);
-  const [saving, setSaving]       = useState(false);
+  const [diseases, setDiseases]         = useState(state?.diseases || []);
+  const [turns, setTurns]               = useState(state?.turns || null);
+  const [selected, setSelected]         = useState(null);
+  const [loadingDb, setLoadingDb]       = useState(false);
+  const [saving, setSaving]             = useState(false);
+  const [agentRunning, setAgentRunning] = useState(false);
+  const [staleSession, setStaleSession] = useState(false); // pending but agent no longer running
+  const [retrying, setRetrying]         = useState(false);
 
-  // If we don't have diseases in state (resume path), fetch from DB
+  // useRef so pollCount survives React StrictMode double-invocation
+  const pollCountRef = useRef(0);
+
+  // If we don't have diseases in state (resume path), fetch from DB.
+  // For pending sessions, poll up to 4 times (16s). After that, mark as stale.
   useEffect(() => {
     if (diseases.length > 0 || !sessionId) return;
-    setLoadingDb(true);
-    api.get(`/patient/sessions/${sessionId}`)
-      .then((res) => {
+
+    let pollTimer = null;
+    pollCountRef.current = 0;
+    const MAX_POLLS = 4;
+
+    const fetchSession = async (isRetry = false) => {
+      if (!isRetry) setLoadingDb(true);
+      try {
+        const res = await api.get(`/patient/sessions/${sessionId}`);
         const session = res.data.session;
         const dbDiseases = session?.predicted_diseases;
+
         if (Array.isArray(dbDiseases) && dbDiseases.length > 0) {
           setDiseases(dbDiseases);
+          setAgentRunning(false);
+          setLoadingDb(false);
+        } else if (session?.status === 'pending') {
+          setAgentRunning(true);
+          setLoadingDb(false);
+          pollCountRef.current += 1;
+          if (pollCountRef.current < MAX_POLLS) {
+            pollTimer = setTimeout(() => fetchSession(true), 4000);
+          } else {
+            // Agent isn't coming back — server likely restarted mid-run
+            setAgentRunning(false);
+            setStaleSession(true);
+          }
         } else {
+          setLoadingDb(false);
+          setAgentRunning(false);
           toast.error('No diagnosis data found for this session.');
         }
-      })
-      .catch(() => toast.error('Failed to load session data.'))
-      .finally(() => setLoadingDb(false));
+      } catch {
+        setLoadingDb(false);
+        toast.error('Failed to load session data.');
+      }
+    };
+
+    fetchSession();
+    return () => { if (pollTimer) clearTimeout(pollTimer); };
   }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRetryDiagnosis = async () => {
+    setRetrying(true);
+    setStaleSession(false);
+    setAgentRunning(true);
+    try {
+      const res = await api.post(`/disease/predict/retry/${sessionId}`);
+      setDiseases(res.data.diseases || []);
+      setTurns(res.data.turns || null);
+      setAgentRunning(false);
+      toast.success('Diagnosis complete!');
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Retry failed. Please try again.';
+      toast.error(msg);
+      setAgentRunning(false);
+      setStaleSession(true);
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   // No session at all — came here directly
   if (!sessionId) {
@@ -83,7 +137,70 @@ export default function Results() {
     );
   }
 
-  if (!loadingDb && diseases.length === 0) {
+  // Agent still running — show live waiting state (auto-refreshes every 4s)
+  if (agentRunning && diseases.length === 0) {
+    return (
+      <div className="max-w-2xl mx-auto text-center py-20">
+        <div className="relative w-16 h-16 mx-auto mb-6">
+          <div className="w-16 h-16 border-4 border-blue-200 rounded-full" />
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute inset-0" />
+          <div className="absolute inset-0 flex items-center justify-center text-2xl">🧬</div>
+        </div>
+        <h2 className="text-lg font-bold text-gray-800 mb-2">Diagnosing your symptoms…</h2>
+        <p className="text-sm text-gray-500 mb-1">
+          Multiple AI agents are cross-verifying your diagnosis with ICD-10 lookups.
+        </p>
+        <p className="text-xs text-gray-400 mb-6">This usually takes 30–60 seconds. This page refreshes automatically.</p>
+        <div className="flex justify-center gap-1.5">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
+              style={{ animationDelay: `${i * 0.15}s` }}
+            />
+          ))}
+        </div>
+        <button
+          onClick={() => navigate('/patient/dashboard')}
+          className="mt-8 text-sm text-gray-400 hover:text-blue-600 underline transition-colors"
+        >
+          ← Back to sessions (results will be saved automatically)
+        </button>
+      </div>
+    );
+  }
+
+  // Stale session — agent was interrupted (server restart). Offer re-run.
+  if (staleSession) {
+    return (
+      <div className="max-w-2xl mx-auto text-center py-20">
+        <div className="text-5xl mb-4">⚠️</div>
+        <h2 className="text-lg font-bold text-gray-800 mb-2">Diagnosis was interrupted</h2>
+        <p className="text-sm text-gray-500 mb-6">
+          The AI agent stopped mid-way (the server may have restarted).
+          Your symptoms are saved — click below to re-run the diagnosis.
+        </p>
+        <button
+          onClick={handleRetryDiagnosis}
+          disabled={retrying}
+          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold
+                     px-6 py-3 rounded-lg transition-colors"
+        >
+          {retrying ? 'Re-running diagnosis…' : '🔄 Re-run Diagnosis'}
+        </button>
+        <div className="mt-4">
+          <button
+            onClick={() => navigate('/patient/dashboard')}
+            className="text-sm text-gray-400 hover:text-blue-600 underline transition-colors"
+          >
+            ← Back to sessions
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!loadingDb && !agentRunning && diseases.length === 0) {
     return (
       <div className="max-w-2xl mx-auto text-center py-20">
         <div className="text-5xl mb-4">🔍</div>

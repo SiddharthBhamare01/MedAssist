@@ -1,4 +1,5 @@
 const { runAgent } = require('./agentRunner');
+const { runEnsembleWithConsensus } = require('./ensembleRunner');
 const { definitions, handlers } = require('./tools/medicalTools');
 const pool = require('../db/pool');
 const { getEmitter } = require('../utils/eventEmitter');
@@ -32,13 +33,17 @@ Rules:
 - Top 5 diseases only
 - Educational use only — not a substitute for professional medical advice`;
 
+// Lightweight prompt for ensemble secondary agents (no tool calls needed)
+const ENSEMBLE_SYSTEM = `You are a medical diagnostic AI for an educational platform (CS 595).
+Given patient symptoms and profile, predict the top 5 most likely diseases.
+Return ONLY a JSON array — no markdown, no explanation.
+Each item: { "disease", "icd_code", "probability" (1-100), "description", "matched_symptoms", "reasoning" }
+Sort by probability descending. Top 5 only. Educational use only.`;
+
 /**
  * Run the Diagnostic Agent for a symptom session.
- * @param {object} opts
- * @param {string}   opts.sessionId      - symptom_sessions UUID
- * @param {Array}    opts.symptoms       - [{ name, duration, severity, onset }]
- * @param {object}   [opts.patientProfile] - patient_profiles row
- * @returns {Array} diseases array
+ * Phase 1: Primary agent with ICD tool calls → verified diagnosis
+ * Phase 2: Ensemble cross-verification with other providers → consensus
  */
 async function runDiagnosticAgent({ sessionId, symptoms, patientProfile }) {
   const emitter = getEmitter(sessionId);
@@ -72,6 +77,9 @@ Reported Symptoms: ${symptomsText}
 
 Please analyse these symptoms, look up ICD-10 codes for each suspected disease, and return the top 5 most likely diagnoses as a JSON array.`;
 
+  // ── Phase 1: Primary agent with ICD tool calls ────────────────────────────
+  emitter.emit('step', { tool: '_system', args: {}, result: { message: 'Running primary diagnostic agent with ICD-10 tool calls…' }, timestamp: new Date().toISOString() });
+
   const { text, steps, turns } = await runAgent({
     systemInstruction: SYSTEM_INSTRUCTION,
     userMessage,
@@ -80,21 +88,85 @@ Please analyse these symptoms, look up ICD-10 codes for each suspected disease, 
     onStep: (step) => emitter.emit('step', step),
   });
 
-  // Parse JSON from Gemini response (strip markdown code fences if present)
-  let diseases = [];
+  // Parse primary agent result
+  let primaryDiseases = [];
   try {
     const clean = text.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(clean);
-    diseases = Array.isArray(parsed) ? parsed.slice(0, 5) : [];
+    primaryDiseases = Array.isArray(parsed) ? parsed.slice(0, 5) : [];
   } catch {
-    // Gemini didn't return clean JSON — try to extract JSON array from text
     const match = text.match(/\[[\s\S]*\]/);
     if (match) {
-      try { diseases = JSON.parse(match[0]).slice(0, 5); } catch { diseases = []; }
+      try { primaryDiseases = JSON.parse(match[0]).slice(0, 5); } catch { primaryDiseases = []; }
     }
   }
 
-  // Save diseases to symptom_sessions
+  // ── Phase 2: Ensemble cross-verification ─────────────────────────────────
+  let diseases = primaryDiseases;
+  let ensembleAgentCount = 1;
+
+  try {
+    emitter.emit('step', {
+      tool: '_ensemble',
+      args: {},
+      result: { message: 'Cross-verifying diagnosis with multiple AI providers…' },
+      timestamp: new Date().toISOString(),
+    });
+
+    const ensembleUserMsg = `Patient Profile: ${profileText}\n\nReported Symptoms: ${symptomsText}\n\nPredict the top 5 most likely diseases as a JSON array.`;
+
+    const { consensusRaw, agentCount, agentOutputs } = await runEnsembleWithConsensus(
+      ENSEMBLE_SYSTEM,
+      ensembleUserMsg,
+      'disease_diagnosis',
+      2000
+    );
+
+    ensembleAgentCount = agentCount + 1; // +1 for the primary agent
+
+    // Merge: if ensemble ran multiple providers, use consensus; otherwise prefer primary (has ICD codes)
+    if (agentCount > 1) {
+      let consensusDiseases = [];
+      try {
+        const parsed = JSON.parse(consensusRaw);
+        consensusDiseases = Array.isArray(parsed) ? parsed.slice(0, 5) : [];
+      } catch { /* keep primary */ }
+
+      if (consensusDiseases.length > 0) {
+        // Enrich consensus result with ICD codes from primary agent
+        const icdMap = {};
+        for (const d of primaryDiseases) {
+          icdMap[d.disease?.toLowerCase()] = { icd_code: d.icd_code, icd_description: d.icd_description };
+        }
+        diseases = consensusDiseases.map((d) => {
+          const key = d.disease?.toLowerCase();
+          if (icdMap[key]) {
+            return { ...d, icd_code: d.icd_code || icdMap[key].icd_code, icd_description: d.icd_description || icdMap[key].icd_description };
+          }
+          return d;
+        });
+        console.log(`[diagnosticAgent] Ensemble consensus from ${agentCount} providers applied`);
+      }
+    } else {
+      // Only 1 ensemble provider — it's likely the same as primary; keep primary result (has ICD codes)
+      console.log('[diagnosticAgent] Single ensemble provider — using primary result with ICD codes');
+    }
+
+    emitter.emit('step', {
+      tool: '_ensemble',
+      args: {},
+      result: {
+        message: `Ensemble complete: ${ensembleAgentCount} agents cross-verified. ${diseases.length} diseases in final result.`,
+        providers: agentOutputs.map((a) => a.providerName),
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (ensembleErr) {
+    console.warn('[diagnosticAgent] Ensemble step failed, using primary result:', ensembleErr.message);
+    // Fall back to primary result — no disruption to user
+  }
+
+  // Save to DB
   try {
     await pool.query(
       'UPDATE symptom_sessions SET predicted_diseases = $1 WHERE id = $2',
@@ -107,11 +179,10 @@ Please analyse these symptoms, look up ICD-10 codes for each suspected disease, 
     );
   } catch (dbErr) {
     console.error('[diagnosticAgent] DB save error:', dbErr.message);
-    // Don't throw — agent result is still valid even if DB write fails
   }
 
-  emitter.emit('done', { diseases });
-  return { diseases, steps, turns };
+  emitter.emit('done', { diseases, ensembleAgentCount });
+  return { diseases, steps, turns, ensembleAgentCount };
 }
 
 module.exports = { runDiagnosticAgent };

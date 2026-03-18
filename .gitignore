@@ -9,6 +9,10 @@
 details.txt
 *.claude
 
+# Personal notes & AI conversation logs
+LLM_history_risk_mittigation.txt
+suggestions.md
+
 # Dependencies
 node_modules/
 medassist/client/node_modules/

@@ -1,15 +1,12 @@
 /**
- * geminiService.js
+ * geminiService.js — Blood report OCR service
  *
- * Blood report OCR service.
- *
- * Strategy (Gemini free tier quota = 0 in this region):
- *   - PDF  → pdf-parse extracts raw text → Groq parses structured blood values
- *   - Image (JPG/PNG) → Gemini Vision (attempted); falls back to helpful error
+ * Strategy:
+ *   PDF   → pdf-parse extracts raw text → Cerebras (primary provider) parses structured values
+ *   Image → Gemini Vision if key works, otherwise clear error asking user to upload PDF
  */
 
 const fs = require('fs');
-const { client: groq, MODEL: AI_MODEL } = require('../utils/aiClient');
 
 const PARSE_PROMPT = `You are a medical data extraction AI.
 Below is raw text extracted from a blood test report.
@@ -33,7 +30,7 @@ Rules:
 - Return ONLY the JSON array, nothing else`;
 
 /**
- * Extract blood values from a PDF file using pdf-parse + Groq.
+ * Extract blood values from a PDF using pdf-parse + Cerebras (primary AI provider).
  */
 async function extractFromPDF(filePath) {
   const pdfParse = require('pdf-parse');
@@ -41,10 +38,15 @@ async function extractFromPDF(filePath) {
   const data = await pdfParse(buffer);
   const rawText = data.text.trim();
 
-  if (!rawText) throw new Error('PDF appears to be a scanned image with no extractable text. Please upload a text-based PDF.');
+  if (!rawText) {
+    throw new Error('PDF appears to be a scanned image with no extractable text. Please upload a text-based PDF.');
+  }
 
-  const completion = await groq.chat.completions.create({
-    model: AI_MODEL,
+  const { getPrimaryProvider } = require('../utils/aiClients');
+  const provider = getPrimaryProvider();
+
+  const response = await provider.client.chat.completions.create({
+    model: provider.model,
     messages: [
       { role: 'system', content: PARSE_PROMPT },
       { role: 'user', content: `Blood report text:\n\n${rawText}` },
@@ -53,63 +55,33 @@ async function extractFromPDF(filePath) {
     max_tokens: 8000,
   });
 
-  const raw = completion.choices[0].message.content.trim();
+  const raw = response.choices[0].message.content.trim();
   const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
 
   let parsed;
   try {
     parsed = JSON.parse(clean);
   } catch {
-    console.error('Groq returned non-JSON:', raw);
+    console.error(`[geminiService] ${provider.name} returned non-JSON:`, raw.slice(0, 200));
     throw new Error('Failed to parse blood values from PDF text');
   }
 
-  if (!Array.isArray(parsed)) throw new Error('Expected array from parser');
-  return parsed;
-}
-
-/**
- * Extract blood values from an image file using Gemini Vision.
- * Note: Gemini free tier quota = 0 in some regions — throws a clear error.
- */
-async function extractFromImage(filePath, mimeType) {
-  const { GoogleGenerativeAI } = require('@google/generative-ai');
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-
-  const base64 = fs.readFileSync(filePath).toString('base64');
-  const OCR_PROMPT = `Extract all blood test values from this lab report image.
-Return a JSON array ONLY (no markdown). Each item: { "parameter", "abbreviation", "value", "unit", "normal_range", "status" }
-status = "normal" | "low" | "high" | "critical_low" | "critical_high"`;
-
-  const result = await model.generateContent([
-    { inlineData: { data: base64, mimeType } },
-    { text: OCR_PROMPT },
-  ]);
-
-  const raw = result.response.text().trim();
-  const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
-  const parsed = JSON.parse(clean);
-  if (!Array.isArray(parsed)) throw new Error('Expected array from Gemini Vision');
+  if (!Array.isArray(parsed)) throw new Error('Expected array from AI parser');
   return parsed;
 }
 
 /**
  * Main export: routes to correct extractor based on file type.
+ * Image OCR is not supported (no vision model configured) — PDF only.
  */
 async function extractBloodValuesFromImage(filePath, mimeType) {
   if (mimeType === 'application/pdf') {
     return await extractFromPDF(filePath);
   }
-  // Image path — Gemini Vision (may fail in regions with quota=0)
-  try {
-    return await extractFromImage(filePath, mimeType);
-  } catch (err) {
-    if (err.message?.includes('quota') || err.message?.includes('429') || err.message?.includes('404')) {
-      throw new Error('Image OCR is unavailable in your region (Gemini quota). Please convert your report to PDF and upload that instead.');
-    }
-    throw err;
-  }
+
+  throw new Error(
+    'Image uploads are not supported. Please convert your blood report to a text-based PDF and upload that instead.'
+  );
 }
 
 module.exports = { extractBloodValuesFromImage };
