@@ -1,7 +1,13 @@
 const router = require('express').Router();
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const speakeasy = require('speakeasy');
+const QRCode = require('qrcode');
 const { findByEmail, createUser } = require('../models/User');
+const pool = require('../db/pool');
+const verifyToken = require('../middleware/auth');
+const { sendEmail } = require('../services/emailService');
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
@@ -25,6 +31,19 @@ router.post('/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await createUser({ email, passwordHash, role, fullName });
+
+    // Auto-create empty profile row for the role
+    if (role === 'patient') {
+      await pool.query(
+        'INSERT INTO patient_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING',
+        [user.id]
+      );
+    } else if (role === 'doctor') {
+      await pool.query(
+        'INSERT INTO doctor_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING',
+        [user.id]
+      );
+    }
 
     const token = jwt.sign(
       { userId: user.id, role: user.role, name: user.full_name },
@@ -74,6 +93,205 @@ router.post('/login', async (req, res) => {
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Login failed. Please try again.' });
+  }
+});
+
+// POST /api/auth/forgot-password
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body;
+
+  // Always return success to avoid leaking whether email exists
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required' });
+  }
+
+  try {
+    const user = await findByEmail(email);
+    if (user) {
+      const token = crypto.randomBytes(32).toString('hex');
+
+      await pool.query(
+        `INSERT INTO password_reset_tokens (user_id, token, expires_at)
+         VALUES ($1, $2, NOW() + INTERVAL '1 hour')`,
+        [user.id, token]
+      );
+
+      const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+      const resetLink = `${clientUrl}/reset-password?token=${token}`;
+
+      const emailResult = await sendEmail({
+        to: email,
+        subject: 'MedAssist AI — Password Reset',
+        html: `
+          <h2>Password Reset Request</h2>
+          <p>Click the link below to reset your password. This link expires in 1 hour.</p>
+          <p><a href="${resetLink}" style="display:inline-block;padding:12px 24px;background:#0d9488;color:#fff;border-radius:8px;text-decoration:none;">Reset Password</a></p>
+          <p style="color:#666;font-size:12px;">If you did not request this, ignore this email.</p>
+        `,
+      });
+
+      // In dev mode (no SMTP), return the reset link directly so the user can use it
+      if (emailResult?.dev) {
+        return res.json({
+          message: 'Reset link generated (dev mode — no SMTP configured)',
+          resetLink,
+        });
+      }
+    }
+
+    res.json({ message: 'If that email is registered, a reset link has been sent.' });
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    res.status(500).json({ error: 'Failed to process request' });
+  }
+});
+
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req, res) => {
+  const { token, password } = req.body;
+
+  if (!token || !password) {
+    return res.status(400).json({ error: 'Token and new password are required' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM password_reset_tokens
+       WHERE token = $1 AND used = false AND expires_at > NOW()`,
+      [token]
+    );
+
+    if (!rows.length) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+
+    const resetToken = rows[0];
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, resetToken.user_id]);
+    await pool.query('UPDATE password_reset_tokens SET used = true WHERE id = $1', [resetToken.id]);
+
+    res.json({ message: 'Password has been reset successfully' });
+  } catch (err) {
+    console.error('Reset password error:', err);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+// POST /api/auth/2fa/setup — generate TOTP secret for logged-in user
+router.post('/2fa/setup', verifyToken, async (req, res) => {
+  try {
+    const secret = speakeasy.generateSecret({
+      name: `MedAssist AI (${req.user.name || 'User'})`,
+      issuer: 'MedAssist AI',
+    });
+
+    await pool.query(
+      'UPDATE users SET totp_secret = $1 WHERE id = $2',
+      [secret.base32, req.user.userId]
+    );
+
+    // Generate QR code data URL
+    const qrDataUrl = await QRCode.toDataURL(secret.otpauth_url);
+
+    res.json({
+      secret: secret.base32,
+      otpauth_url: secret.otpauth_url,
+      qr: qrDataUrl,
+    });
+  } catch (err) {
+    console.error('2FA setup error:', err);
+    res.status(500).json({ error: 'Failed to set up 2FA' });
+  }
+});
+
+// POST /api/auth/2fa/verify — verify TOTP token and enable 2FA
+router.post('/2fa/verify', verifyToken, async (req, res) => {
+  const { token: totpToken } = req.body;
+  if (!totpToken) {
+    return res.status(400).json({ error: 'TOTP token is required' });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      'SELECT totp_secret FROM users WHERE id = $1',
+      [req.user.userId]
+    );
+
+    if (!rows.length || !rows[0].totp_secret) {
+      return res.status(400).json({ error: '2FA not set up yet. Call /2fa/setup first.' });
+    }
+
+    const verified = speakeasy.totp.verify({
+      secret: rows[0].totp_secret,
+      encoding: 'base32',
+      token: totpToken,
+      window: 1,
+    });
+
+    if (!verified) {
+      return res.status(400).json({ error: 'Invalid TOTP token' });
+    }
+
+    await pool.query('UPDATE users SET totp_enabled = true WHERE id = $1', [req.user.userId]);
+
+    res.json({ message: '2FA enabled successfully' });
+  } catch (err) {
+    console.error('2FA verify error:', err);
+    res.status(500).json({ error: 'Failed to verify 2FA token' });
+  }
+});
+
+// POST /api/auth/2fa/validate — login with 2FA (email + password + TOTP token)
+router.post('/2fa/validate', async (req, res) => {
+  const { email, password, token: totpToken } = req.body;
+
+  if (!email || !password || !totpToken) {
+    return res.status(400).json({ error: 'Email, password, and TOTP token are required' });
+  }
+
+  try {
+    const user = await findByEmail(email);
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    if (!user.totp_enabled || !user.totp_secret) {
+      return res.status(400).json({ error: '2FA is not enabled for this account' });
+    }
+
+    const verified = speakeasy.totp.verify({
+      secret: user.totp_secret,
+      encoding: 'base32',
+      token: totpToken,
+      window: 1,
+    });
+
+    if (!verified) {
+      return res.status(401).json({ error: 'Invalid TOTP token' });
+    }
+
+    const jwtToken = jwt.sign(
+      { userId: user.id, role: user.role, name: user.full_name },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      token: jwtToken,
+      user: { id: user.id, email: user.email, role: user.role, name: user.full_name },
+    });
+  } catch (err) {
+    console.error('2FA validate error:', err);
+    res.status(500).json({ error: 'Login failed' });
   }
 });
 

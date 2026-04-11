@@ -31,8 +31,11 @@ app.use('/api/patient', require('./routes/patient'));
 app.use('/api/disease', agentLimiter, require('./routes/disease'));
 app.use('/api/blood-report', agentLimiter, require('./routes/bloodReport'));
 app.use('/api/doctors', require('./routes/doctors'));
-app.use('/api/doctor-assist', agentLimiter, require('./routes/doctorAssist'));
+app.use('/api/doctor-assist', require('./routes/doctorAssist'));
 app.use('/api/agent', require('./routes/agentStatus'));
+app.use('/api/appointments', require('./routes/appointments'));
+app.use('/api/admin', require('./routes/admin'));
+app.use('/api/shared', require('./routes/shared'));
 
 // Health check
 app.get('/api/health', (req, res) => {

@@ -17,7 +17,9 @@ export default function Results() {
   // sessionId comes either from URL param (resume) or from navigation state (fresh flow)
   const sessionId = paramSessionId || state?.sessionId;
 
-  const [diseases, setDiseases]         = useState(state?.diseases || []);
+  const [diseases, setDiseases]         = useState(
+    (state?.diseases || []).slice().sort((a, b) => (b.probability || 0) - (a.probability || 0))
+  );
   const [turns, setTurns]               = useState(state?.turns || null);
   const [selected, setSelected]         = useState(null);
   const [loadingDb, setLoadingDb]       = useState(false);
@@ -36,7 +38,7 @@ export default function Results() {
 
     let pollTimer = null;
     pollCountRef.current = 0;
-    const MAX_POLLS = 4;
+    const MAX_POLLS = 30; // poll for up to ~2.5 minutes (30 × 5s)
 
     const fetchSession = async (isRetry = false) => {
       if (!isRetry) setLoadingDb(true);
@@ -46,7 +48,7 @@ export default function Results() {
         const dbDiseases = session?.predicted_diseases;
 
         if (Array.isArray(dbDiseases) && dbDiseases.length > 0) {
-          setDiseases(dbDiseases);
+          setDiseases(dbDiseases.slice().sort((a, b) => (b.probability || 0) - (a.probability || 0)));
           setAgentRunning(false);
           setLoadingDb(false);
         } else if (session?.status === 'pending') {
@@ -54,7 +56,7 @@ export default function Results() {
           setLoadingDb(false);
           pollCountRef.current += 1;
           if (pollCountRef.current < MAX_POLLS) {
-            pollTimer = setTimeout(() => fetchSession(true), 4000);
+            pollTimer = setTimeout(() => fetchSession(true), 5000);
           } else {
             // Agent isn't coming back — server likely restarted mid-run
             setAgentRunning(false);
@@ -81,7 +83,7 @@ export default function Results() {
     setAgentRunning(true);
     try {
       const res = await api.post(`/disease/predict/retry/${sessionId}`);
-      setDiseases(res.data.diseases || []);
+      setDiseases((res.data.diseases || []).slice().sort((a, b) => (b.probability || 0) - (a.probability || 0)));
       setTurns(res.data.turns || null);
       setAgentRunning(false);
       toast.success('Diagnosis complete!');
@@ -216,7 +218,7 @@ export default function Results() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-gray-400">
         <button onClick={() => navigate('/patient/dashboard')} className="hover:text-blue-600 transition-colors">
@@ -253,7 +255,7 @@ export default function Results() {
       </p>
 
       {/* Disease Cards */}
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {diseases.map((disease, index) => {
           const color = PROBABILITY_COLOR(disease.probability);
           const isSelected = selected?.icd_code === disease.icd_code;

@@ -19,7 +19,7 @@ function cacheKey(lat, lng, radiusMeters) {
 
 function buildQuery(lat, lng, radiusMeters) {
   return `
-[out:json][timeout:20];
+[out:json][timeout:30];
 (
   node["amenity"~"^(doctors|clinic|hospital)$"](around:${radiusMeters},${lat},${lng});
   node["healthcare"~"^(doctor|clinic|hospital)$"](around:${radiusMeters},${lat},${lng});
@@ -39,7 +39,7 @@ async function fetchFromOverpass(query) {
 
   for (const url of OVERPASS_MIRRORS) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 20000);
+    const timer = setTimeout(() => controller.abort(), 30000);
     try {
       const response = await fetch(url, {
         method: 'POST',

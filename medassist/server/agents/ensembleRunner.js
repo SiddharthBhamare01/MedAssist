@@ -45,8 +45,8 @@ async function callProvider(provider, systemPrompt, userMessage, maxTokens = 200
       }
       return text.trim();
     } catch (err) {
-      // 429 = overloaded, 404 = model unavailable, 400 = provider error — try next model
-      if (err.status === 429 || err.status === 404 || err.status === 400) {
+      // 429 = overloaded, 503 = service down, 404 = model unavailable, 400 = provider error — try next model
+      if (err.status === 429 || err.status === 503 || err.status === 404 || err.status === 400) {
         lastErr = err;
         continue;
       }
@@ -87,6 +87,28 @@ Compare blood test recommendation lists from each agent.
 - Return a single JSON array sorted by how many agents recommended each test
 - Add "consensus_count" field to each item
 - Return ONLY the JSON array, no markdown fences`,
+
+  treatment_plan: `
+Compare the treatment plans from each agent.
+- Medications recommended by 2+ agents: HIGH confidence — keep as-is
+- Medications from only 1 agent: include only if FDA-approved and clinically justified
+- For conflicting dosages: prefer the LOWER/SAFER dose (start low, titrate up)
+- For conflicting durations: prefer the SHORTER duration unless chronic condition
+- NEVER include medications the patient is allergic to (check allergies in context)
+- Flag any drug-drug interactions between recommended treatments
+- Deduplicate by generic name (same drug, different brands = one entry)
+- Return ONLY the JSON object with "treatment_solutions" array, no markdown fences
+- Each item: { condition, medication, generic_name, dosage, frequency, duration, route, fda_approved, evidence, precautions }`,
+
+  drug_interactions: `
+Compare drug interaction analyses from each agent.
+- Interactions flagged by 2+ agents: high confidence — keep severity as-is or upgrade
+- Interactions flagged by only 1 agent: include but note lower confidence
+- Merge into one JSON object with "interactions" array, "summary" string, and "safe_combinations" array
+- Each interaction: { drugs, severity (Major/Moderate/Minor/None), mechanism, description, recommendation }
+- For conflicting severities, use the MORE SEVERE rating (patient safety first)
+- Deduplicate drug pairs (A+B = B+A)
+- Return ONLY the JSON object, no markdown fences`,
 };
 
 // ─── Core functions ───────────────────────────────────────────────────────────

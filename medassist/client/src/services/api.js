@@ -3,8 +3,11 @@ import toast from 'react-hot-toast';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
-  timeout: 120000, // 2 min — agents can take time
+  timeout: 120000,
 });
+
+// Custom event for session expiry
+export const SESSION_EXPIRED_EVENT = 'medassist:session-expired';
 
 // Attach JWT to every request
 api.interceptors.request.use((config) => {
@@ -18,15 +21,19 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Global response error handler — toast on server/network errors
+// Global response error handler
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     const status  = error.response?.status;
     const message = error.response?.data?.error || error.message || 'Something went wrong.';
 
-    // 401 — silently pass through (handled by individual pages / auth redirect)
+    // 401 — session expired
     if (status === 401) {
+      // Dispatch custom event so SessionExpiryModal can pick it up
+      window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, {
+        detail: { returnUrl: window.location.pathname + window.location.search }
+      }));
       return Promise.reject(Object.assign(new Error(message), { status, _silent: true }));
     }
 

@@ -1,149 +1,91 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import AgentLogModal from '../../components/AgentLogModal';
 
 const URGENCY_STYLE = {
-  critical: 'bg-red-100 text-red-700 border-red-200',
-  urgent:   'bg-orange-100 text-orange-700 border-orange-200',
-  routine:  'bg-green-100 text-green-700 border-green-200',
+  critical: 'bg-red-500/10 text-red-600 ring-red-500/20',
+  urgent:   'bg-amber-500/10 text-amber-600 ring-amber-500/20',
+  routine:  'bg-emerald-500/10 text-emerald-600 ring-emerald-500/20',
 };
 
 function UrgencyBadge({ urgency }) {
-  const cls = URGENCY_STYLE[urgency] || 'bg-gray-100 text-gray-600 border-gray-200';
+  const cls = URGENCY_STYLE[urgency] || 'bg-slate-100 text-slate-500 ring-slate-200';
   return (
-    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${cls} uppercase tracking-wide`}>
+    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ring-1 ring-inset uppercase tracking-wider ${cls}`}>
       {urgency}
     </span>
   );
 }
 
-function SessionCard({ session, onClick, onViewLog }) {
+function SessionCard({ session, onClick, onViewLog, index }) {
   const summary = session.patient_summary || {};
   const results = summary.results || [];
-  const date = new Date(session.created_at).toLocaleDateString('en-US', {
-    month: 'short', day: 'numeric', year: 'numeric',
-  });
-  const time = new Date(session.created_at).toLocaleTimeString('en-US', {
-    hour: '2-digit', minute: '2-digit',
-  });
+  const date = new Date(session.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const time = new Date(session.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  const critCount = results.filter(r => r.urgency === 'critical').length;
+  const urgCount  = results.filter(r => r.urgency === 'urgent').length;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5 hover:border-blue-300 hover:shadow-md transition-all">
-      <div className="flex items-start justify-between gap-4 cursor-pointer" onClick={onClick}>
+    <div
+      className="group bg-white rounded-2xl border border-slate-200/60 p-5 hover:border-teal-300 hover:shadow-lg hover:shadow-teal-500/5
+                 transition-all duration-300 cursor-pointer relative overflow-hidden"
+      style={{ animationDelay: `${index * 50}ms` }}
+      onClick={onClick}
+    >
+      <div className={`absolute top-0 left-0 w-1 h-full rounded-l-2xl transition-all duration-300
+        ${critCount > 0 ? 'bg-red-500' : urgCount > 0 ? 'bg-amber-500' : 'bg-teal-500'}
+        opacity-0 group-hover:opacity-100`}
+      />
+
+      <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-900 text-sm truncate">
+          <p className="font-semibold text-slate-800 text-sm truncate group-hover:text-teal-700 transition-colors">
             {summary.chiefComplaint || 'Patient Case'}
           </p>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-slate-400 mt-1 leading-relaxed">
             {summary.age ? `${summary.age}yr` : '—'}
             {summary.gender ? ` · ${summary.gender}` : ''}
-            {summary.symptoms ? ` · ${summary.symptoms.slice(0, 50)}…` : ''}
+            {summary.symptoms ? ` · ${summary.symptoms.slice(0, 60)}…` : ''}
           </p>
         </div>
         <div className="text-right shrink-0">
-          <p className="text-xs font-medium text-gray-700">{date}</p>
-          <p className="text-xs text-gray-400">{time}</p>
+          <p className="text-[11px] font-semibold text-slate-500">{date}</p>
+          <p className="text-[10px] text-slate-400">{time}</p>
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-1.5 cursor-pointer" onClick={onClick}>
-        {results.slice(0, 4).map((r, i) => (
-          <UrgencyBadge key={i} urgency={r.urgency} />
-        ))}
+      <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+        {results.slice(0, 4).map((r, i) => <UrgencyBadge key={i} urgency={r.urgency} />)}
         {results.length > 0 && (
-          <span className="text-xs text-gray-500 self-center">
-            {results.length} test{results.length !== 1 ? 's' : ''} suggested
-          </span>
+          <span className="text-[10px] text-slate-400 ml-1">{results.length} test{results.length !== 1 ? 's' : ''}</span>
         )}
       </div>
 
       {session.suggested_tests?.length > 0 && (
-        <p className="mt-2 text-xs text-gray-400 truncate cursor-pointer" onClick={onClick}>
-          {session.suggested_tests.slice(0, 5).join(' · ')}
-          {session.suggested_tests.length > 5 ? ` +${session.suggested_tests.length - 5} more` : ''}
+        <p className="mt-2 text-[11px] text-slate-400 truncate">
+          {session.suggested_tests.slice(0, 4).join(' · ')}
+          {session.suggested_tests.length > 4 ? ` +${session.suggested_tests.length - 4}` : ''}
         </p>
       )}
 
-      {/* View Agent Log button */}
-      <div className="mt-3 pt-3 border-t border-gray-100">
+      <div className="mt-3 pt-3 border-t border-slate-100/80 flex items-center justify-between">
         <button
           onClick={e => { e.stopPropagation(); onViewLog(session); }}
-          className="text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-1 hover:underline"
+          className="text-[11px] text-teal-600 hover:text-teal-800 font-semibold flex items-center gap-1 transition-colors"
         >
-          🔍 View Agent Log
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m5.231 13.481L15 17.25m-4.5-15H5.625c-.621 0-1.125.504-1.125 1.125v16.5c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Zm3.75 11.625a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+          </svg>
+          Agent Log
         </button>
+        <svg className="w-4 h-4 text-slate-300 group-hover:text-teal-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+        </svg>
       </div>
     </div>
-  );
-}
-
-function ProfileEditPanel({ profile, onSave, onCancel }) {
-  const { register, handleSubmit, formState: { isSubmitting } } = useForm({
-    defaultValues: {
-      specialization: profile?.specialization || '',
-      hospital_name:  profile?.hospital_name  || '',
-      city:           profile?.city           || '',
-      state:          profile?.state          || '',
-      phone:          profile?.phone          || '',
-    },
-  });
-
-  async function onSubmit(data) {
-    try {
-      const res = await api.put('/doctor-assist/profile', data);
-      toast.success('Profile updated!');
-      onSave(res.data.profile);
-    } catch {
-      toast.error('Failed to update profile');
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit(onSubmit)}
-      className="bg-white border border-blue-200 rounded-2xl p-6 space-y-4">
-      <h3 className="font-bold text-gray-900">Edit Clinic Profile</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Specialization</label>
-          <input {...register('specialization')} placeholder="e.g. Cardiologist"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Hospital / Clinic</label>
-          <input {...register('hospital_name')} placeholder="e.g. City General Hospital"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">City</label>
-          <input {...register('city')} placeholder="e.g. Phoenix"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">State</label>
-          <input {...register('state')} placeholder="e.g. AZ"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div className="sm:col-span-2">
-          <label className="block text-xs font-medium text-gray-600 mb-1">Phone</label>
-          <input {...register('phone')} placeholder="e.g. (602) 555-0100"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-      </div>
-      <div className="flex gap-3 pt-2">
-        <button type="submit" disabled={isSubmitting}
-          className="bg-blue-600 text-white text-sm font-semibold px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
-          {isSubmitting ? 'Saving…' : 'Save Profile'}
-        </button>
-        <button type="button" onClick={onCancel}
-          className="text-gray-600 text-sm px-5 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
-          Cancel
-        </button>
-      </div>
-    </form>
   );
 }
 
@@ -154,27 +96,19 @@ export default function DoctorDashboard() {
   const [profile, setProfile]       = useState(null);
   const [sessions, setSessions]     = useState([]);
   const [loading, setLoading]       = useState(true);
-  const [editingProfile, setEditingProfile] = useState(false);
-  const [logSession, setLogSession] = useState(null); // session whose log is open
+  const [logSession, setLogSession] = useState(null);
 
   useEffect(() => {
-    async function load() {
-      try {
-        const [profileRes, sessionsRes] = await Promise.all([
-          api.get('/doctor-assist/profile'),
-          api.get('/doctor-assist/sessions'),
-        ]);
+    Promise.all([
+      api.get('/doctor-assist/profile'),
+      api.get('/doctor-assist/sessions'),
+    ])
+      .then(([profileRes, sessionsRes]) => {
         setProfile(profileRes.data.profile);
         setSessions(sessionsRes.data.sessions || []);
-        // Prompt to complete profile if missing
-        if (!profileRes.data.profile) setEditingProfile(true);
-      } catch (err) {
-        toast.error('Failed to load dashboard');
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
+      })
+      .catch(() => toast.error('Failed to load dashboard'))
+      .finally(() => setLoading(false));
   }, []);
 
   const greeting = () => {
@@ -186,138 +120,183 @@ export default function DoctorDashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="animate-spin w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full" />
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-slate-400 font-medium">Loading dashboard...</p>
+        </div>
       </div>
     );
   }
 
+  const urgentCount = sessions.reduce((acc, s) => {
+    const r = s.patient_summary?.results || [];
+    return acc + r.filter(t => t.urgency === 'urgent' || t.urgency === 'critical').length;
+  }, 0);
+  const totalTests = sessions.reduce((acc, s) => acc + (s.suggested_tests?.length || 0), 0);
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header banner */}
-      <div className="bg-gradient-to-r from-blue-700 to-blue-500 text-white px-6 py-8">
-        <div className="max-w-5xl mx-auto flex items-start justify-between gap-4">
-          <div>
-            <p className="text-blue-200 text-sm font-medium mb-1">{greeting()},</p>
-            <h1 className="text-3xl font-bold">{user?.name || profile?.full_name || 'Doctor'}</h1>
-            {profile ? (
-              <p className="text-blue-100 text-sm mt-1">
-                {profile.specialization && <span>{profile.specialization}</span>}
-                {profile.hospital_name  && <span> · {profile.hospital_name}</span>}
-                {profile.city           && <span> · {profile.city}, {profile.state}</span>}
-                {profile.phone          && <span> · {profile.phone}</span>}
-              </p>
-            ) : (
-              <p className="text-blue-200 text-sm mt-1 italic">No clinic profile yet — add your details below</p>
-            )}
+    <div className="max-w-6xl mx-auto space-y-6 pb-10">
+      {/* ── Hero Banner ── */}
+      <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-slate-900 via-teal-900 to-slate-900">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-teal-400/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-400/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4" />
+
+        <div className="relative px-6 sm:px-8 py-8">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-teal-500/20 backdrop-blur-sm rounded-2xl flex items-center justify-center ring-1 ring-white/15 text-2xl font-bold text-white shrink-0">
+                {(user?.name || 'D').charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <p className="text-teal-400 text-sm font-medium tracking-wide">{greeting()}</p>
+                <h1 className="text-2xl sm:text-3xl font-bold text-white mt-0.5">
+                  Dr. {user?.name || profile?.full_name || 'Doctor'}
+                </h1>
+                {profile && (
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    {profile.specialization && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/10 rounded-lg text-xs text-teal-200 font-medium backdrop-blur-sm">
+                        {profile.specialization}
+                      </span>
+                    )}
+                    {profile.hospital_name && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/10 rounded-lg text-xs text-slate-300 font-medium backdrop-blur-sm">
+                        {profile.hospital_name}
+                      </span>
+                    )}
+                    {profile.city && (
+                      <span className="text-xs text-slate-400">{profile.city}{profile.state ? `, ${profile.state}` : ''}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/doctor/profile')}
+              className="shrink-0 flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-all border border-white/10 backdrop-blur-sm"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+              </svg>
+              View Profile
+            </button>
           </div>
-          <button
-            onClick={() => setEditingProfile(v => !v)}
-            className="shrink-0 bg-white/20 hover:bg-white/30 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors border border-white/30"
-          >
-            {editingProfile ? '✕ Cancel Edit' : '✏️ Edit Profile'}
-          </button>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-3 mt-6">
+            <div className="bg-white/5 backdrop-blur-md rounded-xl px-4 py-3.5 text-center border border-white/10 hover:bg-white/10 transition-colors">
+              <p className="text-2xl font-bold text-white">{sessions.length}</p>
+              <p className="text-[11px] text-slate-400 mt-0.5 font-medium">Total Sessions</p>
+            </div>
+            <div className="bg-white/5 backdrop-blur-md rounded-xl px-4 py-3.5 text-center border border-white/10 hover:bg-white/10 transition-colors">
+              <p className="text-2xl font-bold text-amber-400">{urgentCount}</p>
+              <p className="text-[11px] text-slate-400 mt-0.5 font-medium">Urgent / Critical</p>
+            </div>
+            <div className="bg-white/5 backdrop-blur-md rounded-xl px-4 py-3.5 text-center border border-white/10 hover:bg-white/10 transition-colors">
+              <p className="text-2xl font-bold text-emerald-400">{totalTests}</p>
+              <p className="text-[11px] text-slate-400 mt-0.5 font-medium">Tests Suggested</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
-
-        {/* Inline profile editor */}
-        {editingProfile && (
-          <ProfileEditPanel
-            profile={profile}
-            onSave={updated => { setProfile(updated); setEditingProfile(false); }}
-            onCancel={() => setEditingProfile(false)}
-          />
-        )}
-
-        {/* Disclaimer */}
-        <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-xs text-yellow-700">
-          ⚠️ MedAssist AI is an educational tool for CS 595 — Medical Informatics & AI.
-          AI suggestions are not a substitute for clinical judgment.
-        </div>
-
-        {/* Stats row */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4" aria-label="Dashboard statistics">
-          <div className="bg-white rounded-xl border border-gray-200 p-5 text-center" aria-label="Total sessions">
-            <p className="text-3xl font-bold text-blue-600">{sessions.length}</p>
-            <p className="text-xs text-gray-500 mt-1">Total Sessions</p>
+      {/* ── Prompt to complete profile ── */}
+      {!profile && (
+        <div className="bg-amber-50 border border-amber-200/60 rounded-2xl p-5 flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-amber-800">Complete your clinic profile</p>
+              <p className="text-xs text-amber-600">Add your specialization and clinic details so patients can find you.</p>
+            </div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-5 text-center" aria-label="Urgent or critical tests flagged">
-            <p className="text-3xl font-bold text-orange-500">
-              {sessions.reduce((acc, s) => {
-                const r = s.patient_summary?.results || [];
-                return acc + r.filter(t => t.urgency === 'urgent' || t.urgency === 'critical').length;
-              }, 0)}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">Urgent/Critical Tests Flagged</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-5 text-center col-span-2 sm:col-span-1" aria-label="Total tests suggested">
-            <p className="text-3xl font-bold text-green-600">
-              {sessions.reduce((acc, s) => acc + (s.suggested_tests?.length || 0), 0)}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">Total Tests Suggested</p>
-          </div>
-        </div>
-
-        {/* New Patient Assist CTA */}
-        <div className="bg-white border-2 border-dashed border-blue-200 rounded-xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900">New Patient Assist</h2>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Enter a patient case and let the AI flag missing blood tests from the prescription.
-            </p>
-          </div>
-          <button
-            onClick={() => navigate('/doctor/assist')}
-            className="shrink-0 bg-blue-600 text-white font-semibold px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
-          >
-            + New Assist Session
+          <button onClick={() => navigate('/doctor/profile')}
+            className="shrink-0 bg-amber-600 text-white font-bold text-sm px-5 py-2.5 rounded-xl hover:bg-amber-700 transition-all shadow-sm">
+            Set Up Profile
           </button>
         </div>
+      )}
 
-        {/* Recent sessions */}
-        <div>
-          <h2 className="text-lg font-bold text-gray-900 mb-4">
+      {/* ── Disclaimer ── */}
+      <div className="bg-amber-50/80 border border-amber-200/50 rounded-xl px-4 py-2.5 text-[11px] text-amber-600 font-medium">
+        MedAssist AI is an educational tool for CS 595 — AI suggestions are not a substitute for clinical judgment.
+      </div>
+
+      {/* ── New Assist CTA ── */}
+      <div
+        onClick={() => navigate('/doctor/assist')}
+        className="group relative bg-gradient-to-br from-teal-600 to-emerald-600 rounded-2xl p-6 cursor-pointer
+                   hover:from-teal-700 hover:to-emerald-700 transition-all shadow-lg shadow-teal-500/20 hover:shadow-xl hover:shadow-teal-500/30 overflow-hidden"
+      >
+        <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/4" />
+        <div className="relative flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-white/15 backdrop-blur-sm rounded-2xl flex items-center justify-center shrink-0 ring-1 ring-white/20">
+              <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
+              </svg>
+            </div>
+            <div className="text-white">
+              <h2 className="text-lg font-bold">New Patient Assist</h2>
+              <p className="text-sm text-teal-100/80 mt-0.5">Enter a case and let AI flag missing blood tests</p>
+            </div>
+          </div>
+          <div className="shrink-0 flex items-center gap-2 bg-white text-teal-700 font-bold px-6 py-3 rounded-xl shadow-lg group-hover:shadow-xl transition-all text-sm whitespace-nowrap">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            New Assist Session
+          </div>
+        </div>
+      </div>
+
+      {/* ── Recent Sessions ── */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-bold text-slate-700">
             Recent Sessions
             {sessions.length > 0 && (
-              <span className="ml-2 text-sm font-normal text-gray-400">({sessions.length})</span>
+              <span className="ml-2 text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{sessions.length}</span>
             )}
           </h2>
-
-          {sessions.length === 0 ? (
-            <div className="bg-white border border-gray-200 rounded-xl p-12 text-center">
-              <div className="text-4xl mb-3">🩺</div>
-              <p className="text-gray-500 text-sm">No assist sessions yet.</p>
-              <button
-                onClick={() => navigate('/doctor/assist')}
-                className="mt-4 text-blue-600 text-sm underline"
-              >
-                Start your first session →
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {sessions.map(session => (
-                <SessionCard
-                  key={session.id}
-                  session={session}
-                  onClick={() => navigate('/doctor/assist', { state: { sessionResult: session } })}
-                  onViewLog={s => setLogSession(s)}
-                />
-              ))}
-            </div>
-          )}
         </div>
+
+        {sessions.length === 0 ? (
+          <div className="bg-white border border-slate-200/60 rounded-2xl p-14 text-center">
+            <div className="w-16 h-16 bg-gradient-to-br from-teal-50 to-emerald-50 rounded-2xl flex items-center justify-center mx-auto mb-4 ring-1 ring-teal-100">
+              <svg className="w-8 h-8 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3" />
+              </svg>
+            </div>
+            <h3 className="text-base font-bold text-slate-700 mb-1">No assist sessions yet</h3>
+            <p className="text-sm text-slate-400 mb-5">Start by entering a patient case above</p>
+            <button onClick={() => navigate('/doctor/assist')}
+              className="text-teal-600 text-sm font-semibold hover:text-teal-700 transition-colors">
+              Start your first session →
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {sessions.map((session, i) => (
+              <SessionCard
+                key={session.id}
+                session={session}
+                index={i}
+                onClick={() => navigate('/doctor/assist', { state: { sessionResult: session } })}
+                onViewLog={s => setLogSession(s)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Agent Log Modal */}
       {logSession && (
-        <AgentLogModal
-          sessionId={logSession.id}
-          agentName="Doctor Assist Agent"
-          onClose={() => setLogSession(null)}
-        />
+        <AgentLogModal sessionId={logSession.id} agentName="Doctor Assist Agent" onClose={() => setLogSession(null)} />
       )}
     </div>
   );

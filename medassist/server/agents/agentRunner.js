@@ -1,4 +1,4 @@
-const { getPrimaryProvider } = require('../utils/aiClients');
+const { getPrimaryProvider, getAvailableProviders, getProviders } = require('../utils/aiClients');
 
 const MAX_TURNS = 6;
 const INTER_TURN_DELAY_MS = 500; // Small delay between turns; reduce from 2s since Cerebras/GitHub have higher limits
@@ -7,29 +7,151 @@ const INTER_TURN_DELAY_MS = 500; // Small delay between turns; reduce from 2s si
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Call AI with automatic retry on 429 rate-limit errors.
+ * Resolve which provider client + model to use.
+ * If overrides are given, use those. Otherwise pick primary.
  */
-async function groqCreateWithRetry(groq, params, maxRetries = 2) {
+function resolveProvider(clientOverride, modelOverride) {
+  const primary = getPrimaryProvider();
+  return {
+    groq: clientOverride || primary.client,
+    MODEL: modelOverride || primary.model,
+  };
+}
+
+// Track providers that returned hard 429 during this process lifetime.
+// Providers sharing the same underlying API key (e.g. cerebras & cerebras_fast)
+// are grouped — if one is blocked, the other is too.
+const _hardLimitedProviders = new Set();
+
+/**
+ * Mark a provider (and any siblings sharing the same client) as hard-limited.
+ */
+function markProviderLimited(providerName) {
+  const providers = getProviders();
+  const limitedClient = providers[providerName]?.client;
+  // Block all provider entries that share the same client reference
+  for (const [name, p] of Object.entries(providers)) {
+    if (p.client === limitedClient) {
+      _hardLimitedProviders.add(name);
+    }
+  }
+  // Also add the name itself in case the client reference didn't match
+  _hardLimitedProviders.add(providerName);
+}
+
+/**
+ * Try the next available provider after a hard 429.
+ * Returns { client, model, providerName } or null if none left.
+ */
+function getNextProvider() {
+  const available = getAvailableProviders();
+  const providers = getProviders();
+  for (const name of available) {
+    if (!_hardLimitedProviders.has(name)) {
+      console.log(`[agentRunner] Falling back to provider: ${providers[name].name} (${name})`);
+      return { client: providers[name].client, model: providers[name].model, providerName: name };
+    }
+  }
+  return null;
+}
+
+/**
+ * Identify which provider name a client+model belongs to.
+ */
+function identifyProvider(client, model) {
+  const providers = getProviders();
+  for (const [name, p] of Object.entries(providers)) {
+    if (p.client === client && p.model === model) return name;
+  }
+  // Fallback: match by client only
+  for (const [name, p] of Object.entries(providers)) {
+    if (p.client === client) return name;
+  }
+  return null;
+}
+
+/**
+ * Call AI with automatic retry and multi-provider fallback.
+ *
+ * Fallback triggers:
+ *  - Any status with x-should-retry: false → hard failure, switch provider
+ *  - Any 5xx after retries exhausted       → try next provider before giving up
+ *  - 429 with x-should-retry: true/absent  → exponential backoff retry (same provider)
+ *
+ * Returns { response, client, model } so callers can track provider switches.
+ */
+async function groqCreateWithRetry(client, params, maxRetries = 2) {
+  let groq = client;
+  let currentModel = params.model;
+  // Track current provider name so we can mark it limited accurately
+  let currentProviderName = identifyProvider(groq, currentModel);
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      return await groq.chat.completions.create(params);
+      const response = await groq.chat.completions.create({ ...params, model: currentModel });
+      return { response, client: groq, model: currentModel };
     } catch (err) {
-      const is429 = err.status === 429;
-      if (is429 && attempt < maxRetries) {
-        // Headers object (.get) or plain object ([]) — handle both
-        const headers = err.headers;
+      const status = err.status;
+      const headers = err.headers;
+      const shouldRetry =
+        (typeof headers?.get === 'function' ? headers.get('x-should-retry') : null) ||
+        headers?.['x-should-retry'] ||
+        null;
+
+      // Hard failure: provider explicitly says don't retry (429 quota cap, 503 down, etc.)
+      if (shouldRetry === 'false') {
+        if (currentProviderName) markProviderLimited(currentProviderName);
+        console.warn(`[agentRunner] Hard ${status} on ${currentProviderName || 'unknown'} (x-should-retry: false). Trying next provider…`);
+
+        const next = getNextProvider();
+        if (next) {
+          groq = next.client;
+          currentModel = next.model;
+          currentProviderName = next.providerName;
+          attempt = -1; // reset retry counter for new provider
+          continue;
+        }
+        console.error('[agentRunner] All providers exhausted — no fallback left.');
+        throw err;
+      }
+
+      // Soft 429 — retry same provider with backoff
+      if (status === 429 && attempt < maxRetries) {
         const retryAfterRaw =
           (typeof headers?.get === 'function' ? headers.get('retry-after') : null) ||
           headers?.['retry-after'] ||
           null;
         const retryAfterSec = retryAfterRaw ? parseInt(retryAfterRaw, 10) : null;
-        // Exponential backoff if no retry-after: 5s, 10s, 20s, 30s
         const backoff = Math.min(5 * Math.pow(2, attempt), 30);
         const waitSec = retryAfterSec && retryAfterSec < 60 ? retryAfterSec + 1 : backoff;
         console.log(`[agentRunner] Rate limited (429). Waiting ${waitSec}s before retry ${attempt + 1}/${maxRetries}…`);
         await sleep(waitSec * 1000);
         continue;
       }
+
+      // 5xx server error — retry, then try next provider as last resort
+      if (status >= 500 && attempt < maxRetries) {
+        const backoff = Math.min(3 * Math.pow(2, attempt), 15);
+        console.log(`[agentRunner] Server error (${status}). Waiting ${backoff}s before retry ${attempt + 1}/${maxRetries}…`);
+        await sleep(backoff * 1000);
+        continue;
+      }
+
+      // Retries exhausted on a server error — try next provider before giving up
+      if (status >= 500) {
+        if (currentProviderName) markProviderLimited(currentProviderName);
+        console.warn(`[agentRunner] ${status} on ${currentProviderName || 'unknown'} after ${maxRetries} retries. Trying next provider…`);
+
+        const next = getNextProvider();
+        if (next) {
+          groq = next.client;
+          currentModel = next.model;
+          currentProviderName = next.providerName;
+          attempt = -1;
+          continue;
+        }
+      }
+
       throw err;
     }
   }
@@ -47,9 +169,7 @@ async function groqCreateWithRetry(groq, params, maxRetries = 2) {
  * @returns {{ text: string, steps: Array, turns: number }}
  */
 async function runAgent({ systemInstruction, userMessage, tools, toolHandlers, onStep, maxTokens = 1500, client: clientOverride, model: modelOverride }) {
-  const primary = getPrimaryProvider();
-  const groq = clientOverride || primary.client;
-  const MODEL = modelOverride || primary.model;
+  let { groq, MODEL } = resolveProvider(clientOverride, modelOverride);
 
   const messages = [
     { role: 'system', content: systemInstruction },
@@ -74,13 +194,17 @@ async function runAgent({ systemInstruction, userMessage, tools, toolHandlers, o
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     let response;
     try {
-      response = await groqCreateWithRetry(groq, {
+      const result = await groqCreateWithRetry(groq, {
         model: MODEL,
         messages,
         tools: groqTools,
         tool_choice: 'auto',
         max_tokens: maxTokens,
       });
+      response = result.response;
+      // Persist any provider switch so subsequent calls use the new provider
+      groq = result.client;
+      MODEL = result.model;
     } catch (err) {
       // tool_use_failed (400) — model generated malformed tool call JSON.
       // Recover: strip tools and make one final plain-text call so the model
@@ -100,7 +224,9 @@ async function runAgent({ systemInstruction, userMessage, tools, toolHandlers, o
             max_tokens: maxTokens,
             // no tools — forces plain text response
           });
-          const fallbackText = fallback.choices[0]?.message?.content || '';
+          const fallbackText = fallback.response.choices[0]?.message?.content || '';
+          groq = fallback.client;
+          MODEL = fallback.model;
           console.log('[agentRunner] Fallback completion succeeded.');
           return { text: fallbackText, steps, turns: turn + 1 };
         } catch (fallbackErr) {
@@ -160,7 +286,7 @@ async function runAgent({ systemInstruction, userMessage, tools, toolHandlers, o
   // MAX_TURNS reached — make one final tool-free call to extract whatever answer the model has
   console.warn('[agentRunner] MAX_TURNS reached — requesting final tool-free completion.');
   try {
-    const finalResponse = await groqCreateWithRetry(groq, {
+    const final = await groqCreateWithRetry(groq, {
       model: MODEL,
       messages: [
         ...messages,
@@ -171,7 +297,7 @@ async function runAgent({ systemInstruction, userMessage, tools, toolHandlers, o
       ],
       max_tokens: maxTokens,
     });
-    const finalText = finalResponse.choices[0]?.message?.content || '';
+    const finalText = final.response.choices[0]?.message?.content || '';
     return { text: finalText, steps, turns: MAX_TURNS };
   } catch (err) {
     console.error('[agentRunner] MAX_TURNS final completion failed:', err.message);

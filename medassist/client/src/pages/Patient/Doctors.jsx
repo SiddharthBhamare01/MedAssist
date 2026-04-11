@@ -86,6 +86,8 @@ export default function Doctors() {
   const [selectedDoctor, setSelectedDoctor]   = useState(null);
 
   const markerRefs = useRef({});
+  const abortRef = useRef(null);
+  const hasFetchedRef = useRef(false); // prevent duplicate fetches from StrictMode
 
   // Derive available specialty options from the FULL (unfiltered) result
   const specialties = [...new Set(
@@ -100,6 +102,11 @@ export default function Doctors() {
     : allDoctors;
 
   const fetchDoctors = useCallback(async (lat, lng, rad) => {
+    // Cancel any in-flight request before starting a new one
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
     setAllDoctors([]);
     setSelectedDoctor(null);
@@ -107,16 +114,18 @@ export default function Doctors() {
       // Always fetch ALL doctors (no specialty param) — filtering is done client-side
       const { data } = await api.get('/doctors/nearby', {
         params: { lat, lng, radius: rad, source: 'osm' },
+        signal: controller.signal,
       });
       setAllDoctors(data.doctors || []);
       setDataSource(data.source);
       if (data.source === 'db_fallback') {
         toast('Live data unavailable — showing demo doctors', { icon: 'ℹ️' });
       }
-    } catch {
+    } catch (err) {
+      if (err.name === 'CanceledError' || err.name === 'AbortError') return; // silently ignore cancelled requests
       toast.error('Failed to load nearby doctors.');
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, []);
 
@@ -132,7 +141,11 @@ export default function Doctors() {
         const { latitude, longitude } = pos.coords;
         setUserLocation([latitude, longitude]);
         setLocationStatus('granted');
-        fetchDoctors(latitude, longitude, radius);
+        // Only fetch once on initial location grant; radius useEffect handles subsequent fetches
+        if (!hasFetchedRef.current) {
+          hasFetchedRef.current = true;
+          fetchDoctors(latitude, longitude, radius);
+        }
       },
       err => {
         console.warn('Geolocation denied:', err.message);
@@ -143,12 +156,17 @@ export default function Doctors() {
     );
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { requestLocation(); }, []);
 
-  // Re-fetch only when radius changes (specialty is now client-side)
+  // Re-fetch when radius changes (not on initial mount — requestLocation handles that)
+  const prevRadiusRef = useRef(radius);
   useEffect(() => {
-    if (userLocation) fetchDoctors(userLocation[0], userLocation[1], radius);
-  }, [radius]);
+    if (prevRadiusRef.current !== radius && userLocation) {
+      fetchDoctors(userLocation[0], userLocation[1], radius);
+    }
+    prevRadiusRef.current = radius;
+  }, [radius, userLocation, fetchDoctors]);
 
   function handleSidebarClick(doctor) {
     setSelectedDoctor(doctor);
