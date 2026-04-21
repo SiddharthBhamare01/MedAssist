@@ -60,7 +60,7 @@ export default function SharedReports() {
           Back to Reports
         </button>
 
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
           <div className="flex items-start justify-between gap-4 mb-4">
             <div>
               <h1 className="text-xl font-bold text-slate-800">
@@ -80,8 +80,8 @@ export default function SharedReports() {
 
         {/* Summary */}
         {analysis.summary && (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-            <h2 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">Summary</h2>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
+            <h2 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">Summary</h2>
             <p className="text-slate-700 leading-relaxed">{analysis.summary.overall_assessment}</p>
             {analysis.summary.root_cause && (
               <p className="text-sm text-slate-500 mt-2">
@@ -93,12 +93,12 @@ export default function SharedReports() {
 
         {/* Findings */}
         {analysis.abnormal_findings?.length > 0 && (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-            <h2 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">Findings</h2>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
+            <h2 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">Findings</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-xs text-slate-400 border-b border-slate-100">
+                  <tr className="text-left text-xs text-slate-400 border-b border-slate-200">
                     <th className="pb-2 font-medium">Parameter</th>
                     <th className="pb-2 font-medium">Value</th>
                     <th className="pb-2 font-medium">Range</th>
@@ -126,11 +126,11 @@ export default function SharedReports() {
 
         {/* Tablets */}
         {r.tabletRecommendations?.length > 0 && (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-            <h2 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">Tablet Recommendations</h2>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
+            <h2 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">Tablet Recommendations</h2>
             <div className="space-y-3">
               {r.tabletRecommendations.map((med, i) => (
-                <div key={i} className="border border-slate-100 rounded-xl p-4 bg-slate-50">
+                <div key={i} className="border border-slate-200 rounded-xl p-4 bg-slate-50">
                   <h3 className="font-bold text-slate-800">{med.name}</h3>
                   <div className="grid grid-cols-3 gap-2 text-sm mt-2">
                     <div><span className="text-xs text-slate-400">Dosage:</span> <span className="text-slate-700">{med.dosage || '--'}</span></div>
@@ -155,7 +155,7 @@ export default function SharedReports() {
       </div>
 
       {reports.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow p-12 text-center">
           <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -174,7 +174,7 @@ export default function SharedReports() {
               initial="hidden"
               animate="visible"
               onClick={() => setSelectedReport(report)}
-              className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:border-teal-300 hover:shadow-md transition-all cursor-pointer"
+              className="bg-white rounded-2xl border border-slate-200 shadow p-5 hover:border-teal-300 hover:shadow-md transition-all cursor-pointer"
             >
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div className="flex-1 min-w-0">

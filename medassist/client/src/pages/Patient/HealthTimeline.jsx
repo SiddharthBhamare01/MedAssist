@@ -76,7 +76,7 @@ export default function HealthTimeline() {
       </div>
 
       {events.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow p-12 text-center">
           <p className="text-slate-500">No events yet.</p>
           <p className="text-xs text-slate-400 mt-1">Complete a symptom session to start building your timeline.</p>
         </div>

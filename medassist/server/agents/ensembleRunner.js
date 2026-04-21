@@ -11,7 +11,7 @@
  *   );
  */
 
-const { getProviders, getAvailableProviders, getPrimaryProvider } = require('../utils/aiClients');
+const { getProviders, getAvailableProviders } = require('../utils/aiClients');
 
 // ─── Low-level helpers ────────────────────────────────────────────────────────
 
@@ -141,11 +141,7 @@ async function runParallel(systemPrompt, userMessage, maxTokens = 2000) {
     .filter((r) => r.status === 'rejected');
 
   if (failed.length > 0) {
-    // Info-level only — app works fine with remaining providers
-    console.log(
-      '[ensembleRunner] Skipped (overloaded):',
-      failed.map((f) => f.provider).join(', ')
-    );
+    failed.forEach((f) => console.log(`[ensembleRunner] ${f.provider} skipped: ${f.error}`));
   }
 
   if (successful.length === 0) throw new Error('All AI providers failed in ensemble run');
@@ -156,7 +152,8 @@ async function runParallel(systemPrompt, userMessage, maxTokens = 2000) {
  * Run a consensus/judge call to merge multiple agent outputs.
  */
 async function runConsensus(agentOutputs, taskType) {
-  const primary = getPrimaryProvider();
+  const providers = getProviders();
+  const available = getAvailableProviders();
   const instruction = TASK_INSTRUCTIONS[taskType] || 'Merge the outputs, preferring items that appear in multiple outputs. Return ONLY JSON.';
 
   const judgePrompt = `You are a medical AI consensus judge.
@@ -168,9 +165,21 @@ ${instruction}
 --- Agent outputs ---
 ${agentOutputs.map((a, i) => `=== Agent ${i + 1} (${a.providerName}) ===\n${a.output}`).join('\n\n')}`;
 
-  const raw = await callProvider(primary, '', judgePrompt, 3000);
-  const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
-  return clean;
+  let lastErr;
+  for (const name of available) {
+    try {
+      const raw = await callProvider(providers[name], '', judgePrompt, 3000);
+      const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+      return clean;
+    } catch (err) {
+      if (err.status === 429 || err.status === 503) {
+        lastErr = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr || new Error('All providers failed for consensus judge');
 }
 
 /**

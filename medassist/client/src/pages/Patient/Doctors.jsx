@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import 'leaflet/dist/leaflet.css';
+
+const fadeIn = { hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
 
 // Fix Leaflet default icon broken by bundlers
 delete L.Icon.Default.prototype._getIconUrl;
@@ -61,7 +64,7 @@ function SpecialtyBadge({ specialty }) {
     'Hospital':            'bg-red-100 text-red-700',
     'Clinic':              'bg-blue-100 text-blue-700',
     'General Physician':   'bg-green-100 text-green-700',
-    'Healthcare Provider': 'bg-gray-100 text-gray-600',
+    'Healthcare Provider': 'bg-slate-100 text-slate-600',
   };
   const cls = colors[specialty] || 'bg-purple-100 text-purple-700';
   return (
@@ -185,17 +188,17 @@ export default function Doctors() {
   // ── Pre-location permission screen ──────────────────────────────────────────
   if (locationStatus === 'idle' || locationStatus === 'locating') {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50 min-h-screen">
+      <div className="flex-1 flex items-center justify-center bg-slate-50 min-h-screen">
         <div className="text-center space-y-4 p-8">
           <div className="text-6xl">📍</div>
-          <h2 className="text-xl font-semibold text-gray-800">Allow location access</h2>
-          <p className="text-gray-500 max-w-sm text-sm">
+          <h2 className="text-xl font-semibold text-slate-800">Allow location access</h2>
+          <p className="text-slate-500 max-w-sm text-sm">
             MedAssist needs your location to show real doctors and clinics near you
             using live OpenStreetMap data.
           </p>
           {locationStatus === 'locating' && (
-            <div className="flex items-center justify-center gap-2 text-blue-600 text-sm">
-              <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full" />
+            <div className="flex items-center justify-center gap-2 text-teal-600 text-sm">
+              <div className="animate-spin w-4 h-4 border-2 border-teal-600 border-t-transparent rounded-full" />
               Waiting for browser permission…
             </div>
           )}
@@ -206,14 +209,14 @@ export default function Doctors() {
 
   // ── Main layout ─────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col" style={{ height: '100vh' }}>
+    <motion.div variants={fadeIn} initial="hidden" animate="visible" className="flex flex-col" style={{ height: '100vh' }}>
 
       {/* ── Top bar ── */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 shrink-0 z-10">
+      <div className="bg-white border-b border-slate-200 px-4 py-3 shrink-0 z-10">
         <div className="max-w-full flex flex-wrap items-center gap-3">
           <div className="flex-1 min-w-[160px]">
-            <h1 className="text-xl font-bold text-gray-900">Find a Doctor</h1>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <h1 className="text-xl font-bold text-slate-800">Find a Doctor</h1>
+            <p className="text-xs text-slate-500 mt-0.5">
               {locationStatus === 'granted' && userLocation
                 ? `📍 Showing healthcare providers within ${metresToMilesLabel(radius)}`
                 : '⚠️ Location denied — grant permission for live data'}
@@ -223,7 +226,7 @@ export default function Doctors() {
           {locationStatus === 'denied' && (
             <button
               onClick={requestLocation}
-              className="flex items-center gap-2 bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-2 bg-teal-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors"
             >
               📍 Allow Location
             </button>
@@ -231,11 +234,11 @@ export default function Doctors() {
 
           {/* Radius selector */}
           <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500 whitespace-nowrap">Radius</label>
+            <label className="text-xs text-slate-500 whitespace-nowrap">Radius</label>
             <select
               value={radius}
               onChange={e => setRadius(Number(e.target.value))}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
             >
               {RADIUS_OPTIONS.map(o => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -245,11 +248,11 @@ export default function Doctors() {
 
           {/* Specialty filter — always populated from full result */}
           <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500 whitespace-nowrap">Type</label>
+            <label className="text-xs text-slate-500 whitespace-nowrap">Type</label>
             <select
               value={specialtyFilter}
               onChange={e => setSpecialtyFilter(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[180px]"
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500 min-w-[180px]"
             >
               <option value="">All Types</option>
               {specialties.map(s => (
@@ -270,7 +273,7 @@ export default function Doctors() {
             {userLocation && (
               <button
                 onClick={() => fetchDoctors(userLocation[0], userLocation[1], radius)}
-                className="ml-2 text-blue-600 underline"
+                className="ml-2 text-teal-600 underline"
               >
                 Retry
               </button>
@@ -284,10 +287,10 @@ export default function Doctors() {
       <div className="flex flex-row flex-1 overflow-hidden">
 
         {/* ── LEFT: scrollable doctor list ── */}
-        <div className="w-80 xl:w-96 shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
+        <div className="w-80 xl:w-96 shrink-0 bg-white border-r border-slate-200 flex flex-col overflow-hidden">
           {/* Sticky list header */}
-          <div className="border-b border-gray-100 px-4 py-2 shrink-0 flex items-center justify-between bg-white">
-            <p className="text-sm font-semibold text-gray-700">
+          <div className="border-b border-slate-200 px-4 py-2 shrink-0 flex items-center justify-between bg-white">
+            <p className="text-sm font-semibold text-slate-700">
               {loading
                 ? 'Fetching live data…'
                 : `${visibleDoctors.length} of ${allDoctors.length} shown`}
@@ -295,7 +298,7 @@ export default function Doctors() {
             {!loading && userLocation && (
               <button
                 onClick={() => fetchDoctors(userLocation[0], userLocation[1], radius)}
-                className="text-xs text-blue-600 hover:underline"
+                className="text-xs text-teal-600 hover:underline"
               >
                 Refresh
               </button>
@@ -306,15 +309,15 @@ export default function Doctors() {
           <div className="flex-1 overflow-y-auto">
             {loading && (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full" />
-                <p className="text-xs text-gray-400">Querying OpenStreetMap…</p>
+                <div className="animate-spin w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full" />
+                <p className="text-xs text-slate-400">Querying OpenStreetMap…</p>
               </div>
             )}
 
             {!loading && visibleDoctors.length === 0 && (
               <div className="flex flex-col items-center justify-center py-16 px-6 text-center gap-3">
                 <div className="text-4xl">🔍</div>
-                <p className="text-gray-500 text-sm">
+                <p className="text-slate-500 text-sm">
                   {allDoctors.length === 0
                     ? `No providers found within ${metresToMilesLabel(radius)}.`
                     : `No "${specialtyFilter}" found. Try another type.`}
@@ -322,14 +325,14 @@ export default function Doctors() {
                 {allDoctors.length === 0 ? (
                   <button
                     onClick={() => setRadius(prev => Math.min(prev * 2, 50000))}
-                    className="text-sm text-blue-600 border border-blue-300 px-4 py-1.5 rounded-lg hover:bg-blue-50"
+                    className="text-sm text-teal-600 border border-teal-300 px-4 py-1.5 rounded-lg hover:bg-teal-50"
                   >
                     Expand search radius
                   </button>
                 ) : (
                   <button
                     onClick={() => setSpecialtyFilter('')}
-                    className="text-sm text-blue-600 border border-blue-300 px-4 py-1.5 rounded-lg hover:bg-blue-50"
+                    className="text-sm text-teal-600 border border-teal-300 px-4 py-1.5 rounded-lg hover:bg-teal-50"
                   >
                     Clear filter
                   </button>
@@ -341,34 +344,34 @@ export default function Doctors() {
               <button
                 key={doctor.id}
                 onClick={() => handleSidebarClick(doctor)}
-                className={`w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-blue-50 transition-colors ${
+                className={`w-full text-left px-4 py-3 border-b border-slate-200 hover:bg-teal-50 transition-colors ${
                   selectedDoctor?.id === doctor.id
-                    ? 'bg-blue-50 border-l-4 border-l-blue-600'
+                    ? 'bg-teal-50 border-l-4 border-l-teal-600'
                     : ''
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900 text-sm leading-snug line-clamp-2">
+                    <p className="font-semibold text-slate-800 text-sm leading-snug line-clamp-2">
                       {doctor.name}
                     </p>
                     <div className="mt-1">
                       <SpecialtyBadge specialty={doctor.specialization} />
                     </div>
                     {doctor.address && (
-                      <p className="text-gray-500 text-xs mt-1 truncate">{doctor.address}</p>
+                      <p className="text-slate-500 text-xs mt-1 truncate">{doctor.address}</p>
                     )}
                     {(doctor.city || doctor.state) && (
-                      <p className="text-gray-400 text-xs truncate">
+                      <p className="text-slate-400 text-xs truncate">
                         {[doctor.city, doctor.state].filter(Boolean).join(', ')}
                       </p>
                     )}
                     {doctor.phone && (
-                      <p className="text-gray-500 text-xs mt-1">📞 {doctor.phone}</p>
+                      <p className="text-slate-500 text-xs mt-1">📞 {doctor.phone}</p>
                     )}
                   </div>
                   <div className="text-right shrink-0 space-y-1">
-                    <span className="text-xs font-semibold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full block whitespace-nowrap">
+                    <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full block whitespace-nowrap">
                       {toMiles(doctor.distance_km)} mi
                     </span>
                     <span className="text-xs text-green-600 font-medium">● Open</span>
@@ -380,7 +383,7 @@ export default function Doctors() {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={e => e.stopPropagation()}
-                    className="text-xs text-blue-600 hover:underline"
+                    className="text-xs text-teal-600 hover:underline"
                   >
                     Get Directions →
                   </a>
@@ -390,7 +393,7 @@ export default function Doctors() {
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={e => e.stopPropagation()}
-                      className="text-xs text-gray-500 hover:underline truncate max-w-[100px]"
+                      className="text-xs text-slate-500 hover:underline truncate max-w-[100px]"
                     >
                       Website →
                     </a>
@@ -418,7 +421,7 @@ export default function Doctors() {
             {userLocation && (
               <Marker position={userLocation} icon={userIcon}>
                 <Popup>
-                  <span className="text-sm font-semibold text-blue-700">📍 You are here</span>
+                  <span className="text-sm font-semibold text-teal-700">📍 You are here</span>
                 </Popup>
               </Marker>
             )}
@@ -433,18 +436,18 @@ export default function Doctors() {
               >
                 <Popup>
                   <div className="min-w-[210px] space-y-1.5">
-                    <p className="font-bold text-gray-900 text-sm leading-tight">{doctor.name}</p>
+                    <p className="font-bold text-slate-800 text-sm leading-tight">{doctor.name}</p>
                     <SpecialtyBadge specialty={doctor.specialization} />
                     {doctor.address && (
-                      <p className="text-gray-600 text-xs">{doctor.address}</p>
+                      <p className="text-slate-600 text-xs">{doctor.address}</p>
                     )}
                     {(doctor.city || doctor.state) && (
-                      <p className="text-gray-500 text-xs">
+                      <p className="text-slate-500 text-xs">
                         {[doctor.city, doctor.state].filter(Boolean).join(', ')}
                       </p>
                     )}
                     {doctor.phone && (
-                      <p className="text-xs text-gray-600">
+                      <p className="text-xs text-slate-600">
                         📞 <a href={`tel:${doctor.phone}`} className="hover:underline">{doctor.phone}</a>
                       </p>
                     )}
@@ -454,18 +457,18 @@ export default function Doctors() {
                           href={doctor.website}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-600 hover:underline truncate block max-w-[180px]"
+                          className="text-teal-600 hover:underline truncate block max-w-[180px]"
                         >
                           {doctor.website.replace(/^https?:\/\//, '')}
                         </a>
                       </p>
                     )}
-                    <p className="text-xs text-gray-500">📏 {toMiles(doctor.distance_km)} mi away</p>
+                    <p className="text-xs text-slate-500">📏 {toMiles(doctor.distance_km)} mi away</p>
                     <a
                       href={directionsUrl(doctor)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-block mt-1 text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                      className="inline-block mt-1 text-xs bg-teal-600 text-white px-3 py-1 rounded hover:bg-teal-700"
                     >
                       Get Directions →
                     </a>
@@ -477,6 +480,6 @@ export default function Doctors() {
         </div>
 
       </div>
-    </div>
+    </motion.div>
   );
 }

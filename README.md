@@ -1,4 +1,4 @@
-# MedAssist AI
+# 0MedAssist AI
 
 > **AI-powered medical assistant** — symptom diagnosis, blood report analysis, risk scoring, and doctor assistance powered by autonomous multi-provider AI agents with ensemble consensus.
 
@@ -36,11 +36,11 @@
 
 MedAssist AI is a full-stack medical assistant web application with three user roles:
 
-| Role | What they can do |
-|------|-----------------|
+| Role              | What they can do                                                                                                                                                                                             |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Patient** | Enter symptoms → get AI disease diagnosis → see recommended blood tests → upload blood report → receive tablet recommendations, diet plan, risk scores, follow-up schedule, and doctor referral guidance |
-| **Doctor** | Input patient case → AI identifies missing essential blood tests → write prescriptions → check drug interactions → view shared reports → manage appointments |
-| **Admin** | Manage users → view HIPAA audit trail |
+| **Doctor**  | Input patient case → AI identifies missing essential blood tests → write prescriptions → check drug interactions → view shared reports → manage appointments                                            |
+| **Admin**   | Manage users → view HIPAA audit trail                                                                                                                                                                       |
 
 The AI backbone uses a **multi-provider ensemble architecture** with automatic fallback across Cerebras, SambaNova, OpenRouter, and GitHub Models. Agents use **tool calling** to run autonomous multi-turn agentic loops over real medical data from free public APIs — OpenFDA, RxNorm (NIH), and NIH ClinicalTables. A **consensus judge** merges outputs from multiple providers for higher-accuracy results.
 
@@ -49,6 +49,7 @@ The AI backbone uses a **multi-provider ensemble architecture** with automatic f
 ## Features
 
 ### Patient
+
 - **Symptom Intake Wizard** — 3-step form: demographics, medical history (tag inputs for conditions/allergies/medications), and 36 symptoms across 7 body systems with severity, duration, and onset
 - **AI Diagnostic Agent** — autonomous agent with ICD-10 tool lookups, returns top 5 diseases with confidence scores, descriptions, and ensemble consensus count
 - **Ensemble Cross-Verification** — runs diagnosis on all available AI providers in parallel, then a consensus judge merges results for higher accuracy
@@ -76,6 +77,7 @@ The AI backbone uses a **multi-provider ensemble architecture** with automatic f
 - **Session Expiry Warning** — modal warns before 7-day JWT expiry
 
 ### Doctor
+
 - **Clinic Profile** — specialization, hospital, city, state, phone, availability toggle
 - **Doctor Assist Agent** — input patient case + existing tests → AI returns missing essential tests, ICD-10 code, and coverage analysis with fuzzy matching
 - **Drug Interaction Checker** — ensemble-powered drug interaction analysis with severity ratings
@@ -86,10 +88,12 @@ The AI backbone uses a **multi-provider ensemble architecture** with automatic f
 - **Session History** — full history of past assist sessions with agent step logs
 
 ### Admin
+
 - **User Management** — list, search, filter users by role
 - **HIPAA Audit Trail** — view all data access logs (user, action, resource, IP, user agent)
 
 ### Platform
+
 - **Role-Based Auth** — JWT (7-day), bcrypt password hashing, patient/doctor/admin separation enforced at every route
 - **Two-Factor Authentication** — TOTP-based 2FA with QR code setup (speakeasy)
 - **Password Reset** — email-based flow with single-use expiry tokens
@@ -246,54 +250,54 @@ The AI backbone uses a **multi-provider ensemble architecture** with automatic f
 
 ### Agent 1 — Diagnostic Agent (`diagnosticAgent.js`)
 
-| | |
-|---|---|
-| **Input** | Patient demographics + 36-symptom assessment (severity/duration/onset) |
-| **Tools** | `lookup_icd_code` — queries NIH ClinicalTables for ICD-10 codes |
-| **Phase 1** | Primary agent with tool-calling loop — gathers ICD codes, reasons about top 5 diseases |
-| **Phase 2** | Ensemble — all providers predict top 5 diseases in parallel |
-| **Phase 3** | Consensus judge merges outputs — adds `consensus_count` and `confidence` fields |
-| **Output** | Top 5 differential diagnoses with ICD code, confidence %, description, matched symptoms, consensus count |
+|                   |                                                                                                          |
+| ----------------- | -------------------------------------------------------------------------------------------------------- |
+| **Input**   | Patient demographics + 36-symptom assessment (severity/duration/onset)                                   |
+| **Tools**   | `lookup_icd_code` — queries NIH ClinicalTables for ICD-10 codes                                       |
+| **Phase 1** | Primary agent with tool-calling loop — gathers ICD codes, reasons about top 5 diseases                  |
+| **Phase 2** | Ensemble — all providers predict top 5 diseases in parallel                                             |
+| **Phase 3** | Consensus judge merges outputs — adds `consensus_count` and `confidence` fields                     |
+| **Output**  | Top 5 differential diagnoses with ICD code, confidence %, description, matched symptoms, consensus count |
 
 ### Agent 2 — Blood Report Agent (`bloodReportAgent.js`)
 
-| | |
-|---|---|
-| **Input** | OCR-extracted blood values, patient profile |
-| **Tools** | `get_lab_reference_range`, `search_drug_by_condition`, `get_drug_details`, `check_drug_interactions` |
-| **Phase 1** | Autonomous tool calls — gathers lab reference ranges and FDA drug data |
-| **Phase 2a** | Medical ensemble — all providers generate: summary, abnormal findings, treatment, tablet recommendations |
-| **Phase 2b** | Lifestyle ensemble — all providers generate: diet plan, recovery ingredients |
-| **Consensus** | Judge merges each phase: where agents agree use consensus; conflicts default to safer option |
-| **Output** | Full medical analysis JSON (summary, findings, tablets, diet, recovery) |
+|                     |                                                                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Input**     | OCR-extracted blood values, patient profile                                                                  |
+| **Tools**     | `get_lab_reference_range`, `search_drug_by_condition`, `get_drug_details`, `check_drug_interactions` |
+| **Phase 1**   | Autonomous tool calls — gathers lab reference ranges and FDA drug data                                      |
+| **Phase 2a**  | Medical ensemble — all providers generate: summary, abnormal findings, treatment, tablet recommendations    |
+| **Phase 2b**  | Lifestyle ensemble — all providers generate: diet plan, recovery ingredients                                |
+| **Consensus** | Judge merges each phase: where agents agree use consensus; conflicts default to safer option                 |
+| **Output**    | Full medical analysis JSON (summary, findings, tablets, diet, recovery)                                      |
 
 ### Agent 3 — Risk Scoring Agent (`riskScoringAgent.js`)
 
-| | |
-|---|---|
-| **Input** | OCR-extracted blood values, patient profile |
-| **Tools** | None (single-turn reasoning) |
+|                   |                                                                                                                                                 |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Input**   | OCR-extracted blood values, patient profile                                                                                                     |
+| **Tools**   | None (single-turn reasoning)                                                                                                                    |
 | **Scoring** | Evaluates 4 clinical dimensions: cardiovascular (Framingham-based), diabetes (FINDRISC-based), kidney (CKD-EPI-based), liver (Child-Pugh-based) |
-| **Output** | Composite score 0–100, risk level (Low/Moderate/High/Critical), hospital visit urgency, per-area breakdown |
+| **Output**  | Composite score 0–100, risk level (Low/Moderate/High/Critical), hospital visit urgency, per-area breakdown                                     |
 
 ### Agent 4 — Follow-Up Agent (`followUpAgent.js`)
 
-| | |
-|---|---|
-| **Input** | Abnormal findings + current tablet recommendations |
-| **Tools** | None (single-turn reasoning) |
-| **Logic** | Critical values → 1–2 weeks; significantly abnormal → 1–3 months; mildly abnormal → 3–6 months; new medications → 4–6 weeks |
-| **Output** | Top 3 recheck recommendations with test name, timing, reason, and priority (urgent/routine/monitoring) |
+|                  |                                                                                                                                     |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Input**  | Abnormal findings + current tablet recommendations                                                                                  |
+| **Tools**  | None (single-turn reasoning)                                                                                                        |
+| **Logic**  | Critical values → 1–2 weeks; significantly abnormal → 1–3 months; mildly abnormal → 3–6 months; new medications → 4–6 weeks |
+| **Output** | Top 3 recheck recommendations with test name, timing, reason, and priority (urgent/routine/monitoring)                              |
 
 ### Agent 5 — Doctor Assist Agent (`doctorAssistAgent.js`)
 
-| | |
-|---|---|
-| **Input** | Patient case (age, gender, chief complaint, symptoms, known conditions) + list of existing tests |
-| **Tools** | `lookup_icd_code`, `get_lab_reference_range` |
-| **Logic** | Confirms disease via ICD lookup → determines essential tests (max 6) → fuzzy-matches against existing tests → reports gaps |
-| **Output** | Missing essential tests with urgency, reference ranges; covered tests; ICD-10 code; `allCovered` boolean |
-| **Access** | Doctor role only, rate limited to 10 req/min |
+|                  |                                                                                                                               |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Input**  | Patient case (age, gender, chief complaint, symptoms, known conditions) + list of existing tests                              |
+| **Tools**  | `lookup_icd_code`, `get_lab_reference_range`                                                                              |
+| **Logic**  | Confirms disease via ICD lookup → determines essential tests (max 6) → fuzzy-matches against existing tests → reports gaps |
+| **Output** | Missing essential tests with urgency, reference ranges; covered tests; ICD-10 code;`allCovered` boolean                     |
+| **Access** | Doctor role only, rate limited to 10 req/min                                                                                  |
 
 ### Shared Agent Runner (`agentRunner.js`)
 
@@ -311,15 +315,16 @@ DEFAULT_MAX_TOKENS   = 1500
 
 All providers use the OpenAI-compatible `chat.completions` API via the `openai` SDK.
 
-| Priority | Provider | Model | Purpose |
-|----------|----------|-------|---------|
-| 1 | **Cerebras** | `qwen-3-235b-a22b-instruct-2507` | Primary — best medical reasoning |
-| 2 | **Cerebras** | `llama3.1-8b` | Fast secondary ensemble opinion |
-| 3 | **SambaNova** | `Meta-Llama-3.3-70B-Instruct` | Free tier, no monthly cap |
-| 4 | **OpenRouter** | `openrouter/free` + Gemma-3 fallbacks | Free tier, multiple model fallbacks |
-| 5 | **GitHub Models** | `gpt-4o-mini` | PAT-authenticated fallback |
+| Priority | Provider                | Model                                   | Purpose                             |
+| -------- | ----------------------- | --------------------------------------- | ----------------------------------- |
+| 1        | **Cerebras**      | `qwen-3-235b-a22b-instruct-2507`      | Primary — best medical reasoning   |
+| 2        | **Cerebras**      | `llama3.1-8b`                         | Fast secondary ensemble opinion     |
+| 3        | **SambaNova**     | `Meta-Llama-3.3-70B-Instruct`         | Free tier, no monthly cap           |
+| 4        | **OpenRouter**    | `openrouter/free` + Gemma-3 fallbacks | Free tier, multiple model fallbacks |
+| 5        | **GitHub Models** | `gpt-4o-mini`                         | PAT-authenticated fallback          |
 
 **Fallback behavior:**
+
 - Soft 429 (transient rate limit) → retry with exponential backoff (5s, 10s, max 30s)
 - Hard 429 (`x-should-retry: false`) → mark provider + siblings as blocked → switch to next provider
 - Cerebras and Cerebras Fast share the same API key — if one is blocked, both are skipped
@@ -333,11 +338,11 @@ All providers use the OpenAI-compatible `chat.completions` API via the `openai` 
 
 The ensemble runner (`ensembleRunner.js`) executes the same prompt on **all available providers in parallel**, then a **consensus judge** (running on the primary provider) merges the outputs into a single higher-accuracy result.
 
-| Task Type | Used By | Merge Logic |
-|-----------|---------|-------------|
-| `disease_diagnosis` | Diagnostic Agent | 2+ agents agree → 0.8–1.0 confidence; 1 agent only → 0.4–0.6; deduplicate, top 5 |
-| `blood_analysis` | Blood Report Agent (medical + lifestyle) | Where agents agree → use consensus; conflicts → safer option; add consensus_note per section |
-| `drug_interactions` | Drug Interaction Checker | 2+ agents agree → high confidence; conflicts → MORE SEVERE rating; patient safety first |
+| Task Type             | Used By                                  | Merge Logic                                                                                    |
+| --------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `disease_diagnosis` | Diagnostic Agent                         | 2+ agents agree → 0.8–1.0 confidence; 1 agent only → 0.4–0.6; deduplicate, top 5           |
+| `blood_analysis`    | Blood Report Agent (medical + lifestyle) | Where agents agree → use consensus; conflicts → safer option; add consensus_note per section |
+| `drug_interactions` | Drug Interaction Checker                 | 2+ agents agree → high confidence; conflicts → MORE SEVERE rating; patient safety first      |
 
 **Single-provider fallback:** If only one provider is available, the ensemble step is skipped and the primary output is used directly.
 
@@ -347,13 +352,13 @@ The ensemble runner (`ensembleRunner.js`) executes the same prompt on **all avai
 
 Five tools available to agents for real-time medical knowledge lookup:
 
-| Tool | API Source | Purpose |
-|------|-----------|---------|
-| `lookup_icd_code` | NIH ClinicalTables | Find ICD-10-CM codes for diseases |
-| `get_lab_reference_range` | Local reference table (40 parameters) | Normal ranges for blood tests, gender-specific variants |
-| `search_drug_by_condition` | OpenFDA | Find FDA-approved drugs for conditions |
-| `get_drug_details` | OpenFDA | Dosage, warnings, contraindications, adverse reactions |
-| `check_drug_interactions` | RxNorm (NIH) | Check interactions between multiple drugs |
+| Tool                         | API Source                            | Purpose                                                 |
+| ---------------------------- | ------------------------------------- | ------------------------------------------------------- |
+| `lookup_icd_code`          | NIH ClinicalTables                    | Find ICD-10-CM codes for diseases                       |
+| `get_lab_reference_range`  | Local reference table (40 parameters) | Normal ranges for blood tests, gender-specific variants |
+| `search_drug_by_condition` | OpenFDA                               | Find FDA-approved drugs for conditions                  |
+| `get_drug_details`         | OpenFDA                               | Dosage, warnings, contraindications, adverse reactions  |
+| `check_drug_interactions`  | RxNorm (NIH)                          | Check interactions between multiple drugs               |
 
 **Lab parameters covered (40):** CBC (hemoglobin, hematocrit, WBC, RBC, platelets, MCV, MCHC), glucose/diabetes (glucose, HbA1c, insulin), metabolic panel (sodium, potassium, chloride, bicarbonate, BUN, creatinine, GFR), liver (ALT, AST, bilirubin, alkaline phosphatase, albumin, total protein), lipids (total cholesterol, LDL, HDL, triglycerides), thyroid (TSH, free T3, free T4), minerals/vitamins (calcium, magnesium, phosphorus, vitamin D, vitamin B12, iron, ferritin), inflammation (CRP, ESR), other (uric acid, LDH, INR).
 
@@ -361,24 +366,24 @@ Five tools available to agents for real-time medical knowledge lookup:
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| **Frontend** | React 19, Vite 7, React Router v7, TailwindCSS 3 |
-| **UI Components** | react-hot-toast, react-hook-form, Recharts, Framer Motion |
-| **Maps** | Leaflet + react-leaflet, OpenStreetMap tiles + Overpass API (no API key) |
-| **Backend** | Node.js 18+, Express.js 5 |
-| **Database** | PostgreSQL via Supabase (SSL, `rejectUnauthorized: false`) |
-| **Authentication** | jsonwebtoken (JWT, 7-day), bcrypt, speakeasy (TOTP 2FA) |
-| **Primary AI** | Multi-provider ensemble: Cerebras, SambaNova, OpenRouter, GitHub Models |
-| **AI SDK** | OpenAI SDK (`openai` package) — all providers are OpenAI-compatible |
-| **Vision OCR** | Google Gemini API — `gemini-1.5-flash` |
-| **Observability** | Helicone gateway — live LLM call traces |
-| **File Upload** | Multer — JPEG/PNG/PDF, max 10MB |
-| **PDF Generation** | PDFKit — session summaries, prescriptions |
-| **Email** | Nodemailer — password reset, notifications |
-| **Real-time** | Server-Sent Events (SSE) — live agent step streaming |
-| **Medical APIs** | OpenFDA, RxNorm (NIH), NIH ClinicalTables, OpenStreetMap Overpass |
-| **Testing** | Plain Node.js `http` — integration tests, zero external dependencies |
+| Layer                    | Technology                                                               |
+| ------------------------ | ------------------------------------------------------------------------ |
+| **Frontend**       | React 19, Vite 7, React Router v7, TailwindCSS 3                         |
+| **UI Components**  | react-hot-toast, react-hook-form, Recharts, Framer Motion                |
+| **Maps**           | Leaflet + react-leaflet, OpenStreetMap tiles + Overpass API (no API key) |
+| **Backend**        | Node.js 18+, Express.js 5                                                |
+| **Database**       | PostgreSQL via Supabase (SSL,`rejectUnauthorized: false`)              |
+| **Authentication** | jsonwebtoken (JWT, 7-day), bcrypt, speakeasy (TOTP 2FA)                  |
+| **Primary AI**     | Multi-provider ensemble: Cerebras, SambaNova, OpenRouter, GitHub Models  |
+| **AI SDK**         | OpenAI SDK (`openai` package) — all providers are OpenAI-compatible   |
+| **Vision OCR**     | Google Gemini API —`gemini-1.5-flash`                                 |
+| **Observability**  | Helicone gateway — live LLM call traces                                 |
+| **File Upload**    | Multer — JPEG/PNG/PDF, max 10MB                                         |
+| **PDF Generation** | PDFKit — session summaries, prescriptions                               |
+| **Email**          | Nodemailer — password reset, notifications                              |
+| **Real-time**      | Server-Sent Events (SSE) — live agent step streaming                    |
+| **Medical APIs**   | OpenFDA, RxNorm (NIH), NIH ClinicalTables, OpenStreetMap Overpass        |
+| **Testing**        | Plain Node.js `http` — integration tests, zero external dependencies  |
 
 ---
 
@@ -602,95 +607,96 @@ CLIENT_URL=http://localhost:5173
 ## API Reference
 
 All protected endpoints require:
+
 ```
 Authorization: Bearer <jwt_token>
 ```
 
 ### Authentication
 
-| Method | Endpoint | Body | Response |
-|--------|----------|------|----------|
-| `POST` | `/api/auth/register` | `{ name, email, password, role }` | `{ token, user }` |
-| `POST` | `/api/auth/login` | `{ email, password }` | `{ token, user }` |
-| `POST` | `/api/auth/forgot-password` | `{ email }` | `{ message }` |
-| `POST` | `/api/auth/reset-password` | `{ token, newPassword }` | `{ message }` |
+| Method   | Endpoint                      | Body                                | Response            |
+| -------- | ----------------------------- | ----------------------------------- | ------------------- |
+| `POST` | `/api/auth/register`        | `{ name, email, password, role }` | `{ token, user }` |
+| `POST` | `/api/auth/login`           | `{ email, password }`             | `{ token, user }` |
+| `POST` | `/api/auth/forgot-password` | `{ email }`                       | `{ message }`     |
+| `POST` | `/api/auth/reset-password`  | `{ token, newPassword }`          | `{ message }`     |
 
 `role` must be `"patient"`, `"doctor"`, or `"admin"`.
 
 ### Patient
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `GET` | `/api/patient/profile` | Patient | Get patient profile |
-| `PUT` | `/api/patient/profile` | Patient | Create or update patient profile |
-| `GET` | `/api/patient/sessions` | Patient | List recent symptom sessions |
-| `POST` | `/api/patient/sessions/:id/second-opinion` | Patient | Re-run diagnostic agent |
-| `GET/POST` | `/api/patient/vitals` | Patient | Get or log vitals (BP, glucose, weight, etc.) |
-| `GET/POST` | `/api/patient/medications` | Patient | Get or add medication log entries |
-| `GET/PUT` | `/api/patient/medical-id` | Patient | Get or update emergency medical ID |
-| `GET` | `/api/patient/timeline` | Patient | Health timeline (sessions + vitals as events) |
-| `GET` | `/api/patient/prescriptions` | Patient | List prescriptions from doctors |
+| Method       | Endpoint                                     | Auth    | Description                                   |
+| ------------ | -------------------------------------------- | ------- | --------------------------------------------- |
+| `GET`      | `/api/patient/profile`                     | Patient | Get patient profile                           |
+| `PUT`      | `/api/patient/profile`                     | Patient | Create or update patient profile              |
+| `GET`      | `/api/patient/sessions`                    | Patient | List recent symptom sessions                  |
+| `POST`     | `/api/patient/sessions/:id/second-opinion` | Patient | Re-run diagnostic agent                       |
+| `GET/POST` | `/api/patient/vitals`                      | Patient | Get or log vitals (BP, glucose, weight, etc.) |
+| `GET/POST` | `/api/patient/medications`                 | Patient | Get or add medication log entries             |
+| `GET/PUT`  | `/api/patient/medical-id`                  | Patient | Get or update emergency medical ID            |
+| `GET`      | `/api/patient/timeline`                    | Patient | Health timeline (sessions + vitals as events) |
+| `GET`      | `/api/patient/prescriptions`               | Patient | List prescriptions from doctors               |
 
 ### Disease Diagnosis
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `POST` | `/api/disease/predict` | Patient | Run diagnostic agent + ensemble consensus |
-| `POST` | `/api/disease/predict/retry/:sessionId` | Patient | Retry a stale pending session |
-| `POST` | `/api/disease/tests` | Patient | Get recommended blood tests for a disease |
+| Method   | Endpoint                                  | Auth    | Description                               |
+| -------- | ----------------------------------------- | ------- | ----------------------------------------- |
+| `POST` | `/api/disease/predict`                  | Patient | Run diagnostic agent + ensemble consensus |
+| `POST` | `/api/disease/predict/retry/:sessionId` | Patient | Retry a stale pending session             |
+| `POST` | `/api/disease/tests`                    | Patient | Get recommended blood tests for a disease |
 
 ### Blood Report
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `POST` | `/api/blood-report/upload` | Patient | Upload image/PDF, run Gemini OCR. Returns `{ reportId, extractedValues }` |
-| `POST` | `/api/blood-report/analyze` | Patient | Run blood report agent (3-phase ensemble). Returns full analysis |
-| `POST` | `/api/blood-report/risk-scores` | Patient | Run risk scoring agent. Returns composite score + breakdown |
-| `POST` | `/api/blood-report/follow-up` | Patient | Run follow-up agent. Returns top 3 recheck recommendations |
-| `GET` | `/api/blood-report/:id` | Patient | Fetch saved report + cached analysis |
+| Method   | Endpoint                          | Auth    | Description                                                                 |
+| -------- | --------------------------------- | ------- | --------------------------------------------------------------------------- |
+| `POST` | `/api/blood-report/upload`      | Patient | Upload image/PDF, run Gemini OCR. Returns `{ reportId, extractedValues }` |
+| `POST` | `/api/blood-report/analyze`     | Patient | Run blood report agent (3-phase ensemble). Returns full analysis            |
+| `POST` | `/api/blood-report/risk-scores` | Patient | Run risk scoring agent. Returns composite score + breakdown                 |
+| `POST` | `/api/blood-report/follow-up`   | Patient | Run follow-up agent. Returns top 3 recheck recommendations                  |
+| `GET`  | `/api/blood-report/:id`         | Patient | Fetch saved report + cached analysis                                        |
 
 ### Doctor Assist
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `POST` | `/api/doctor-assist/suggest-tests` | Doctor | Run doctor assist agent (10 req/min limit) |
-| `GET` | `/api/doctor-assist/drug-interactions` | Doctor | Ensemble-powered drug interaction check |
-| `GET` | `/api/doctor-assist/sessions` | Doctor | Last 10 assist sessions |
-| `GET/PUT` | `/api/doctor-assist/profile` | Doctor | Get or update clinic profile |
+| Method      | Endpoint                                 | Auth   | Description                                |
+| ----------- | ---------------------------------------- | ------ | ------------------------------------------ |
+| `POST`    | `/api/doctor-assist/suggest-tests`     | Doctor | Run doctor assist agent (10 req/min limit) |
+| `GET`     | `/api/doctor-assist/drug-interactions` | Doctor | Ensemble-powered drug interaction check    |
+| `GET`     | `/api/doctor-assist/sessions`          | Doctor | Last 10 assist sessions                    |
+| `GET/PUT` | `/api/doctor-assist/profile`           | Doctor | Get or update clinic profile               |
 
 ### Doctors (Nearby)
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `GET` | `/api/doctors/nearby` | Patient | Query: `?lat=&lng=&radius=&specialty=` — real-time Overpass API + DB fallback |
+| Method  | Endpoint                | Auth    | Description                                                                     |
+| ------- | ----------------------- | ------- | ------------------------------------------------------------------------------- |
+| `GET` | `/api/doctors/nearby` | Patient | Query:`?lat=&lng=&radius=&specialty=` — real-time Overpass API + DB fallback |
 
 ### Appointments
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `POST` | `/api/appointments/request` | Patient | Request an appointment |
-| `POST` | `/api/appointments/accept/:id` | Doctor | Accept appointment |
-| `POST` | `/api/appointments/decline/:id` | Doctor | Decline appointment |
-| `GET` | `/api/appointments/list` | Both | List appointments for current user |
+| Method   | Endpoint                          | Auth    | Description                        |
+| -------- | --------------------------------- | ------- | ---------------------------------- |
+| `POST` | `/api/appointments/request`     | Patient | Request an appointment             |
+| `POST` | `/api/appointments/accept/:id`  | Doctor  | Accept appointment                 |
+| `POST` | `/api/appointments/decline/:id` | Doctor  | Decline appointment                |
+| `GET`  | `/api/appointments/list`        | Both    | List appointments for current user |
 
 ### Shared (Public — No Auth)
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `GET` | `/api/shared/report/:token` | None | View shared blood report (7-day expiry token) |
-| `GET` | `/api/shared/medical-id/:patientId` | None | View medical ID (requires PIN) |
+| Method  | Endpoint                              | Auth | Description                                   |
+| ------- | ------------------------------------- | ---- | --------------------------------------------- |
+| `GET` | `/api/shared/report/:token`         | None | View shared blood report (7-day expiry token) |
+| `GET` | `/api/shared/medical-id/:patientId` | None | View medical ID (requires PIN)                |
 
 ### Admin
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `GET` | `/api/admin/users` | Admin | List/search/filter users |
-| `GET` | `/api/admin/audit-log` | Admin | HIPAA audit trail |
+| Method  | Endpoint                 | Auth  | Description              |
+| ------- | ------------------------ | ----- | ------------------------ |
+| `GET` | `/api/admin/users`     | Admin | List/search/filter users |
+| `GET` | `/api/admin/audit-log` | Admin | HIPAA audit trail        |
 
 ### Agent Status (SSE)
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
+| Method  | Endpoint                         | Auth    | Description                                                 |
+| ------- | -------------------------------- | ------- | ----------------------------------------------------------- |
 | `GET` | `/api/agent/stream/:sessionId` | Patient | EventSource — streams `step`, `done`, `error` events |
 
 ---
@@ -882,18 +888,18 @@ node tests/integration.js
 
 ## Free APIs Used
 
-| API | Purpose | Limit |
-|-----|---------|-------|
-| [Cerebras](https://cloud.cerebras.ai/) | Primary LLM inference (Qwen-235B) | RPM limited, no monthly cap |
-| [SambaNova](https://cloud.sambanova.ai/) | LLM inference (Llama-3.3-70B) | Free, no monthly cap |
-| [OpenRouter](https://openrouter.ai/) | LLM inference (free models) | Free :free models |
-| [GitHub Models](https://github.com/marketplace/models) | LLM inference (gpt-4o-mini) | Free with PAT |
-| [Google Gemini](https://ai.google.dev/) | Vision OCR for blood report images | 15 req/min free |
-| [OpenFDA](https://open.fda.gov/apis/) | Drug search by condition + drug details | 240 req/min (no key) |
-| [RxNorm API — NIH](https://rxnav.nlm.nih.gov/) | Drug interaction checking | No hard limit |
-| [NIH ClinicalTables](https://clinicaltables.nlm.nih.gov/) | ICD-10 code lookup | No hard limit |
-| [OpenStreetMap Overpass](https://overpass-api.de/) | Nearby healthcare providers (3 mirrors) | Fair use |
-| [Helicone](https://helicone.ai/) | LLM observability & tracing | Free tier |
+| API                                                    | Purpose                                 | Limit                       |
+| ------------------------------------------------------ | --------------------------------------- | --------------------------- |
+| [Cerebras](https://cloud.cerebras.ai/)                    | Primary LLM inference (Qwen-235B)       | RPM limited, no monthly cap |
+| [SambaNova](https://cloud.sambanova.ai/)                  | LLM inference (Llama-3.3-70B)           | Free, no monthly cap        |
+| [OpenRouter](https://openrouter.ai/)                      | LLM inference (free models)             | Free :free models           |
+| [GitHub Models](https://github.com/marketplace/models)    | LLM inference (gpt-4o-mini)             | Free with PAT               |
+| [Google Gemini](https://ai.google.dev/)                   | Vision OCR for blood report images      | 15 req/min free             |
+| [OpenFDA](https://open.fda.gov/apis/)                     | Drug search by condition + drug details | 240 req/min (no key)        |
+| [RxNorm API — NIH](https://rxnav.nlm.nih.gov/)           | Drug interaction checking               | No hard limit               |
+| [NIH ClinicalTables](https://clinicaltables.nlm.nih.gov/) | ICD-10 code lookup                      | No hard limit               |
+| [OpenStreetMap Overpass](https://overpass-api.de/)        | Nearby healthcare providers (3 mirrors) | Fair use                    |
+| [Helicone](https://helicone.ai/)                          | LLM observability & tracing             | Free tier                   |
 
 All external APIs are called server-side only. No API keys are exposed to the frontend.
 

@@ -10,7 +10,7 @@ function StatCard({ label, value, color, icon }) {
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5"
+      className="bg-white rounded-2xl border border-slate-200 shadow p-5"
     >
       <div className="flex items-center gap-4">
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${color}`}>
@@ -111,8 +111,8 @@ export default function AdminDashboard() {
       </div>
 
       {/* Users Table */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-4 flex-wrap">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow overflow-hidden">
+        <div className="p-5 border-b border-slate-200 flex items-center justify-between gap-4 flex-wrap">
           <h2 className="text-lg font-semibold text-slate-800">Users ({totalUsers})</h2>
           <input
             type="text"
@@ -182,7 +182,7 @@ export default function AdminDashboard() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="p-4 border-t border-slate-100 flex items-center justify-between">
+          <div className="p-4 border-t border-slate-200 flex items-center justify-between">
             <p className="text-xs text-slate-500">
               Page {page} of {totalPages}
             </p>

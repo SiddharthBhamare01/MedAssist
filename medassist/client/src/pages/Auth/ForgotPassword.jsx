@@ -36,7 +36,7 @@ export default function ForgotPassword() {
         variants={fadeIn}
         initial="hidden"
         animate="visible"
-        className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md border border-slate-100"
+        className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md border border-slate-200"
       >
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-teal-600">MedAssist AI</h1>

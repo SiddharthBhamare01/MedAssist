@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+
+const fadeIn = { hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
 
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 const SMOKING = ['never', 'former', 'current'];
@@ -13,7 +16,7 @@ const labelClass = 'block text-xs font-semibold text-slate-500 mb-1.5';
 
 function InfoRow({ icon, label, value }) {
   return (
-    <div className="flex items-start gap-3 py-3 border-b border-slate-100 last:border-0">
+    <div className="flex items-start gap-3 py-3 border-b border-slate-200 last:border-0">
       <div className="w-8 h-8 bg-teal-50 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
         <span className="text-sm">{icon}</span>
       </div>
@@ -151,7 +154,7 @@ export default function PatientProfile() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-10">
+    <motion.div variants={fadeIn} initial="hidden" animate="visible" className="max-w-4xl mx-auto space-y-6 pb-10">
       {/* Hero */}
       <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-teal-700 via-teal-600 to-emerald-600">
         <div className="absolute top-0 right-0 w-72 h-72 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
@@ -185,8 +188,8 @@ export default function PatientProfile() {
       {editing ? (
         /* ── Edit Mode ── */
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6 space-y-5">
-            <h2 className="text-sm font-bold text-slate-700 pb-3 border-b border-slate-100">Basic Information</h2>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 space-y-5">
+            <h2 className="text-sm font-bold text-slate-700 pb-3 border-b border-slate-200">Basic Information</h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div>
                 <label className={labelClass}>Age *</label>
@@ -237,8 +240,8 @@ export default function PatientProfile() {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6 space-y-5">
-            <h2 className="text-sm font-bold text-slate-700 pb-3 border-b border-slate-100">Medical History</h2>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 space-y-5">
+            <h2 className="text-sm font-bold text-slate-700 pb-3 border-b border-slate-200">Medical History</h2>
             <div>
               <label className={labelClass}>Existing Conditions</label>
               <TagInput value={conditions} onChange={setConditions} placeholder="e.g. Hypertension, Diabetes" />
@@ -268,8 +271,8 @@ export default function PatientProfile() {
         /* ── View Mode ── */
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left column */}
-          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
-            <h2 className="text-sm font-bold text-slate-700 pb-3 mb-1 border-b border-slate-100">Basic Information</h2>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
+            <h2 className="text-sm font-bold text-slate-700 pb-3 mb-1 border-b border-slate-200">Basic Information</h2>
             <InfoRow icon="🎂" label="Age" value={profile?.age ? `${profile.age} years` : null} />
             <InfoRow icon="👤" label="Gender" value={profile?.gender ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1) : null} />
             <InfoRow icon="⚖️" label="Weight" value={profile?.weightKg || profile?.weight_kg ? `${profile.weightKg || profile.weight_kg} kg` : null} />
@@ -281,16 +284,16 @@ export default function PatientProfile() {
 
           {/* Right column */}
           <div className="space-y-6">
-            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
-              <h2 className="text-sm font-bold text-slate-700 pb-3 mb-3 border-b border-slate-100">Existing Conditions</h2>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
+              <h2 className="text-sm font-bold text-slate-700 pb-3 mb-3 border-b border-slate-200">Existing Conditions</h2>
               <TagList items={profile?.existingConditions || profile?.existing_conditions} emptyText="No conditions listed" />
             </div>
-            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
-              <h2 className="text-sm font-bold text-slate-700 pb-3 mb-3 border-b border-slate-100">Allergies</h2>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
+              <h2 className="text-sm font-bold text-slate-700 pb-3 mb-3 border-b border-slate-200">Allergies</h2>
               <TagList items={profile?.allergies} emptyText="No allergies listed" color="red" />
             </div>
-            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
-              <h2 className="text-sm font-bold text-slate-700 pb-3 mb-3 border-b border-slate-100">Current Medications</h2>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
+              <h2 className="text-sm font-bold text-slate-700 pb-3 mb-3 border-b border-slate-200">Current Medications</h2>
               <TagList items={profile?.currentMedications || profile?.current_medications} emptyText="No medications listed" color="amber" />
             </div>
           </div>
@@ -312,6 +315,6 @@ export default function PatientProfile() {
           </button>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }

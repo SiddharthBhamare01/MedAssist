@@ -71,7 +71,7 @@ function SessionCard({ session, onClick, onViewLog, index }) {
         </p>
       )}
 
-      <div className="mt-3 pt-3 border-t border-slate-100/80 flex items-center justify-between">
+      <div className="mt-3 pt-3 border-t border-slate-200/80 flex items-center justify-between">
         <button
           onClick={e => { e.stopPropagation(); onViewLog(session); }}
           className="text-[11px] text-teal-600 hover:text-teal-800 font-semibold flex items-center gap-1 transition-colors"

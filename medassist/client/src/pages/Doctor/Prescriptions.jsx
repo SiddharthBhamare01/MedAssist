@@ -119,7 +119,7 @@ export default function Prescriptions() {
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Form */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow p-6">
           <h2 className="text-lg font-semibold text-slate-800 mb-4">New Prescription</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
 
@@ -244,7 +244,7 @@ export default function Prescriptions() {
               <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : prescriptions.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow p-8 text-center">
               <p className="text-slate-500">No prescriptions yet.</p>
             </div>
           ) : (
@@ -259,7 +259,7 @@ export default function Prescriptions() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.04 }}
-                  className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5"
+                  className="bg-white rounded-2xl border border-slate-200 shadow p-5"
                 >
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div>
@@ -283,7 +283,7 @@ export default function Prescriptions() {
                   </div>
 
                   {/* Medications table */}
-                  <div className="rounded-lg border border-slate-100 overflow-hidden">
+                  <div className="rounded-lg border border-slate-200 shadow overflow-hidden">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">

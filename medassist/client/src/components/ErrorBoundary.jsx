@@ -21,8 +21,8 @@ export default class ErrorBoundary extends Component {
       <div className="min-h-[60vh] flex items-center justify-center p-8">
         <div className="bg-white border border-red-200 rounded-2xl p-8 max-w-md w-full text-center shadow-sm space-y-4">
           <div className="text-5xl">⚠️</div>
-          <h2 className="text-xl font-bold text-gray-900">Something went wrong</h2>
-          <p className="text-sm text-gray-500">
+          <h2 className="text-xl font-bold text-slate-800">Something went wrong</h2>
+          <p className="text-sm text-slate-500">
             An unexpected error occurred on this page. This has been logged.
           </p>
           {this.state.error?.message && (
@@ -39,7 +39,7 @@ export default class ErrorBoundary extends Component {
             </button>
             <button
               onClick={() => window.location.href = '/'}
-              className="border border-gray-300 text-gray-600 text-sm px-5 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+              className="border border-slate-300 text-slate-600 text-sm px-5 py-2 rounded-lg hover:bg-slate-50 transition-colors"
             >
               Go Home
             </button>

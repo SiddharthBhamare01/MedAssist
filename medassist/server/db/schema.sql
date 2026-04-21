@@ -86,3 +86,14 @@ CREATE TABLE IF NOT EXISTS agent_logs (
   total_turns INT,
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+
+-- Magic link tokens for passwordless login
+CREATE TABLE IF NOT EXISTS magic_link_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email VARCHAR(255) NOT NULL,
+  token VARCHAR(255) UNIQUE NOT NULL,
+  expires_at TIMESTAMP NOT NULL,
+  used BOOLEAN DEFAULT false,
+  created_at TIMESTAMP DEFAULT NOW()
+);

@@ -42,32 +42,48 @@ async function extractFromPDF(filePath) {
     throw new Error('PDF appears to be a scanned image with no extractable text. Please upload a text-based PDF.');
   }
 
-  const { getPrimaryProvider } = require('../utils/aiClients');
-  const provider = getPrimaryProvider();
+  // Truncate to ~15 000 chars — enough for any blood report, avoids provider token limits
+  const truncatedText = rawText.length > 15000 ? rawText.slice(0, 15000) + '\n[truncated]' : rawText;
 
-  const response = await provider.client.chat.completions.create({
-    model: provider.model,
-    messages: [
-      { role: 'system', content: PARSE_PROMPT },
-      { role: 'user', content: `Blood report text:\n\n${rawText}` },
-    ],
-    temperature: 0.1,
-    max_tokens: 8000,
-  });
+  const { getProviders, getAvailableProviders } = require('../utils/aiClients');
+  const providers = getProviders();
+  const available = getAvailableProviders();
 
-  const raw = response.choices[0].message.content.trim();
-  const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+  let lastErr;
+  for (const name of available) {
+    const provider = providers[name];
+    try {
+      const response = await provider.client.chat.completions.create({
+        model: provider.model,
+        messages: [
+          { role: 'system', content: PARSE_PROMPT },
+          { role: 'user', content: `Blood report text:\n\n${truncatedText}` },
+        ],
+        temperature: 0.1,
+        max_tokens: 8000,
+      });
 
-  let parsed;
-  try {
-    parsed = JSON.parse(clean);
-  } catch {
-    console.error(`[geminiService] ${provider.name} returned non-JSON:`, raw.slice(0, 200));
-    throw new Error('Failed to parse blood values from PDF text');
+      const raw = response.choices[0].message.content.trim();
+      const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+
+      let parsed;
+      try {
+        parsed = JSON.parse(clean);
+      } catch {
+        console.error(`[geminiService] ${provider.name} returned non-JSON:`, raw.slice(0, 200));
+        lastErr = new Error('Failed to parse blood values from PDF text');
+        continue;
+      }
+
+      if (!Array.isArray(parsed)) { lastErr = new Error('Expected array from AI parser'); continue; }
+      console.log(`[geminiService] PDF parsed by ${provider.name}`);
+      return parsed;
+    } catch (err) {
+      if (err.status === 429 || err.status === 503 || err.status === 400) { lastErr = err; continue; }
+      throw err;
+    }
   }
-
-  if (!Array.isArray(parsed)) throw new Error('Expected array from AI parser');
-  return parsed;
+  throw lastErr || new Error('All AI providers failed to parse PDF');
 }
 
 /**

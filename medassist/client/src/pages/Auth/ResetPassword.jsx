@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
+import PasswordInput from '../../components/PasswordInput';
 
 const fadeIn = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5 } } };
 
@@ -41,7 +42,7 @@ export default function ResetPassword() {
   if (!token) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-teal-50">
-        <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md text-center border border-slate-100">
+        <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md text-center border border-slate-200">
           <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -65,7 +66,7 @@ export default function ResetPassword() {
         variants={fadeIn}
         initial="hidden"
         animate="visible"
-        className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md border border-slate-100"
+        className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md border border-slate-200"
       >
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-teal-600">MedAssist AI</h1>
@@ -82,17 +83,14 @@ export default function ResetPassword() {
             <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1">
               New Password
             </label>
-            <input
+            <PasswordInput
               id="password"
-              type="password"
               name="password"
               value={form.password}
               onChange={handleChange}
-              required
-              minLength={8}
-              autoComplete="new-password"
               placeholder="At least 8 characters"
-              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow"
+              autoComplete="new-password"
+              minLength={8}
             />
           </div>
 
@@ -100,17 +98,14 @@ export default function ResetPassword() {
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700 mb-1">
               Confirm Password
             </label>
-            <input
+            <PasswordInput
               id="confirmPassword"
-              type="password"
               name="confirmPassword"
               value={form.confirmPassword}
               onChange={handleChange}
-              required
-              minLength={8}
-              autoComplete="new-password"
               placeholder="Re-enter your password"
-              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow"
+              autoComplete="new-password"
+              minLength={8}
             />
           </div>
 

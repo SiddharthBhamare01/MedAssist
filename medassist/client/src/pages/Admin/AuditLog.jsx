@@ -74,7 +74,7 @@ export default function AuditLog() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow p-5">
         <div className="flex items-end gap-4 flex-wrap">
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">Action</label>
@@ -136,7 +136,7 @@ export default function AuditLog() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
@@ -188,7 +188,7 @@ export default function AuditLog() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="p-4 border-t border-slate-100 flex items-center justify-between">
+          <div className="p-4 border-t border-slate-200 flex items-center justify-between">
             <p className="text-xs text-slate-500">
               Showing {(page - 1) * perPage + 1}–{Math.min(page * perPage, total)} of {total}
             </p>

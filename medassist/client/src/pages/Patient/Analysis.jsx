@@ -24,8 +24,8 @@ const COMPLEXITY_STYLE = {
 
 function Section({ title, icon, children, className = '' }) {
   return (
-    <div className={`bg-white rounded-2xl border border-slate-100 shadow-card p-6 space-y-4 animate-slide-up flex flex-col ${className}`}>
-      <h2 className="text-base font-bold font-display text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2 shrink-0">
+    <div className={`bg-white rounded-2xl border border-slate-200 shadow p-6 space-y-4 animate-slide-up flex flex-col ${className}`}>
+      <h2 className="text-base font-bold font-display text-slate-800 border-b border-slate-200 pb-3 flex items-center gap-2 shrink-0">
         {icon && <span className="text-lg">{icon}</span>}
         {title}
       </h2>
@@ -203,7 +203,7 @@ export default function Analysis() {
       </nav>
 
       {/* Header */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-6">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-xl font-bold font-display text-slate-800">Blood Report Analysis</h1>
@@ -249,7 +249,7 @@ export default function Analysis() {
       {loading && (
         <div className="space-y-4">
           <AgentStatusPanel sessionId={reportId} />
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-8 flex flex-col items-center gap-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow p-8 flex flex-col items-center gap-4">
             <div className="w-10 h-10 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
             <div className="text-center">
               <p className="font-medium text-slate-700">Blood Report Agent is running...</p>
@@ -334,7 +334,7 @@ export default function Analysis() {
                     </div>
                   ) : (
                     // New format: structured treatment object
-                    <div key={i} className="border border-slate-100 rounded-xl p-4 bg-gradient-to-r from-teal-50/50 to-white hover:from-teal-50 transition-colors">
+                    <div key={i} className="border border-slate-200 rounded-xl p-4 bg-gradient-to-r from-teal-50/50 to-white hover:from-teal-50 transition-colors">
                       <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
                         <div>
                           <h3 className="font-bold text-slate-800">{t.medication || t.name}</h3>
@@ -353,25 +353,25 @@ export default function Analysis() {
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mt-2">
                         {t.dosage && (
-                          <div className="bg-white rounded-lg px-2.5 py-1.5 border border-slate-100">
+                          <div className="bg-white rounded-lg px-2.5 py-1.5 border border-slate-200">
                             <span className="text-slate-400 block">Dosage</span>
                             <span className="text-slate-700 font-medium">{t.dosage}</span>
                           </div>
                         )}
                         {t.frequency && (
-                          <div className="bg-white rounded-lg px-2.5 py-1.5 border border-slate-100">
+                          <div className="bg-white rounded-lg px-2.5 py-1.5 border border-slate-200">
                             <span className="text-slate-400 block">Frequency</span>
                             <span className="text-slate-700 font-medium">{t.frequency}</span>
                           </div>
                         )}
                         {t.duration && (
-                          <div className="bg-white rounded-lg px-2.5 py-1.5 border border-slate-100">
+                          <div className="bg-white rounded-lg px-2.5 py-1.5 border border-slate-200">
                             <span className="text-slate-400 block">Duration</span>
                             <span className="text-slate-700 font-medium">{t.duration}</span>
                           </div>
                         )}
                         {t.route && (
-                          <div className="bg-white rounded-lg px-2.5 py-1.5 border border-slate-100">
+                          <div className="bg-white rounded-lg px-2.5 py-1.5 border border-slate-200">
                             <span className="text-slate-400 block">Route</span>
                             <span className="text-slate-700 font-medium capitalize">{t.route}</span>
                           </div>
@@ -399,7 +399,7 @@ export default function Analysis() {
             <Section title={`Tablet Recommendations (${tabletRecommendations.length})`} icon="💊">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {tabletRecommendations.map((med, i) => (
-                  <div key={i} className="border border-slate-100 rounded-xl p-4 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                  <div key={i} className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 hover:bg-slate-50 transition-colors">
                     <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
                       <div>
                         <h3 className="font-bold text-slate-800">{med.name}</h3>
@@ -422,7 +422,7 @@ export default function Analysis() {
                       ))}
                     </div>
                     {med.reason && (
-                      <p className="text-xs text-slate-500 mt-3 border-t border-slate-100 pt-2">
+                      <p className="text-xs text-slate-500 mt-3 border-t border-slate-200 pt-2">
                         <span className="font-medium">Reason:</span> {med.reason}
                       </p>
                     )}
@@ -528,7 +528,7 @@ export default function Analysis() {
             <button
               onClick={handleRiskScores}
               disabled={loadingRisk || !!riskScores}
-              className="bg-white rounded-2xl border border-slate-100 shadow-card p-5 text-left hover:shadow-card-hover hover:border-teal-200 transition-all disabled:opacity-60"
+              className="bg-white rounded-2xl border border-slate-200 shadow p-5 text-left hover:shadow-card-hover hover:border-teal-200 transition-all disabled:opacity-60"
             >
               <div className="text-2xl mb-2">📈</div>
               <h3 className="font-bold text-slate-800 text-sm">Clinical Risk Scores</h3>
@@ -539,7 +539,7 @@ export default function Analysis() {
             <button
               onClick={handleFollowUp}
               disabled={loadingFollowUp || !!followUp}
-              className="bg-white rounded-2xl border border-slate-100 shadow-card p-5 text-left hover:shadow-card-hover hover:border-teal-200 transition-all disabled:opacity-60"
+              className="bg-white rounded-2xl border border-slate-200 shadow p-5 text-left hover:shadow-card-hover hover:border-teal-200 transition-all disabled:opacity-60"
             >
               <div className="text-2xl mb-2">📅</div>
               <h3 className="font-bold text-slate-800 text-sm">Follow-up Schedule</h3>
@@ -608,7 +608,7 @@ export default function Analysis() {
                       const bScore = b.score ?? 0;
                       const bColor = bScore >= 76 ? 'bg-red-500' : bScore >= 51 ? 'bg-orange-400' : bScore >= 26 ? 'bg-amber-400' : 'bg-emerald-500';
                       return (
-                        <div key={b.area} className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+                        <div key={b.area} className="bg-slate-50 border border-slate-200 rounded-xl p-3">
                           <p className="text-xs font-semibold text-slate-700">{b.area}</p>
                           <div className="flex items-center gap-2 mt-1.5">
                             <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
@@ -672,7 +672,7 @@ export default function Analysis() {
 
           {/* Find Doctor CTA */}
           {!doctorReferralNeeded && (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-card p-5 flex items-center justify-between gap-4">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow p-5 flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-medium text-slate-700">Looking for a doctor anyway?</p>
                 <p className="text-xs text-slate-400">Find specialists near you</p>

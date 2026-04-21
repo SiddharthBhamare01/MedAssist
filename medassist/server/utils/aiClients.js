@@ -67,26 +67,27 @@ function getProviders() {
       client: makeClient(process.env.SAMBANOVA_API_KEY, 'https://api.sambanova.ai/v1'),
       model: 'Meta-Llama-3.3-70B-Instruct',
     },
-    // OpenRouter — free tier, unlimited credits; tries multiple models in fallback order
+    // OpenRouter — direct client (bypasses Helicone; Helicone gateway doesn't forward
+    // Authorization header correctly to OpenRouter, causing silent 401s)
     openrouter: {
       name: 'OpenRouter',
       client: process.env.OPENROUTER_API_KEY
-        ? makeClient(
-            process.env.OPENROUTER_API_KEY,
-            'https://openrouter.ai/api/v1',
-            {
+        ? new OpenAI({
+            apiKey: process.env.OPENROUTER_API_KEY,
+            baseURL: 'https://openrouter.ai/api/v1',
+            defaultHeaders: {
               'HTTP-Referer': process.env.CLIENT_URL || 'http://localhost:5173',
               'X-Title': 'MedAssist AI CS595',
-            }
-          )
+            },
+          })
         : null,
       // Fallback model list — tried in order until one works
-      model: 'openrouter/free',
+      model: 'google/gemma-3-12b-it:free',
       fallbackModels: [
-        'openrouter/free',
         'google/gemma-3-12b-it:free',
         'google/gemma-3-27b-it:free',
-        'arcee-ai/trinity-large-preview:free',
+        'meta-llama/llama-3.1-8b-instruct:free',
+        'mistralai/mistral-7b-instruct:free',
         'google/gemma-3n-e4b-it:free',
         'google/gemma-3-4b-it:free',
       ],

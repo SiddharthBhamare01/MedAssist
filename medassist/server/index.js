@@ -20,13 +20,28 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Rate limiting for agent routes (agents make multiple API calls per request)
 const agentLimiter = rateLimit({
-  windowMs: 60 * 1000,      // 1 minute
-  max: 10,                   // 10 requests per minute per IP
+  windowMs: 60 * 1000,
+  max: 10,
   message: { error: 'Too many requests to AI agent. Please wait a moment.' }
 });
 
+// Auth rate limiting — prevent brute force and email spam
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,  // 15 minutes
+  max: 20,                    // 20 auth attempts per 15 min per IP
+  message: { error: 'Too many attempts. Please try again in 15 minutes.' },
+  skipSuccessfulRequests: true,
+});
+const emailLimiter = rateLimit({
+  windowMs: 60 * 1000,        // 1 minute
+  max: 3,                     // max 3 verification/reset emails per minute
+  message: { error: 'Too many email requests. Please wait a minute.' },
+});
+
 // Routes
-app.use('/api/auth', require('./routes/auth'));
+app.use('/api/auth', authLimiter, require('./routes/auth'));
+app.use('/api/auth/resend-verification', emailLimiter);
+app.use('/api/auth/forgot-password', emailLimiter);
 app.use('/api/patient', require('./routes/patient'));
 app.use('/api/disease', agentLimiter, require('./routes/disease'));
 app.use('/api/blood-report', agentLimiter, require('./routes/bloodReport'));
@@ -36,6 +51,7 @@ app.use('/api/agent', require('./routes/agentStatus'));
 app.use('/api/appointments', require('./routes/appointments'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/shared', require('./routes/shared'));
+app.use('/api/voice',  require('./routes/voice'));
 
 // Health check
 app.get('/api/health', (req, res) => {

@@ -16,7 +16,7 @@ function StatCard({ label, value, icon, color }) {
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5"
+      className="bg-white rounded-2xl border border-slate-200 shadow p-5"
     >
       <div className="flex items-center gap-4">
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${color}`}>
@@ -98,7 +98,7 @@ export default function Analytics() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Sessions over time */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
           <h2 className="text-lg font-semibold text-slate-800 mb-4">Sessions Over Time</h2>
           {sessionsOverTime.length === 0 ? (
             <div className="flex items-center justify-center h-64 text-slate-400 text-sm">No data available</div>
@@ -116,7 +116,7 @@ export default function Analytics() {
         </div>
 
         {/* Urgency Distribution */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
           <h2 className="text-lg font-semibold text-slate-800 mb-4">Urgency Distribution</h2>
           {urgencyDistribution.length === 0 ? (
             <div className="flex items-center justify-center h-64 text-slate-400 text-sm">No data available</div>

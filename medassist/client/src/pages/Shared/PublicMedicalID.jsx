@@ -43,7 +43,7 @@ export default function PublicMedicalID() {
           variants={fadeIn}
           initial="hidden"
           animate="visible"
-          className="bg-white rounded-2xl shadow-lg p-8 max-w-sm w-full border border-slate-100 text-center"
+          className="bg-white rounded-2xl shadow-lg p-8 max-w-sm w-full border border-slate-200 text-center"
         >
           <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -105,7 +105,7 @@ export default function PublicMedicalID() {
 
         {/* Blood Type */}
         {medicalId.blood_type && (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 text-center">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow p-5 text-center">
             <p className="text-xs text-slate-400 uppercase tracking-wide font-medium mb-1">Blood Type</p>
             <p className="text-4xl font-bold text-red-600">{medicalId.blood_type}</p>
           </div>
@@ -113,7 +113,7 @@ export default function PublicMedicalID() {
 
         {/* Emergency Contact */}
         {(medicalId.emergency_contact_name || medicalId.emergency_contact_phone) && (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow p-5">
             <h2 className="text-sm font-semibold text-slate-800 mb-3">Emergency Contact</h2>
             {medicalId.emergency_contact_name && (
               <p className="text-slate-700 font-medium">{medicalId.emergency_contact_name}</p>
@@ -141,7 +141,7 @@ export default function PublicMedicalID() {
         )}
 
         {/* Organ Donor */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex items-center justify-between">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow p-5 flex items-center justify-between">
           <span className="text-sm font-medium text-slate-700">Organ Donor</span>
           <span className={`px-3 py-1 rounded-full text-xs font-bold ${
             medicalId.organ_donor ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-500'

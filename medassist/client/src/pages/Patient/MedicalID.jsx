@@ -92,14 +92,21 @@ export default function MedicalID() {
       </div>
 
       {/* Share Link Card */}
-      <div className="bg-gradient-to-r from-teal-50 to-amber-50 border border-teal-100 rounded-2xl p-5">
-        <h3 className="text-sm font-semibold text-slate-700 mb-2">Shareable Emergency Link</h3>
+      <div className="bg-teal-50 border border-teal-200/60 rounded-2xl p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-6 h-6 bg-teal-100 rounded-lg flex items-center justify-center shrink-0">
+            <svg className="w-3.5 h-3.5 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+            </svg>
+          </div>
+          <h3 className="text-sm font-semibold text-teal-800">Shareable Emergency Link</h3>
+        </div>
         <div className="flex items-center gap-2">
           <input
             type="text"
             readOnly
             value={shareLink}
-            className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600 font-mono truncate"
+            className="flex-1 bg-white border border-teal-200/80 rounded-xl px-3 py-2 text-sm text-slate-600 font-mono truncate focus:outline-none"
           />
           <button
             onClick={copyLink}
@@ -108,12 +115,12 @@ export default function MedicalID() {
             {copied ? 'Copied!' : 'Copy'}
           </button>
         </div>
-        <p className="text-xs text-slate-500 mt-2">Anyone with this link will need your PIN to view your emergency info.</p>
+        <p className="text-xs text-teal-600/70 mt-2">Anyone with this link will need your PIN to view your emergency info.</p>
       </div>
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-5">
-        <h2 className="text-lg font-semibold text-slate-800 border-b border-slate-100 pb-3">Emergency Information</h2>
+      <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200 shadow p-6 space-y-5">
+        <h2 className="text-lg font-semibold text-slate-800 border-b border-slate-200 pb-3">Emergency Information</h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
@@ -185,7 +192,7 @@ export default function MedicalID() {
           />
         </div>
 
-        <div className="border-t border-slate-100 pt-4">
+        <div className="border-t border-slate-200 pt-4">
           <h3 className="text-sm font-semibold text-slate-700 mb-2">Access PIN</h3>
           <p className="text-xs text-slate-400 mb-2">Set a 4-digit PIN to protect your public Medical ID page. Leave blank to keep current PIN.</p>
           <input

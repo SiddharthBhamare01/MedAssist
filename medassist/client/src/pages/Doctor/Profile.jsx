@@ -9,7 +9,7 @@ const labelClass = 'block text-xs font-semibold text-slate-500 mb-1.5';
 
 function InfoRow({ icon, label, value }) {
   return (
-    <div className="flex items-start gap-3 py-3 border-b border-slate-100 last:border-0">
+    <div className="flex items-start gap-3 py-3 border-b border-slate-200 last:border-0">
       <div className="w-8 h-8 bg-teal-50 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
         <span className="text-sm">{icon}</span>
       </div>
@@ -143,8 +143,8 @@ export default function DoctorProfile() {
       {editing ? (
         /* ── Edit Mode ── */
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6 space-y-5">
-            <h2 className="text-sm font-bold text-slate-700 pb-3 border-b border-slate-100">Clinic Information</h2>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 space-y-5">
+            <h2 className="text-sm font-bold text-slate-700 pb-3 border-b border-slate-200">Clinic Information</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Specialization</label>
@@ -183,16 +183,16 @@ export default function DoctorProfile() {
       ) : (
         /* ── View Mode ── */
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
-            <h2 className="text-sm font-bold text-slate-700 pb-3 mb-1 border-b border-slate-100">Clinic Details</h2>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
+            <h2 className="text-sm font-bold text-slate-700 pb-3 mb-1 border-b border-slate-200">Clinic Details</h2>
             <InfoRow icon="🏥" label="Specialization" value={profile?.specialization} />
             <InfoRow icon="🏢" label="Hospital / Clinic" value={profile?.hospital_name} />
             <InfoRow icon="📍" label="Location" value={profile?.city ? `${profile.city}, ${profile.state || ''}` : null} />
             <InfoRow icon="📞" label="Phone" value={profile?.phone} />
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
-            <h2 className="text-sm font-bold text-slate-700 pb-3 mb-1 border-b border-slate-100">Account Details</h2>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
+            <h2 className="text-sm font-bold text-slate-700 pb-3 mb-1 border-b border-slate-200">Account Details</h2>
             <InfoRow icon="👤" label="Full Name" value={user?.name} />
             <InfoRow icon="📧" label="Email" value={user?.email} />
             <InfoRow icon="🔑" label="Role" value="Doctor" />

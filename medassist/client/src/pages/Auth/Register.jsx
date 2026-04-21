@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import PasswordInput from '../../components/PasswordInput';
 
 export default function Register() {
   const { login } = useAuth();
@@ -15,8 +17,41 @@ export default function Register() {
     role: 'patient',
   });
   const [loading, setLoading] = useState(false);
+  const [registered, setRegistered] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState('');
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  function redirectAfterLogin(user) {
+    if (user.role === 'admin') return navigate('/admin/dashboard');
+    if (user.role === 'doctor') return navigate('/doctor/dashboard');
+    return navigate('/patient/dashboard');
+  }
+
+  const handleGoogleSuccess = async ({ credential }) => {
+    try {
+      const { data } = await api.post('/auth/google', { credential, role: form.role });
+      if (data.requiresVerification) {
+        if (data.devLink) console.log('[Dev] Verify link:', data.devLink);
+        setRegisteredEmail(data.email);
+        setRegistered(true);
+        return;
+      }
+      if (data.token) {
+        login({ token: data.token, ...data.user });
+        toast.success(`Welcome, ${data.user.name}!`);
+        redirectAfterLogin(data.user);
+      }
+    } catch (err) {
+      const status = err.response?.status || err.status;
+      if (status === 409) {
+        toast.error('This Google account already has an account. Please sign in.', { duration: 5000, icon: '👤' });
+        setTimeout(() => navigate('/login'), 2500);
+      } else {
+        toast.error('Google sign-up failed. Please try again.');
+      }
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,21 +67,53 @@ export default function Register() {
         password: form.password,
         role: form.role,
       });
-      login({ token: data.token, ...data.user });
-      toast.success(`Account created! Welcome, ${data.user.name}!`);
-      if (data.user.role === 'admin') {
-        navigate('/admin/dashboard');
-      } else if (data.user.role === 'doctor') {
-        navigate('/doctor/dashboard');
-      } else {
-        navigate('/patient/dashboard');
-      }
+      setRegisteredEmail(form.email);
+      setRegistered(true);
+      if (data.devLink) console.log('[Dev] Verify link:', data.devLink);
     } catch (err) {
-      toast.error(err.message);
+      const status = err.response?.status || err.status;
+      if (status === 409) {
+        toast.error(`${form.email} already has an account. Redirecting to sign in…`, {
+          duration: 5000,
+          icon: '👤',
+        });
+        setTimeout(() => navigate('/login'), 2500);
+      } else {
+        toast.error(err.message || 'Registration failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  if (registered) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-teal-50/30 to-slate-100">
+        <div className="bg-white/80 backdrop-blur-sm p-10 rounded-3xl shadow-card-hover w-full max-w-sm border border-white/60 text-center">
+          <div className="w-16 h-16 bg-teal-50 rounded-2xl flex items-center justify-center mx-auto mb-5">
+            <svg className="w-8 h-8 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-slate-800 mb-2">Verify your email</h2>
+          <p className="text-sm text-slate-500 mb-2">
+            We sent a verification link to
+          </p>
+          <p className="text-sm font-semibold text-slate-800 mb-4">{registeredEmail}</p>
+          <p className="text-xs text-slate-400 mb-6">
+            Click the link in the email to activate your account. The link expires in 24 hours.
+          </p>
+          <Link
+            to="/login"
+            className="inline-block w-full bg-gradient-to-r from-teal-600 to-teal-500 text-white font-semibold py-3 rounded-xl text-sm shadow-md hover:shadow-lg transition-all"
+          >
+            Go to Sign In
+          </Link>
+          <p className="text-xs text-slate-400 mt-4">Didn't receive it? Check your spam folder.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-teal-50/30 to-slate-100 relative overflow-hidden">
@@ -65,6 +132,54 @@ export default function Register() {
         </div>
 
         <h2 className="text-lg font-semibold text-slate-800 mb-6">Create your account</h2>
+
+        {/* Role selector shown above Google button so it's used for Google sign-up too */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-slate-600 mb-2">I am a...</label>
+          <div className="grid grid-cols-2 gap-3">
+            {['patient', 'doctor'].map((r) => (
+              <label
+                key={r}
+                className={`flex items-center justify-center gap-2 border-2 rounded-xl py-3 cursor-pointer transition-all text-sm font-semibold capitalize
+                  ${form.role === r
+                    ? 'border-teal-500 bg-teal-50 text-teal-700 shadow-sm'
+                    : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+              >
+                <input
+                  type="radio"
+                  name="role"
+                  value={r}
+                  checked={form.role === r}
+                  onChange={handleChange}
+                  className="sr-only"
+                />
+                <span className="text-lg">{r === 'patient' ? '🤒' : '🩺'}</span> {r}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Social sign-up */}
+        <div className="mb-4">
+          <div className="flex justify-center">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => toast.error('Google sign-up failed')}
+              theme="outline"
+              size="large"
+              width="368"
+              text="signup_with"
+              shape="rectangular"
+            />
+          </div>
+        </div>
+
+        <div className="relative flex items-center gap-3 mb-5">
+          <div className="flex-1 h-px bg-slate-200" />
+          <span className="text-xs text-slate-400 font-medium">or sign up with email</span>
+          <div className="flex-1 h-px bg-slate-200" />
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4" aria-label="Create account form">
           <div>
@@ -98,59 +213,27 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-2">I am a...</label>
-            <div className="grid grid-cols-2 gap-3">
-              {['patient', 'doctor'].map((r) => (
-                <label
-                  key={r}
-                  className={`flex items-center justify-center gap-2 border-2 rounded-xl py-3 cursor-pointer transition-all text-sm font-semibold capitalize
-                    ${form.role === r
-                      ? 'border-teal-500 bg-teal-50 text-teal-700 shadow-sm'
-                      : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50'
-                    }`}
-                >
-                  <input
-                    type="radio"
-                    name="role"
-                    value={r}
-                    checked={form.role === r}
-                    onChange={handleChange}
-                    className="sr-only"
-                  />
-                  <span className="text-lg">{r === 'patient' ? '🤒' : '🩺'}</span> {r}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div>
             <label htmlFor="regPassword" className="block text-sm font-medium text-slate-600 mb-1.5">Password</label>
-            <input
+            <PasswordInput
               id="regPassword"
-              type="password"
               name="password"
               value={form.password}
               onChange={handleChange}
-              required
-              minLength={6}
-              autoComplete="new-password"
               placeholder="Min. 6 characters"
-              className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 transition-all"
+              autoComplete="new-password"
+              minLength={6}
             />
           </div>
 
           <div>
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-600 mb-1.5">Confirm Password</label>
-            <input
+            <PasswordInput
               id="confirmPassword"
-              type="password"
               name="confirmPassword"
               value={form.confirmPassword}
               onChange={handleChange}
-              required
-              autoComplete="new-password"
               placeholder="Re-enter password"
-              className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 transition-all"
+              autoComplete="new-password"
             />
           </div>
 

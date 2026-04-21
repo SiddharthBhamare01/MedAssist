@@ -22,7 +22,7 @@ function StatusBadge({ status }) {
     critical_high: 'Critical High',
   };
   return (
-    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${map[status] || 'bg-gray-100 text-gray-600'}`}>
+    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${map[status] || 'bg-slate-100 text-slate-600'}`}>
       {label[status] || status}
     </span>
   );
@@ -131,7 +131,7 @@ export default function UploadReport() {
     return (
       <div className="max-w-2xl mx-auto text-center py-20">
         <div className="text-5xl mb-4">📄</div>
-        <p className="text-gray-500 mb-4">No session found. Please start from your dashboard.</p>
+        <p className="text-slate-500 mb-4">No session found. Please start from your dashboard.</p>
         <button
           onClick={() => navigate('/patient/dashboard')}
           className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-blue-700"
@@ -145,7 +145,7 @@ export default function UploadReport() {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {/* Breadcrumb */}
-      <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-gray-400">
+      <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-slate-400">
         <button onClick={() => navigate('/patient/dashboard')} className="hover:text-blue-600 transition-colors">
           My Sessions
         </button>
@@ -154,17 +154,17 @@ export default function UploadReport() {
           Blood Tests
         </button>
         <span>›</span>
-        <span className="text-gray-600 font-medium">Upload Report</span>
+        <span className="text-slate-600 font-medium">Upload Report</span>
       </nav>
 
       {/* Header */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <h1 className="text-xl font-bold text-gray-800">Upload Blood Report</h1>
-        <p className="text-sm text-gray-500 mt-1">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
+        <h1 className="text-xl font-bold text-slate-800">Upload Blood Report</h1>
+        <p className="text-sm text-slate-500 mt-1">
           Upload your lab report and our AI will extract all values for analysis.
         </p>
         {loadingDb && (
-          <p className="text-xs text-gray-400 mt-1 animate-pulse">Loading session context…</p>
+          <p className="text-xs text-slate-400 mt-1 animate-pulse">Loading session context…</p>
         )}
         {disease && (
           <p className="text-xs text-blue-600 mt-1 font-medium">
@@ -184,7 +184,7 @@ export default function UploadReport() {
           onDragLeave={onDragLeave}
           onClick={() => !file && inputRef.current?.click()}
           className={`bg-white rounded-2xl border-2 border-dashed transition-colors cursor-pointer p-10 text-center
-            ${dragging ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}
+            ${dragging ? 'border-blue-400 bg-blue-50' : 'border-slate-200 hover:border-blue-300'}
             ${file ? 'cursor-default' : ''}`}
         >
           <input
@@ -198,9 +198,9 @@ export default function UploadReport() {
           {!file ? (
             <>
               <div className="text-5xl mb-3">📄</div>
-              <p className="font-semibold text-gray-700">Drag & drop your blood report here</p>
-              <p className="text-sm text-gray-400 mt-1">or click to browse</p>
-              <p className="text-xs text-gray-300 mt-3">JPG, PNG, PDF — max {MAX_MB} MB</p>
+              <p className="font-semibold text-slate-700">Drag & drop your blood report here</p>
+              <p className="text-sm text-slate-400 mt-1">or click to browse</p>
+              <p className="text-xs text-slate-300 mt-3">JPG, PNG, PDF — max {MAX_MB} MB</p>
             </>
           ) : (
             <div className="space-y-4">
@@ -208,14 +208,14 @@ export default function UploadReport() {
                 <img
                   src={preview}
                   alt="Report preview"
-                  className="max-h-64 mx-auto rounded-lg border border-gray-100 object-contain"
+                  className="max-h-64 mx-auto rounded-lg border border-slate-200 object-contain"
                 />
               ) : (
                 <div className="text-6xl">📑</div>
               )}
               <div>
-                <p className="font-semibold text-gray-800">{file.name}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                <p className="font-semibold text-slate-800">{file.name}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
               </div>
               <button
                 onClick={(e) => { e.stopPropagation(); setFile(null); setPreview(null); }}
@@ -230,21 +230,21 @@ export default function UploadReport() {
 
       {/* Upload progress */}
       {uploading && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 space-y-4">
           <div className="flex items-center gap-3">
             <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin shrink-0" />
-            <p className="font-medium text-gray-700">
+            <p className="font-medium text-slate-700">
               {progress < 100 ? `Uploading… ${progress}%` : 'AI is extracting values from your report…'}
             </p>
           </div>
-          <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+          <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
             <div
               className="bg-blue-500 h-2 rounded-full transition-all duration-300"
               style={{ width: `${progress}%` }}
             />
           </div>
           {progress === 100 && (
-            <p className="text-xs text-gray-400 text-center animate-pulse">
+            <p className="text-xs text-slate-400 text-center animate-pulse">
               AI is extracting values from your blood report…
             </p>
           )}
@@ -265,11 +265,11 @@ export default function UploadReport() {
 
       {/* Extracted values table */}
       {result && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold text-gray-800">Extracted Values</h2>
-              <p className="text-sm text-gray-500">{result.count} parameters found</p>
+              <h2 className="text-lg font-bold text-slate-800">Extracted Values</h2>
+              <p className="text-sm text-slate-500">{result.count} parameters found</p>
             </div>
             <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
               OCR Complete
@@ -279,7 +279,7 @@ export default function UploadReport() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-xs text-gray-400 border-b border-gray-100">
+                <tr className="text-left text-xs text-slate-400 border-b border-slate-200">
                   <th className="pb-2 font-medium">Parameter</th>
                   <th className="pb-2 font-medium">Value</th>
                   <th className="pb-2 font-medium">Normal Range</th>
@@ -290,15 +290,15 @@ export default function UploadReport() {
                 {result.extractedValues.map((v, i) => (
                   <tr key={i} className={v.status !== 'normal' ? 'bg-red-50/30' : ''}>
                     <td className="py-2 pr-4">
-                      <span className="font-medium text-gray-800">{v.parameter}</span>
+                      <span className="font-medium text-slate-800">{v.parameter}</span>
                       {v.abbreviation && (
-                        <span className="text-xs text-gray-400 ml-1 font-mono">({v.abbreviation})</span>
+                        <span className="text-xs text-slate-400 ml-1 font-mono">({v.abbreviation})</span>
                       )}
                     </td>
-                    <td className="py-2 pr-4 font-mono font-semibold text-gray-700">
-                      {v.value} <span className="text-gray-400 font-normal">{v.unit}</span>
+                    <td className="py-2 pr-4 font-mono font-semibold text-slate-700">
+                      {v.value} <span className="text-slate-400 font-normal">{v.unit}</span>
                     </td>
-                    <td className="py-2 pr-4 text-gray-500 font-mono text-xs">{v.normal_range}</td>
+                    <td className="py-2 pr-4 text-slate-500 font-mono text-xs">{v.normal_range}</td>
                     <td className="py-2"><StatusBadge status={v.status} /></td>
                   </tr>
                 ))}
@@ -306,10 +306,10 @@ export default function UploadReport() {
             </table>
           </div>
 
-          <div className="pt-4 border-t border-gray-100 flex items-center justify-between gap-4">
+          <div className="pt-4 border-t border-slate-200 flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-gray-700">Next step</p>
-              <p className="text-xs text-gray-400">Run the AI Blood Report Agent for medication recommendations</p>
+              <p className="text-sm font-medium text-slate-700">Next step</p>
+              <p className="text-xs text-slate-400">Run the AI Blood Report Agent for medication recommendations</p>
             </div>
             <button
               onClick={handleProceed}

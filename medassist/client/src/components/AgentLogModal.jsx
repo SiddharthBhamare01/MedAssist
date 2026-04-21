@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 
 function ToolResultPreview({ result }) {
-  if (!result) return <span className="text-gray-400 italic">no result</span>;
+  if (!result) return <span className="text-slate-400 italic">no result</span>;
   if (result.error) return <span className="text-red-500">{result.error}</span>;
 
   // Summarise common tool results concisely
@@ -33,7 +33,7 @@ function ToolResultPreview({ result }) {
 
   // Generic fallback
   const str = JSON.stringify(result).slice(0, 120);
-  return <span className="text-gray-600 font-mono">{str}</span>;
+  return <span className="text-slate-600 font-mono">{str}</span>;
 }
 
 function StepRow({ step, index }) {
@@ -47,39 +47,39 @@ function StepRow({ step, index }) {
     : '';
 
   return (
-    <div className="border border-gray-100 rounded-xl overflow-hidden">
+    <div className="border border-slate-200 rounded-xl overflow-hidden">
       <button
         onClick={() => setExpanded(v => !v)}
-        className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors flex items-start gap-3"
+        className="w-full text-left px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors flex items-start gap-3"
       >
         <span className="shrink-0 bg-blue-100 text-blue-700 text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center mt-0.5">
           {index + 1}
         </span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-gray-800 font-mono">🔧 {step.tool}</span>
-            {ts && <span className="text-xs text-gray-400">{ts}</span>}
+            <span className="text-xs font-bold text-slate-800 font-mono">🔧 {step.tool}</span>
+            {ts && <span className="text-xs text-slate-400">{ts}</span>}
           </div>
           {argsStr && (
-            <p className="text-xs text-gray-500 mt-0.5 truncate">{argsStr}</p>
+            <p className="text-xs text-slate-500 mt-0.5 truncate">{argsStr}</p>
           )}
         </div>
-        <span className="text-gray-400 text-xs shrink-0">{expanded ? '▲' : '▼'}</span>
+        <span className="text-slate-400 text-xs shrink-0">{expanded ? '▲' : '▼'}</span>
       </button>
 
       {expanded && (
-        <div className="px-4 py-3 space-y-3 bg-white border-t border-gray-100">
+        <div className="px-4 py-3 space-y-3 bg-white border-t border-slate-200">
           {step.args && (
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Input Parameters</p>
-              <pre className="text-xs bg-gray-50 rounded-lg px-3 py-2 overflow-x-auto text-gray-700">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Input Parameters</p>
+              <pre className="text-xs bg-slate-50 rounded-lg px-3 py-2 overflow-x-auto text-slate-700">
                 {JSON.stringify(step.args, null, 2)}
               </pre>
             </div>
           )}
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Result</p>
-            <div className="text-xs bg-gray-50 rounded-lg px-3 py-2">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Result</p>
+            <div className="text-xs bg-slate-50 rounded-lg px-3 py-2">
               <ToolResultPreview result={step.result} />
             </div>
           </div>
@@ -137,17 +137,17 @@ export default function AgentLogModal({ sessionId, agentName, onClose }) {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
 
         {/* Modal header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
           <div>
-            <h2 id="agent-log-title" className="font-bold text-gray-900 text-lg">Agent Audit Log</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <h2 id="agent-log-title" className="font-bold text-slate-800 text-lg">Agent Audit Log</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
               {agentName && <span className="font-medium">{agentName}</span>}
               {totalTurns > 0 && <span> · {totalTurns} reasoning turn{totalTurns !== 1 ? 's' : ''}</span>}
               {allSteps.length > 0 && <span> · {allSteps.length} tool call{allSteps.length !== 1 ? 's' : ''}</span>}
             </p>
           </div>
           <button onClick={onClose}
-            className="text-gray-400 hover:text-gray-700 text-2xl leading-none transition-colors"
+            className="text-slate-400 hover:text-slate-700 text-2xl leading-none transition-colors"
             aria-label="Close agent log">
             ×
           </button>
@@ -168,7 +168,7 @@ export default function AgentLogModal({ sessionId, agentName, onClose }) {
           )}
 
           {!loading && !error && allSteps.length === 0 && (
-            <div className="text-center py-16 text-gray-400 text-sm">
+            <div className="text-center py-16 text-slate-400 text-sm">
               No tool calls recorded for this session.
             </div>
           )}
@@ -179,12 +179,12 @@ export default function AgentLogModal({ sessionId, agentName, onClose }) {
         </div>
 
         {/* Modal footer */}
-        <div className="px-6 py-3 border-t border-gray-100 shrink-0 flex justify-between items-center">
-          <p className="text-xs text-gray-400 italic">
+        <div className="px-6 py-3 border-t border-slate-200 shrink-0 flex justify-between items-center">
+          <p className="text-xs text-slate-400 italic">
             Tool calls are logged for educational transparency (CS 595).
           </p>
           <button onClick={onClose}
-            className="text-sm text-gray-600 border border-gray-300 px-4 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
+            className="text-sm text-slate-600 border border-slate-300 px-4 py-1.5 rounded-lg hover:bg-slate-50 transition-colors">
             Close
           </button>
         </div>

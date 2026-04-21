@@ -18,25 +18,33 @@ function resolveProvider(clientOverride, modelOverride) {
   };
 }
 
-// Track providers that returned hard 429 during this process lifetime.
-// Providers sharing the same underlying API key (e.g. cerebras & cerebras_fast)
-// are grouped — if one is blocked, the other is too.
-const _hardLimitedProviders = new Set();
+// Track providers that returned hard 429, with a timestamp for TTL-based recovery.
+// Providers sharing the same underlying API key (e.g. cerebras & cerebras_fast) are grouped.
+const _hardLimitedProviders = new Map(); // name → Date.now() when blocked
+const HARD_LIMIT_TTL_MS = 5 * 60 * 1000; // retry blocked providers after 5 minutes
+
+function isHardLimited(name) {
+  const blockedAt = _hardLimitedProviders.get(name);
+  if (!blockedAt) return false;
+  if (Date.now() - blockedAt > HARD_LIMIT_TTL_MS) {
+    _hardLimitedProviders.delete(name);
+    console.log(`[agentRunner] Provider ${name} TTL expired — will retry.`);
+    return false;
+  }
+  return true;
+}
 
 /**
  * Mark a provider (and any siblings sharing the same client) as hard-limited.
  */
 function markProviderLimited(providerName) {
+  const now = Date.now();
   const providers = getProviders();
   const limitedClient = providers[providerName]?.client;
-  // Block all provider entries that share the same client reference
   for (const [name, p] of Object.entries(providers)) {
-    if (p.client === limitedClient) {
-      _hardLimitedProviders.add(name);
-    }
+    if (p.client === limitedClient) _hardLimitedProviders.set(name, now);
   }
-  // Also add the name itself in case the client reference didn't match
-  _hardLimitedProviders.add(providerName);
+  _hardLimitedProviders.set(providerName, now);
 }
 
 /**
@@ -47,7 +55,7 @@ function getNextProvider() {
   const available = getAvailableProviders();
   const providers = getProviders();
   for (const name of available) {
-    if (!_hardLimitedProviders.has(name)) {
+    if (!isHardLimited(name)) {
       console.log(`[agentRunner] Falling back to provider: ${providers[name].name} (${name})`);
       return { client: providers[name].client, model: providers[name].model, providerName: name };
     }
@@ -89,6 +97,12 @@ async function groqCreateWithRetry(client, params, maxRetries = 2) {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const response = await groq.chat.completions.create({ ...params, model: currentModel });
+      // Some providers return 200 with empty choices when overloaded — treat as a retryable error
+      if (!response.choices?.length) {
+        const emptyErr = new Error(`${currentProviderName || currentModel} returned empty choices`);
+        emptyErr.status = 503;
+        throw emptyErr;
+      }
       return { response, client: groq, model: currentModel };
     } catch (err) {
       const status = err.status;
@@ -115,7 +129,38 @@ async function groqCreateWithRetry(client, params, maxRetries = 2) {
         throw err;
       }
 
-      // Soft 429 — retry same provider with backoff
+      // 400 invalid_request from provider (e.g. SambaNova rejects tool format) — skip to next provider.
+      // Don't catch tool_use_failed here; that's handled by the caller (runAgent).
+      if (status === 400 && err.error?.type === 'invalid_request_error') {
+        if (currentProviderName) markProviderLimited(currentProviderName);
+        console.warn(`[agentRunner] 400 invalid_request on ${currentProviderName || 'unknown'} — skipping to next provider…`);
+        const next = getNextProvider();
+        if (next) {
+          groq = next.client;
+          currentModel = next.model;
+          currentProviderName = next.providerName;
+          attempt = -1;
+          continue;
+        }
+        throw err;
+      }
+
+      // Daily limit exhausted (e.g. SambaNova 20 req/day) — skip to next provider immediately
+      if (status === 429) {
+        const remainingDay =
+          (typeof headers?.get === 'function' ? headers.get('x-ratelimit-remaining-requests-day') : null) ||
+          headers?.['x-ratelimit-remaining-requests-day'] ||
+          null;
+        if (remainingDay === '0') {
+          if (currentProviderName) markProviderLimited(currentProviderName);
+          console.warn(`[agentRunner] Daily limit hit on ${currentProviderName || 'unknown'} — skipping to next provider…`);
+          const next = getNextProvider();
+          if (next) { groq = next.client; currentModel = next.model; currentProviderName = next.providerName; attempt = -1; continue; }
+          throw err;
+        }
+      }
+
+      // Soft 429 — retry same provider with backoff, then fall to next provider
       if (status === 429 && attempt < maxRetries) {
         const retryAfterRaw =
           (typeof headers?.get === 'function' ? headers.get('retry-after') : null) ||
@@ -127,6 +172,15 @@ async function groqCreateWithRetry(client, params, maxRetries = 2) {
         console.log(`[agentRunner] Rate limited (429). Waiting ${waitSec}s before retry ${attempt + 1}/${maxRetries}…`);
         await sleep(waitSec * 1000);
         continue;
+      }
+
+      // Soft 429 retries exhausted — try next provider instead of throwing
+      if (status === 429) {
+        if (currentProviderName) markProviderLimited(currentProviderName);
+        console.warn(`[agentRunner] 429 retries exhausted on ${currentProviderName || 'unknown'} — trying next provider…`);
+        const next = getNextProvider();
+        if (next) { groq = next.client; currentModel = next.model; currentProviderName = next.providerName; attempt = -1; continue; }
+        throw err;
       }
 
       // 5xx server error — retry, then try next provider as last resort
@@ -237,7 +291,11 @@ async function runAgent({ systemInstruction, userMessage, tools, toolHandlers, o
       throw err;
     }
 
-    const choice = response.choices[0];
+    const choice = response.choices?.[0];
+    if (!choice) {
+      console.warn('[agentRunner] Provider returned empty choices — treating as completion.');
+      return { text: '', steps, turns: turn + 1 };
+    }
     const message = choice.message;
 
     messages.push(message);

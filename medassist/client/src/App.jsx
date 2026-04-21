@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider } from './context/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
 import Navbar from './components/Layout/Navbar';
@@ -11,6 +12,7 @@ import Login from './pages/Auth/Login';
 import Register from './pages/Auth/Register';
 import ForgotPassword from './pages/Auth/ForgotPassword';
 import ResetPassword from './pages/Auth/ResetPassword';
+import EmailVerify from './pages/Auth/EmailVerify';
 
 // Patient pages
 import PatientDashboard from './pages/Patient/PatientDashboard';
@@ -36,8 +38,9 @@ import DrugChecker from './pages/Doctor/DrugChecker';
 import DoctorAnalytics from './pages/Doctor/Analytics';
 import DoctorProfile from './pages/Doctor/Profile';
 
-// Shared pages (both roles)
-import Appointments from './pages/Appointments';
+// Appointments (role-specific)
+import PatientAppointments from './pages/Patient/Appointments';
+import DoctorAppointments from './pages/Doctor/Appointments';
 
 // Admin pages
 import AdminDashboard from './pages/Admin/AdminDashboard';
@@ -83,6 +86,7 @@ function A({ children }) {
 
 export default function App() {
   return (
+    <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID || ''}>
     <AuthProvider>
       <BrowserRouter>
         <Toaster position="top-right" toastOptions={{
@@ -95,6 +99,7 @@ export default function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/auth/verify-email" element={<EmailVerify />} />
 
           {/* Public — Shared views */}
           <Route path="/shared/:token" element={<SharedReport />} />
@@ -109,7 +114,7 @@ export default function App() {
           <Route path="/patient/medical-id" element={<P><MedicalID /></P>} />
           <Route path="/patient/prescriptions" element={<P><PatientPrescriptions /></P>} />
           <Route path="/patient/profile" element={<P><PatientProfile /></P>} />
-          <Route path="/patient/appointments" element={<P><Appointments /></P>} />
+          <Route path="/patient/appointments" element={<P><PatientAppointments /></P>} />
 
           {/* Patient — URL-param routes */}
           <Route path="/patient/results/:sessionId" element={<P><Results /></P>} />
@@ -132,7 +137,7 @@ export default function App() {
           <Route path="/doctor/drug-checker" element={<D><DrugChecker /></D>} />
           <Route path="/doctor/analytics" element={<D><DoctorAnalytics /></D>} />
           <Route path="/doctor/profile" element={<D><DoctorProfile /></D>} />
-          <Route path="/doctor/appointments" element={<D><Appointments /></D>} />
+          <Route path="/doctor/appointments" element={<D><DoctorAppointments /></D>} />
 
           {/* Admin */}
           <Route path="/admin/dashboard" element={<A><AdminDashboard /></A>} />
@@ -144,5 +149,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+    </GoogleOAuthProvider>
   );
 }

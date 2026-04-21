@@ -74,7 +74,7 @@ function DoctorSelect({ value, onChange, doctors }) {
       {open && (
         <div className="absolute z-30 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
           {/* Search */}
-          <div className="p-2 border-b border-slate-100">
+          <div className="p-2 border-b border-slate-200">
             <input
               type="text"
               value={search}
@@ -251,7 +251,7 @@ export default function Appointments() {
 
       {/* Patient: Request Form */}
       {!isDoctor && (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
           <h2 className="text-lg font-semibold text-slate-800 mb-4">Request Appointment</h2>
           <form onSubmit={handleRequest} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -315,7 +315,7 @@ export default function Appointments() {
         </h2>
 
         {appointments.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow p-12 text-center">
             <p className="text-slate-500">No appointments found.</p>
           </div>
         ) : (
@@ -330,7 +330,7 @@ export default function Appointments() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.04 }}
-                    className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5"
+                    className="bg-white rounded-2xl border border-slate-200 shadow p-5"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">

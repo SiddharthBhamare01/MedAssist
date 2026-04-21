@@ -46,7 +46,7 @@ export default function SharedReport() {
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md text-center border border-slate-100">
+        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md text-center border border-slate-200">
           <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -66,7 +66,7 @@ export default function SharedReport() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 py-8 px-4">
       <motion.div variants={fadeIn} initial="hidden" animate="visible" className="max-w-3xl mx-auto space-y-6">
         {/* Header */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 bg-teal-50 rounded-xl flex items-center justify-center">
               <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -88,8 +88,8 @@ export default function SharedReport() {
 
         {/* Summary */}
         {summary && (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-            <h2 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">Summary</h2>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
+            <h2 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">Summary</h2>
             <p className="text-slate-700 leading-relaxed">{summary.overall_assessment}</p>
             {summary.root_cause && (
               <p className="text-sm text-slate-500 mt-2">
@@ -101,14 +101,14 @@ export default function SharedReport() {
 
         {/* Findings */}
         {analysis?.abnormal_findings?.length > 0 && (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-            <h2 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
+            <h2 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">
               Abnormal Findings ({analysis.abnormal_findings.length})
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-xs text-slate-400 border-b border-slate-100">
+                  <tr className="text-left text-xs text-slate-400 border-b border-slate-200">
                     <th className="pb-2 font-medium">Parameter</th>
                     <th className="pb-2 font-medium">Value</th>
                     <th className="pb-2 font-medium">Normal Range</th>
@@ -136,13 +136,13 @@ export default function SharedReport() {
 
         {/* Tablets */}
         {tabletRecommendations?.length > 0 && (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-            <h2 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
+            <h2 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">
               Tablet Recommendations
             </h2>
             <div className="space-y-3">
               {tabletRecommendations.map((med, i) => (
-                <div key={i} className="border border-slate-100 rounded-xl p-4 bg-slate-50">
+                <div key={i} className="border border-slate-200 rounded-xl p-4 bg-slate-50">
                   <h3 className="font-bold text-slate-800">{med.name}</h3>
                   <div className="grid grid-cols-3 gap-2 text-sm mt-2">
                     <div><span className="text-xs text-slate-400">Dosage:</span> <span className="text-slate-700">{med.dosage || '--'}</span></div>
@@ -150,7 +150,7 @@ export default function SharedReport() {
                     <div><span className="text-xs text-slate-400">Duration:</span> <span className="text-slate-700">{med.duration || '--'}</span></div>
                   </div>
                   {med.reason && (
-                    <p className="text-xs text-slate-500 mt-2 border-t border-slate-100 pt-2">{med.reason}</p>
+                    <p className="text-xs text-slate-500 mt-2 border-t border-slate-200 pt-2">{med.reason}</p>
                   )}
                 </div>
               ))}
@@ -160,8 +160,8 @@ export default function SharedReport() {
 
         {/* Diet */}
         {analysis?.diet_plan && (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-            <h2 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">Diet Plan</h2>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
+            <h2 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">Diet Plan</h2>
             {analysis.diet_plan.overview && (
               <p className="text-sm text-slate-600 mb-3">{analysis.diet_plan.overview}</p>
             )}

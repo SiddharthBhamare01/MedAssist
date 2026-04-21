@@ -50,7 +50,7 @@ api.interceptors.response.use(
       toast.error('Network error — check your connection or try again.', { id: 'network-error' });
     }
 
-    return Promise.reject(Object.assign(new Error(message), { status }));
+    return Promise.reject(Object.assign(new Error(message), { status, response: error.response }));
   }
 );
 

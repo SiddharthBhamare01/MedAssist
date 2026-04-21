@@ -175,8 +175,8 @@ export default function DoctorAssist() {
 
           {/* LEFT — Patient Info */}
           <div className="flex-1 space-y-5">
-            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6 space-y-5">
-              <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 space-y-5">
+              <div className="flex items-center gap-3 pb-4 border-b border-slate-200">
                 <div className="w-8 h-8 bg-teal-500/10 rounded-xl flex items-center justify-center">
                   <span className="text-sm font-bold text-teal-600">1</span>
                 </div>
@@ -252,8 +252,8 @@ export default function DoctorAssist() {
 
           {/* RIGHT — Tests + Submit */}
           <div className="w-full lg:w-[380px] space-y-5">
-            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6 space-y-4">
-              <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 space-y-4">
+              <div className="flex items-center gap-3 pb-4 border-b border-slate-200">
                 <div className="w-8 h-8 bg-teal-500/10 rounded-xl flex items-center justify-center">
                   <span className="text-sm font-bold text-teal-600">2</span>
                 </div>
@@ -386,9 +386,9 @@ export default function DoctorAssist() {
 
           {/* Missing tests */}
           {!allCovered && suggestions.length > 0 && (
-            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow overflow-hidden">
               {/* Results header */}
-              <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between gap-4 flex-wrap">
+              <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between gap-4 flex-wrap">
                 <div>
                   <h2 className="text-base font-bold text-slate-800">
                     Missing Tests
@@ -414,7 +414,7 @@ export default function DoctorAssist() {
 
               {/* Covered tests */}
               {coveredTests.length > 0 && (
-                <div className="px-6 py-3 bg-emerald-50/50 border-b border-slate-100 flex flex-wrap gap-2 items-center">
+                <div className="px-6 py-3 bg-emerald-50/50 border-b border-slate-200 flex flex-wrap gap-2 items-center">
                   <span className="text-[11px] text-emerald-700 font-semibold shrink-0">Already ordered:</span>
                   {coveredTests.map(t => (
                     <span key={t} className="text-[10px] bg-emerald-100 text-emerald-700 font-medium px-2 py-0.5 rounded-md ring-1 ring-emerald-200/60">
@@ -450,7 +450,7 @@ export default function DoctorAssist() {
                 })}
               </div>
 
-              <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50">
+              <div className="px-6 py-3 border-t border-slate-200 bg-slate-50/50">
                 <p className="text-[11px] text-slate-400 italic">
                   AI-generated gap analysis for educational purposes only. Clinical judgment required before ordering tests.
                 </p>

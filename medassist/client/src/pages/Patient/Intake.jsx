@@ -1,9 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import VoiceIntake from '../../components/VoiceIntake';
+
+const fadeIn = { hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
 
 // ── Symptom data ───────────────────────────────────────────────────────────────
 const SYMPTOM_SYSTEMS = [
@@ -45,18 +49,18 @@ function ProgressBar({ step }) {
           <div key={i} className="flex flex-col items-center flex-1">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all
               ${i + 1 < step  ? 'bg-green-500 border-green-500 text-white' :
-                i + 1 === step ? 'bg-blue-600 border-blue-600 text-white' :
-                                 'bg-white border-gray-300 text-gray-400'}`}>
+                i + 1 === step ? 'bg-teal-600 border-teal-600 text-white' :
+                                 'bg-white border-slate-300 text-slate-400'}`}>
               {i + 1 < step ? '✓' : i + 1}
             </div>
-            <span className={`text-xs mt-1 font-medium ${i + 1 === step ? 'text-blue-600' : 'text-gray-400'}`}>
+            <span className={`text-xs mt-1 font-medium ${i + 1 === step ? 'text-teal-600' : 'text-slate-400'}`}>
               {label}
             </span>
           </div>
         ))}
       </div>
-      <div className="relative h-1.5 bg-gray-200 rounded-full">
-        <div className="absolute h-1.5 bg-blue-600 rounded-full transition-all duration-300"
+      <div className="relative h-1.5 bg-slate-200 rounded-full">
+        <div className="absolute h-1.5 bg-teal-600 rounded-full transition-all duration-300"
           style={{ width: `${((step - 1) / 2) * 100}%` }} />
       </div>
     </div>
@@ -73,12 +77,12 @@ function TagInput({ label, tags, onChange, placeholder }) {
   };
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1 flex-wrap">{label}</label>
       <div className="flex flex-wrap gap-2 mb-2">
         {tags.map(tag => (
-          <span key={tag} className="flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-sm">
+          <span key={tag} className="flex items-center gap-1 bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full text-sm">
             {tag}
-            <button type="button" onClick={() => onChange(tags.filter(t => t !== tag))} className="text-blue-400 hover:text-blue-700">×</button>
+            <button type="button" onClick={() => onChange(tags.filter(t => t !== tag))} className="text-teal-400 hover:text-teal-700">×</button>
           </span>
         ))}
       </div>
@@ -88,10 +92,10 @@ function TagInput({ label, tags, onChange, placeholder }) {
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())}
           placeholder={placeholder}
-          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
         />
         <button type="button" onClick={addTag}
-          className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm hover:bg-blue-200">
+          className="px-3 py-2 bg-teal-100 text-teal-700 rounded-lg text-sm hover:bg-teal-200">
           Add
         </button>
       </div>
@@ -99,29 +103,50 @@ function TagInput({ label, tags, onChange, placeholder }) {
   );
 }
 
+// ── Voice fill badge ──────────────────────────────────────────────────────────
+function VoiceBadge({ value }) {
+  if (value === null || value === undefined || value === '') return null;
+  const display = Array.isArray(value) ? value.join(', ') : String(value);
+  if (!display) return null;
+  return (
+    <span className="ml-2 inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-medium border border-green-200">
+      ✓ {display}
+    </span>
+  );
+}
+
 // ── Step 1 ─────────────────────────────────────────────────────────────────────
-function Step1({ onNext, defaultValues }) {
-  const { register, handleSubmit, formState: { errors }, watch } = useForm({ defaultValues });
+function Step1({ onNext, defaultValues, voiceLive = {} }) {
+  const { register, handleSubmit, formState: { errors }, watch, setValue } = useForm({ defaultValues });
   const selectedBloodGroup = watch('bloodGroup');
+
+  // Fill form fields when voice captures them
+  useEffect(() => {
+    if (voiceLive.age        != null) setValue('age',        voiceLive.age);
+    if (voiceLive.gender     != null) setValue('gender',     voiceLive.gender);
+    if (voiceLive.weightKg   != null) setValue('weightKg',   voiceLive.weightKg);
+    if (voiceLive.heightCm   != null) setValue('heightCm',   voiceLive.heightCm);
+    if (voiceLive.bloodGroup != null) setValue('bloodGroup', voiceLive.bloodGroup);
+  }, [voiceLive, setValue]);
 
   return (
     <form onSubmit={handleSubmit(onNext)} className="space-y-5">
-      <h2 className="text-xl font-bold text-gray-800 mb-1">Basic Information</h2>
-      <p className="text-sm text-gray-500 mb-4">Review and update your details before continuing.</p>
+      <h2 className="text-xl font-bold text-slate-800 mb-1">Basic Information</h2>
+      <p className="text-sm text-slate-500 mb-4">Review and update your details before continuing.</p>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Age <span className="text-red-500">*</span></label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Age <span className="text-red-500">*</span><VoiceBadge value={voiceLive.age} /></label>
           <input type="number" min="1" max="120"
             {...register('age', { required: 'Age is required', min: { value: 1, message: 'Enter valid age' } })}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
           />
           {errors.age && <p className="text-red-500 text-xs mt-1">{errors.age.message}</p>}
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Gender <span className="text-red-500">*</span></label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Gender <span className="text-red-500">*</span><VoiceBadge value={voiceLive.gender} /></label>
           <select {...register('gender', { required: 'Gender is required' })}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
             <option value="">Select…</option>
             <option value="male">Male</option>
             <option value="female">Female</option>
@@ -131,25 +156,25 @@ function Step1({ onNext, defaultValues }) {
           {errors.gender && <p className="text-red-500 text-xs mt-1">{errors.gender.message}</p>}
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Weight (kg)</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Weight (kg)<VoiceBadge value={voiceLive.weightKg} /></label>
           <input type="number" step="0.1" min="1" {...register('weightKg')} placeholder="e.g. 70"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Height (cm)</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Height (cm)<VoiceBadge value={voiceLive.heightCm} /></label>
           <input type="number" step="0.1" min="1" {...register('heightCm')} placeholder="e.g. 170"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Blood Group</label>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Blood Group<VoiceBadge value={voiceLive.bloodGroup} /></label>
         <div className="flex flex-wrap gap-2">
           {BLOOD_GROUPS.map(bg => (
             <label key={bg} className="cursor-pointer">
               <input type="radio" value={bg} {...register('bloodGroup')} className="sr-only" />
               <span className={`px-3 py-1.5 border-2 rounded-lg text-sm font-medium transition-all cursor-pointer select-none
-                ${selectedBloodGroup === bg ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 text-gray-600 hover:border-blue-400'}`}>
+                ${selectedBloodGroup === bg ? 'border-teal-600 bg-teal-600 text-white' : 'border-slate-200 text-slate-600 hover:border-teal-400'}`}>
                 {bg}
               </span>
             </label>
@@ -158,7 +183,7 @@ function Step1({ onNext, defaultValues }) {
       </div>
 
       <div className="flex justify-end pt-2">
-        <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors">
+        <button type="submit" className="bg-teal-600 hover:bg-teal-700 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors">
           Next →
         </button>
       </div>
@@ -167,44 +192,53 @@ function Step1({ onNext, defaultValues }) {
 }
 
 // ── Step 2 ─────────────────────────────────────────────────────────────────────
-function Step2({ onNext, onBack, defaultValues }) {
-  const { register, handleSubmit } = useForm({ defaultValues });
+function Step2({ onNext, onBack, defaultValues, voiceLive = {} }) {
+  const { register, handleSubmit, setValue } = useForm({ defaultValues });
   const [allergies, setAllergies]     = useState(defaultValues?.allergies || []);
   const [medications, setMedications] = useState(defaultValues?.currentMedications || []);
+
+  // Fill form fields and TagInputs when voice captures them
+  useEffect(() => {
+    if (voiceLive.allergies?.length)          setAllergies(voiceLive.allergies);
+    if (voiceLive.currentMedications?.length) setMedications(voiceLive.currentMedications);
+    if (voiceLive.existingConditions)         setValue('existingConditions', voiceLive.existingConditions);
+    if (voiceLive.smokingStatus)              setValue('smokingStatus', voiceLive.smokingStatus);
+    if (voiceLive.alcoholUse)                 setValue('alcoholUse',    voiceLive.alcoholUse);
+  }, [voiceLive, setValue]);
 
   const onSubmit = data => onNext({ ...data, allergies, currentMedications: medications });
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <h2 className="text-xl font-bold text-gray-800 mb-1">Medical History</h2>
-      <p className="text-sm text-gray-500 mb-4">Review and update your medical history.</p>
+      <h2 className="text-xl font-bold text-slate-800 mb-1">Medical History</h2>
+      <p className="text-sm text-slate-500 mb-4">Review and update your medical history.</p>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Existing Conditions</label>
+        <label className="block text-sm font-medium text-slate-700 mb-2">Existing Conditions<VoiceBadge value={voiceLive.existingConditions} /></label>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {CONDITIONS.map(c => (
             <label key={c} className="flex items-center gap-2 cursor-pointer text-sm">
               <input type="checkbox" value={c} {...register('existingConditions')}
                 defaultChecked={defaultValues?.existingConditions?.includes(c)}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                className="rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
               {c}
             </label>
           ))}
         </div>
       </div>
 
-      <TagInput label="Allergies" tags={allergies} onChange={setAllergies}
+      <TagInput label={<>Allergies<VoiceBadge value={voiceLive.allergies} /></>} tags={allergies} onChange={setAllergies}
         placeholder="Type allergy + press Enter (e.g. Penicillin)" />
-      <TagInput label="Current Medications" tags={medications} onChange={setMedications}
+      <TagInput label={<>Current Medications<VoiceBadge value={voiceLive.currentMedications} /></>} tags={medications} onChange={setMedications}
         placeholder="Type medication + press Enter (e.g. Metformin)" />
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Smoking Status</label>
+        <label className="block text-sm font-medium text-slate-700 mb-2">Smoking Status<VoiceBadge value={voiceLive.smokingStatus} /></label>
         <div className="flex gap-4">
           {['Never','Former','Current'].map(s => (
             <label key={s} className="flex items-center gap-2 cursor-pointer text-sm">
               <input type="radio" value={s.toLowerCase()} {...register('smokingStatus')}
-                className="text-blue-600 focus:ring-blue-500" />
+                className="text-teal-600 focus:ring-teal-500" />
               {s}
             </label>
           ))}
@@ -212,12 +246,12 @@ function Step2({ onNext, onBack, defaultValues }) {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Alcohol Use</label>
+        <label className="block text-sm font-medium text-slate-700 mb-2">Alcohol Use<VoiceBadge value={voiceLive.alcoholUse} /></label>
         <div className="flex gap-4">
           {['None','Occasional','Regular'].map(a => (
             <label key={a} className="flex items-center gap-2 cursor-pointer text-sm">
               <input type="radio" value={a.toLowerCase()} {...register('alcoholUse')}
-                className="text-blue-600 focus:ring-blue-500" />
+                className="text-teal-600 focus:ring-teal-500" />
               {a}
             </label>
           ))}
@@ -226,11 +260,11 @@ function Step2({ onNext, onBack, defaultValues }) {
 
       <div className="flex justify-between pt-2">
         <button type="button" onClick={onBack}
-          className="text-gray-600 font-medium px-4 py-2.5 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
+          className="text-slate-600 font-medium px-4 py-2.5 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors">
           ← Back
         </button>
         <button type="submit"
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors">
+          className="bg-teal-600 hover:bg-teal-700 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors">
           Next →
         </button>
       </div>
@@ -239,7 +273,7 @@ function Step2({ onNext, onBack, defaultValues }) {
 }
 
 // ── Step 3 ─────────────────────────────────────────────────────────────────────
-function Step3({ onSubmit, onBack, loading }) {
+function Step3({ onSubmit, onBack, loading, voiceMode }) {
   const [selected, setSelected] = useState({});
 
   const toggleSymptom = name => setSelected(prev => {
@@ -261,21 +295,28 @@ function Step3({ onSubmit, onBack, loading }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-gray-800 mb-1">Current Symptoms</h2>
-        <p className="text-sm text-gray-500">Select what you are experiencing right now.</p>
+        <h2 className="text-xl font-bold text-slate-800 mb-1">Current Symptoms</h2>
+        <p className="text-sm text-slate-500">Select what you are experiencing right now.</p>
       </div>
 
+      {voiceMode && (
+        <div className="bg-teal-50 border border-teal-200 rounded-xl px-4 py-3 flex items-center gap-2 text-sm text-teal-700">
+          <span className="w-2 h-2 bg-teal-500 rounded-full animate-pulse shrink-0" />
+          Voice assistant is asking about your symptoms — just speak your answers.
+        </div>
+      )}
+
       {Object.keys(selected).length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-700">
+        <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-2 text-sm text-teal-700">
           {Object.keys(selected).length} symptom(s) selected
         </div>
       )}
 
       {SYMPTOM_SYSTEMS.map(({ system, icon, symptoms }) => (
-        <div key={system} className="border border-gray-200 rounded-xl overflow-hidden">
-          <div className="bg-gray-50 px-4 py-2.5 flex items-center gap-2 border-b border-gray-200">
+        <div key={system} className="border border-slate-200 rounded-xl overflow-hidden">
+          <div className="bg-slate-50 px-4 py-2.5 flex items-center gap-2 border-b border-slate-200">
             <span>{icon}</span>
-            <span className="font-semibold text-gray-700 text-sm">{system}</span>
+            <span className="font-semibold text-slate-700 text-sm">{system}</span>
           </div>
           <div className="p-4 space-y-3">
             <div className="flex flex-wrap gap-2">
@@ -284,40 +325,40 @@ function Step3({ onSubmit, onBack, loading }) {
                 return (
                   <button key={symptom} type="button" onClick={() => toggleSymptom(symptom)}
                     className={`px-3 py-1.5 rounded-full text-sm font-medium border-2 transition-all
-                      ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'}`}>
+                      ${isSelected ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-teal-300'}`}>
                     {isSelected ? '✓ ' : ''}{symptom}
                   </button>
                 );
               })}
             </div>
             {symptoms.filter(s => selected[s]).map(symptom => (
-              <div key={symptom} className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-3">
-                <p className="text-sm font-semibold text-blue-800">{symptom}</p>
+              <div key={symptom} className="bg-teal-50 border border-teal-200 rounded-lg p-3 space-y-3">
+                <p className="text-sm font-semibold text-teal-800">{symptom}</p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="text-xs text-gray-600 block mb-1">Duration (days)</label>
+                    <label className="text-xs text-slate-600 block mb-1">Duration (days)</label>
                     <input type="number" min="1" value={selected[symptom].duration}
                       onChange={e => updateSymptom(symptom, 'duration', e.target.value)}
                       placeholder="e.g. 3"
-                      className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600 block mb-1">
-                      Severity: <span className="font-bold text-blue-700">{selected[symptom].severity}/10</span>
+                    <label className="text-xs text-slate-600 block mb-1">
+                      Severity: <span className="font-bold text-teal-700">{selected[symptom].severity}/10</span>
                     </label>
                     <input type="range" min="1" max="10" value={selected[symptom].severity}
                       onChange={e => updateSymptom(symptom, 'severity', parseInt(e.target.value))}
-                      className="w-full accent-blue-600" />
+                      className="w-full accent-teal-600" />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600 block mb-1">Onset</label>
+                    <label className="text-xs text-slate-600 block mb-1">Onset</label>
                     <div className="flex gap-3">
                       {['sudden','gradual'].map(o => (
                         <label key={o} className="flex items-center gap-1 text-sm cursor-pointer capitalize">
                           <input type="radio" name={`onset-${symptom}`} value={o}
                             checked={selected[symptom].onset === o}
                             onChange={() => updateSymptom(symptom, 'onset', o)}
-                            className="text-blue-600" />
+                            className="text-teal-600" />
                           {o}
                         </label>
                       ))}
@@ -332,7 +373,7 @@ function Step3({ onSubmit, onBack, loading }) {
 
       <div className="flex justify-between pt-2">
         <button type="button" onClick={onBack}
-          className="text-gray-600 font-medium px-4 py-2.5 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
+          className="text-slate-600 font-medium px-4 py-2.5 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors">
           ← Back
         </button>
         <button type="submit" disabled={loading}
@@ -353,26 +394,26 @@ function SessionHistoryCard({ session, onReview }) {
     month: 'short', day: 'numeric', year: 'numeric',
   });
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-start justify-between gap-4">
+    <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-start justify-between gap-4">
       <div className="flex-1 min-w-0">
-        <p className="text-xs text-gray-400 mb-1">{date}</p>
+        <p className="text-xs text-slate-400 mb-1">{date}</p>
         {diseases.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
             {diseases.slice(0, 3).map((d, i) => (
-              <span key={i} className="bg-blue-50 text-blue-700 border border-blue-100 text-xs px-2 py-0.5 rounded-full font-medium">
+              <span key={i} className="bg-teal-50 text-teal-700 border border-teal-100 text-xs px-2 py-0.5 rounded-full font-medium">
                 {d.disease}
               </span>
             ))}
             {diseases.length > 3 && (
-              <span className="text-xs text-gray-400">+{diseases.length - 3} more</span>
+              <span className="text-xs text-slate-400">+{diseases.length - 3} more</span>
             )}
           </div>
         ) : (
-          <p className="text-xs text-gray-400 italic">No diseases recorded</p>
+          <p className="text-xs text-slate-400 italic">No diseases recorded</p>
         )}
       </div>
       <button onClick={() => onReview(session)}
-        className="shrink-0 text-xs text-blue-600 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">
+        className="shrink-0 text-xs text-teal-600 border border-teal-200 px-3 py-1.5 rounded-lg hover:bg-teal-50 transition-colors">
         View →
       </button>
     </div>
@@ -393,6 +434,14 @@ export default function Intake() {
   // Pre-filled data from DB (carried across steps)
   const [step1Data, setStep1Data] = useState({});
   const [step2Data, setStep2Data] = useState({});
+  const [voiceLiveData, setVoiceLiveData] = useState({ step1: {}, step2: {} });
+
+  const handleVoiceLive = useCallback((stepKey, field, value) => {
+    setVoiceLiveData(prev => ({
+      ...prev,
+      [stepKey]: { ...prev[stepKey], [field]: value },
+    }));
+  }, []);
 
   // Load profile + sessions on mount
   useEffect(() => {
@@ -480,20 +529,20 @@ export default function Intake() {
 
   // Skip directly to symptoms if profile is complete
   const skipToSymptoms = () => {
-    // Profile already saved — just go to Step 3
     setStep(3);
   };
 
   if (profileLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full" />
+        <div className="animate-spin w-10 h-10 border-4 border-teal-600 border-t-transparent rounded-full" />
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 pb-12">
+    <>
+    <motion.div variants={fadeIn} initial="hidden" animate="visible" className="max-w-2xl mx-auto space-y-6 pb-12">
 
       {/* ── Returning patient banner ── */}
       {hasExistingProfile && step < 3 && (
@@ -519,18 +568,21 @@ export default function Intake() {
 
       {/* ── Progress bar + form card ── */}
       <div>
-        <ProgressBar step={step} />
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8">
-          {step === 1 && <Step1 onNext={handleStep1} defaultValues={step1Data} />}
-          {step === 2 && <Step2 onNext={handleStep2} onBack={() => setStep(1)} defaultValues={step2Data} />}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex-1"><ProgressBar step={step} /></div>
+        </div>
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 shadow p-6 sm:p-8">
+          {step === 1 && <Step1 onNext={handleStep1} defaultValues={step1Data} voiceLive={voiceLiveData.step1} />}
+          {step === 2 && <Step2 onNext={handleStep2} onBack={() => setStep(1)} defaultValues={step2Data} voiceLive={voiceLiveData.step2} />}
           {step === 3 && <Step3 onSubmit={handleStep3} onBack={() => setStep(hasExistingProfile ? 1 : 2)} loading={loading} />}
         </div>
       </div>
 
+
       {/* ── Past sessions ── */}
       {pastSessions.length > 0 && step < 3 && (
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
+          <h2 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">
             Your Previous Diagnoses
           </h2>
           {pastSessions.map(session => (
@@ -544,6 +596,20 @@ export default function Intake() {
           ))}
         </div>
       )}
-    </div>
+
+    </motion.div>
+
+    {/* ── Voice Intake (outside motion.div — fixed positioning must not be inside a transformed ancestor) ── */}
+    <VoiceIntake
+      step={step}
+      step1Data={step1Data}
+      step2Data={step2Data}
+      onStep1Done={data => { handleStep1(data); }}
+      onStep2Done={data => { handleStep2(data); }}
+      onStep3Done={symptoms => { handleStep3(symptoms); }}
+      onClose={() => {}}
+      onLiveUpdate={handleVoiceLive}
+    />
+    </>
   );
 }

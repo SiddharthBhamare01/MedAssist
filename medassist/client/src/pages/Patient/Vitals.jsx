@@ -107,7 +107,7 @@ export default function Vitals() {
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6"
+          className="bg-white rounded-2xl border border-slate-200 shadow p-6"
         >
           <h2 className="text-lg font-semibold text-slate-800 mb-1">Record {typeConfig.label}</h2>
           <p className="text-xs text-slate-400 mb-4">Normal: {NORMAL_RANGES[selectedType]}</p>
@@ -166,7 +166,7 @@ export default function Vitals() {
         </motion.div>
 
         {/* Chart */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow p-6">
           <h2 className="text-lg font-semibold text-slate-800 mb-1">
             {typeConfig.label} — Last 30 Days
           </h2>
