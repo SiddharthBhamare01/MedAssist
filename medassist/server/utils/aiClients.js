@@ -109,19 +109,33 @@ function getProviders() {
   return _providers;
 }
 
+// Default order — heavy reasoning tasks (diagnostic agents, blood report analysis)
 const PRIORITY_ORDER = ['cerebras', 'cerebras_fast', 'sambanova', 'openrouter', 'github'];
+
+// Voice/lightweight order — GitHub gpt-4o-mini first (generous rate limits, fast JSON extraction)
+// Falls back to Cerebras only if GitHub is unavailable
+const VOICE_PRIORITY_ORDER = ['github', 'cerebras', 'cerebras_fast', 'sambanova', 'openrouter'];
 
 // Providers to exclude (set via EXCLUDED_AI_PROVIDERS env var, comma-separated)
 const EXCLUDED_PROVIDERS = new Set(
   (process.env.EXCLUDED_AI_PROVIDERS || '').split(',').map((s) => s.trim()).filter(Boolean)
 );
 
-/** Returns provider names that have API keys configured, in priority order */
-function getAvailableProviders() {
+function _filterAvailable(order) {
   const providers = getProviders();
-  return PRIORITY_ORDER.filter(
-    (name) => providers[name].client !== null && !EXCLUDED_PROVIDERS.has(name)
+  return order.filter(
+    (name) => providers[name]?.client !== null && !EXCLUDED_PROVIDERS.has(name)
   );
+}
+
+/** Returns provider names for heavyweight tasks (agents), in priority order */
+function getAvailableProviders() {
+  return _filterAvailable(PRIORITY_ORDER);
+}
+
+/** Returns provider names for lightweight tasks (voice parsing, quick JSON extraction) */
+function getAvailableVoiceProviders() {
+  return _filterAvailable(VOICE_PRIORITY_ORDER);
 }
 
 /** Primary provider — first available key in .env */
@@ -135,4 +149,4 @@ function getPrimaryProvider() {
   return getProviders()[available[0]];
 }
 
-module.exports = { getProviders, getAvailableProviders, getPrimaryProvider };
+module.exports = { getProviders, getAvailableProviders, getAvailableVoiceProviders, getPrimaryProvider };

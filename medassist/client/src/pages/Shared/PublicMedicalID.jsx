@@ -86,12 +86,17 @@ export default function PublicMedicalID() {
     );
   }
 
-  // Medical ID Display
-  const { medicalId } = data;
+  // Medical ID Display — API returns flat camelCase: { patientName, emergencyName, emergencyPhone,
+  // bloodType, organDonor, criticalNotes, profile: { blood_group, allergies, existing_conditions, current_medications } }
+  const { patientName, emergencyName, emergencyPhone, bloodType, organDonor, criticalNotes, profile } = data;
+
+  // Merge allergies: criticalNotes from medical_id + allergies array from profile
+  const profileAllergies = profile?.allergies?.length ? profile.allergies.join(', ') : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-red-50 py-8 px-4">
       <motion.div variants={fadeIn} initial="hidden" animate="visible" className="max-w-md mx-auto space-y-4">
+
         {/* Header */}
         <div className="bg-red-600 rounded-2xl p-6 text-white text-center shadow-lg">
           <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -100,43 +105,70 @@ export default function PublicMedicalID() {
             </svg>
           </div>
           <h1 className="text-2xl font-bold">MEDICAL ID</h1>
-          <p className="text-red-100 text-sm mt-1">Emergency Information</p>
+          {patientName && <p className="text-red-100 text-sm mt-1">{patientName}</p>}
         </div>
 
         {/* Blood Type */}
-        {medicalId.blood_type && (
+        {(bloodType || profile?.blood_group) && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow p-5 text-center">
             <p className="text-xs text-slate-400 uppercase tracking-wide font-medium mb-1">Blood Type</p>
-            <p className="text-4xl font-bold text-red-600">{medicalId.blood_type}</p>
+            <p className="text-4xl font-bold text-red-600">{bloodType || profile?.blood_group}</p>
           </div>
         )}
 
         {/* Emergency Contact */}
-        {(medicalId.emergency_contact_name || medicalId.emergency_contact_phone) && (
+        {(emergencyName || emergencyPhone) && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow p-5">
             <h2 className="text-sm font-semibold text-slate-800 mb-3">Emergency Contact</h2>
-            {medicalId.emergency_contact_name && (
-              <p className="text-slate-700 font-medium">{medicalId.emergency_contact_name}</p>
+            {emergencyName && (
+              <p className="text-slate-700 font-medium">{emergencyName}</p>
             )}
-            {medicalId.emergency_contact_phone && (
+            {emergencyPhone && (
               <a
-                href={`tel:${medicalId.emergency_contact_phone}`}
+                href={`tel:${emergencyPhone}`}
                 className="inline-flex items-center gap-2 mt-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                 </svg>
-                Call {medicalId.emergency_contact_phone}
+                Call {emergencyPhone}
               </a>
             )}
           </div>
         )}
 
-        {/* Critical Notes */}
-        {medicalId.critical_notes && (
+        {/* Critical Notes / Allergies */}
+        {(criticalNotes || profileAllergies) && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
             <h2 className="text-sm font-semibold text-amber-800 mb-2">Critical Notes / Allergies</h2>
-            <p className="text-sm text-amber-900 leading-relaxed">{medicalId.critical_notes}</p>
+            {criticalNotes && <p className="text-sm text-amber-900 leading-relaxed">{criticalNotes}</p>}
+            {profileAllergies && !criticalNotes && (
+              <p className="text-sm text-amber-900 leading-relaxed">{profileAllergies}</p>
+            )}
+          </div>
+        )}
+
+        {/* Existing Conditions */}
+        {profile?.existing_conditions?.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow p-5">
+            <h2 className="text-sm font-semibold text-slate-800 mb-2">Known Conditions</h2>
+            <div className="flex flex-wrap gap-2">
+              {profile.existing_conditions.map((c) => (
+                <span key={c} className="px-2.5 py-1 bg-slate-100 text-slate-700 text-xs font-medium rounded-full">{c}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Current Medications */}
+        {profile?.current_medications?.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow p-5">
+            <h2 className="text-sm font-semibold text-slate-800 mb-2">Current Medications</h2>
+            <div className="flex flex-wrap gap-2">
+              {profile.current_medications.map((m) => (
+                <span key={m} className="px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full">{m}</span>
+              ))}
+            </div>
           </div>
         )}
 
@@ -144,14 +176,14 @@ export default function PublicMedicalID() {
         <div className="bg-white rounded-2xl border border-slate-200 shadow p-5 flex items-center justify-between">
           <span className="text-sm font-medium text-slate-700">Organ Donor</span>
           <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-            medicalId.organ_donor ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-500'
+            organDonor ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-500'
           }`}>
-            {medicalId.organ_donor ? 'Yes' : 'No'}
+            {organDonor ? 'Yes' : 'No'}
           </span>
         </div>
 
         <div className="text-center text-xs text-slate-400 py-4">
-          MedAssist AI - Emergency Medical ID
+          MedAssist AI — Emergency Medical ID
         </div>
       </motion.div>
     </div>

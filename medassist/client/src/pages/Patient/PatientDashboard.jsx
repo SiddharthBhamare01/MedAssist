@@ -128,14 +128,65 @@ function SessionCard({ session, onResume, index }) {
   );
 }
 
+function StandaloneReportCard({ report, index, onOpen }) {
+  const date = new Date(report.created_at).toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+  });
+  return (
+    <div
+      className="bg-white rounded-2xl border border-slate-200 shadow p-5 hover:shadow-md hover:border-teal-200 transition-all cursor-pointer animate-slide-up"
+      style={{ animationDelay: `${index * 60}ms` }}
+      onClick={onOpen}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && onOpen()}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold ${
+              report.analyzed ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+            }`}>
+              {report.analyzed ? 'Analyzed' : 'Uploaded'}
+            </span>
+            <span className="text-xs text-slate-400">{date}</span>
+          </div>
+          <p className="mt-2 text-sm font-semibold text-slate-800">
+            {report.total_parameters} parameters extracted
+          </p>
+          {report.abnormal_count > 0 && (
+            <p className="text-xs text-red-500 mt-0.5">
+              {report.abnormal_count} abnormal finding{report.abnormal_count !== 1 ? 's' : ''}
+            </p>
+          )}
+        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); onOpen(); }}
+          className="shrink-0 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-700 hover:to-teal-600
+                     text-white text-sm font-semibold px-4 py-2 rounded-xl transition-all shadow-sm whitespace-nowrap"
+        >
+          {report.analyzed ? 'View Analysis' : 'Run Analysis'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function PatientDashboard() {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState([]);
+  const [standaloneReports, setStandaloneReports] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get('/patient/sessions')
-      .then((res) => setSessions(res.data.sessions || []))
+    Promise.all([
+      api.get('/patient/sessions').then((res) => res.data.sessions || []),
+      api.get('/blood-report/standalone').then((res) => res.data.reports || []).catch(() => []),
+    ])
+      .then(([sess, reports]) => {
+        setSessions(sess);
+        setStandaloneReports(reports);
+      })
       .catch(() => toast.error('Could not load your sessions'))
       .finally(() => setLoading(false));
   }, []);
@@ -156,16 +207,28 @@ export default function PatientDashboard() {
               Resume an in-progress assessment or start a new one
             </p>
           </div>
-          <button
-            onClick={() => navigate('/patient/intake')}
-            className="flex items-center gap-2 bg-white text-teal-700 font-bold px-6 py-3 rounded-xl
-                       hover:bg-teal-50 transition-all text-sm whitespace-nowrap shadow-md hover:shadow-lg"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            New Assessment
-          </button>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={() => navigate('/patient/upload-report')}
+              className="flex items-center gap-2 bg-white/20 border border-white/30 text-white font-semibold px-5 py-3 rounded-xl
+                         hover:bg-white/30 transition-all text-sm whitespace-nowrap"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" />
+              </svg>
+              Analyze Blood Report
+            </button>
+            <button
+              onClick={() => navigate('/patient/intake')}
+              className="flex items-center gap-2 bg-white text-teal-700 font-bold px-6 py-3 rounded-xl
+                         hover:bg-teal-50 transition-all text-sm whitespace-nowrap shadow-md hover:shadow-lg"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              New Assessment
+            </button>
+          </div>
         </div>
 
         {/* Inline Stats */}
@@ -231,8 +294,27 @@ export default function PatientDashboard() {
         </div>
       )}
 
+      {/* Standalone blood reports */}
+      {!loading && standaloneReports.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-1">
+            Direct Blood Report Analyses ({standaloneReports.length})
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {standaloneReports.map((r, i) => (
+              <StandaloneReportCard
+                key={r.id}
+                report={r}
+                index={i}
+                onOpen={() => navigate(`/patient/analysis/${r.id}`)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Empty state */}
-      {!loading && sessions.length === 0 && (
+      {!loading && sessions.length === 0 && standaloneReports.length === 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow p-12 text-center">
           <div className="w-20 h-20 bg-teal-50 rounded-3xl flex items-center justify-center mx-auto mb-4">
             <svg className="w-10 h-10 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -243,13 +325,22 @@ export default function PatientDashboard() {
           <p className="text-sm text-slate-400 mb-6 max-w-sm mx-auto">
             Start by entering your symptoms — the AI will guide you through diagnosis, blood tests, and a full report analysis.
           </p>
-          <button
-            onClick={() => navigate('/patient/intake')}
-            className="bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-700 hover:to-teal-600
-                       text-white font-semibold px-6 py-2.5 rounded-xl transition-all shadow-md hover:shadow-lg"
-          >
-            Start First Assessment
-          </button>
+          <div className="flex items-center justify-center gap-3 flex-wrap">
+            <button
+              onClick={() => navigate('/patient/upload-report')}
+              className="border border-teal-300 text-teal-700 font-semibold px-5 py-2.5 rounded-xl
+                         hover:bg-teal-50 transition-all text-sm"
+            >
+              Have a blood report? Analyze it directly
+            </button>
+            <button
+              onClick={() => navigate('/patient/intake')}
+              className="bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-700 hover:to-teal-600
+                         text-white font-semibold px-6 py-2.5 rounded-xl transition-all shadow-md hover:shadow-lg"
+            >
+              Start First Assessment
+            </button>
+          </div>
         </div>
       )}
     </div>

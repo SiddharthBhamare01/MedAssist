@@ -15,11 +15,8 @@ function StatusBadge({ status }) {
     critical_high: 'bg-red-200 text-red-800',
   };
   const label = {
-    normal:        'Normal',
-    low:           'Low',
-    high:          'High',
-    critical_low:  'Critical Low',
-    critical_high: 'Critical High',
+    normal: 'Normal', low: 'Low', high: 'High',
+    critical_low: 'Critical Low', critical_high: 'Critical High',
   };
   return (
     <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${map[status] || 'bg-slate-100 text-slate-600'}`}>
@@ -28,43 +25,156 @@ function StatusBadge({ status }) {
   );
 }
 
+/** Stop all tracks on a MediaStream and null it out */
+function stopStream(stream) {
+  if (stream) stream.getTracks().forEach((t) => t.stop());
+}
+
 export default function UploadReport() {
   const { state } = useLocation();
   const { sessionId: paramSessionId } = useParams();
   const navigate = useNavigate();
 
-  // sessionId from URL param (resume) or navigation state (fresh flow)
-  const sessionId = paramSessionId || state?.sessionId;
+  const sessionId = paramSessionId || state?.sessionId || null;
+  const standalone = !sessionId;
 
   const [disease, setDisease]     = useState(state?.disease || null);
   const [loadingDb, setLoadingDb] = useState(false);
 
-  const [file, setFile]         = useState(null);
-  const [preview, setPreview]   = useState(null);
+  // ── upload / file state ──
+  const [file, setFile]       = useState(null);
+  const [preview, setPreview] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [result, setResult]     = useState(null);
-  const inputRef = useRef();
+  const [progress, setProgress]   = useState(0);
+  const [result, setResult]       = useState(null);
+  const fileInputRef = useRef();
 
-  // If no disease context (resume path), load from DB
+  // ── mode: 'file' | 'camera' ──
+  const [mode, setMode] = useState('file');
+
+  // ── camera state ──
+  const [cameraReady, setCameraReady]     = useState(false);
+  const [cameraError, setCameraError]     = useState(null);
+  const [facingMode, setFacingMode]       = useState('environment'); // rear cam by default
+  const [capturedImage, setCapturedImage] = useState(null); // dataURL of snapshot
+  const streamRef  = useRef(null); // holds the live MediaStream
+  const videoRef   = useRef(null);
+  const canvasRef  = useRef(null);
+
+  // ── load disease from DB if resuming ──
   useEffect(() => {
     if (disease || !sessionId) return;
     setLoadingDb(true);
     api.get(`/patient/sessions/${sessionId}`)
       .then((res) => {
-        const session = res.data.session;
-        if (session?.selected_disease_data) {
-          setDisease(session.selected_disease_data);
-        } else if (session?.selected_disease) {
-          setDisease({ disease: session.selected_disease });
-        }
+        const s = res.data.session;
+        if (s?.selected_disease_data)      setDisease(s.selected_disease_data);
+        else if (s?.selected_disease)       setDisease({ disease: s.selected_disease });
       })
       .catch(() => toast.error('Failed to load session data.'))
       .finally(() => setLoadingDb(false));
   }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleFile = (f) => {
+  // ── stop camera stream when leaving camera mode or unmounting ──
+  useEffect(() => {
+    return () => stopStream(streamRef.current);
+  }, []);
+
+  // ── start / restart camera whenever mode=camera or facingMode changes ──
+  useEffect(() => {
+    if (mode !== 'camera') {
+      stopStream(streamRef.current);
+      streamRef.current = null;
+      setCameraReady(false);
+      setCameraError(null);
+      setCapturedImage(null);
+      return;
+    }
+    startCamera();
+  }, [mode, facingMode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function startCamera() {
+    stopStream(streamRef.current);
+    streamRef.current = null;
+    setCameraReady(false);
+    setCameraError(null);
+    setCapturedImage(null);
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('Camera not supported on this browser.');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode,
+          width:  { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current.play();
+          setCameraReady(true);
+        };
+      }
+    } catch (err) {
+      const msg =
+        err.name === 'NotAllowedError'  ? 'Camera permission denied. Allow camera access and try again.' :
+        err.name === 'NotFoundError'    ? 'No camera found on this device.' :
+        err.name === 'NotReadableError' ? 'Camera is in use by another application.' :
+                                          `Camera error: ${err.message}`;
+      setCameraError(msg);
+    }
+  }
+
+  function capturePhoto() {
+    const video  = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+
+    // Use the video's actual pixel dimensions for best OCR quality
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) { toast.error('Failed to capture photo'); return; }
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+        setCapturedImage(dataUrl);
+        // Pause the live feed while reviewing the capture
+        if (video) video.pause();
+
+        const f = new File([blob], `blood-report-photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        handleFile(f, dataUrl);
+      },
+      'image/jpeg',
+      0.92,
+    );
+  }
+
+  function retakePhoto() {
+    setCapturedImage(null);
+    setFile(null);
+    setPreview(null);
+    setResult(null);
+    if (videoRef.current) {
+      videoRef.current.play();
+    }
+  }
+
+  function flipCamera() {
+    setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
+  }
+
+  // ── file handling (shared by file-picker and camera capture) ──
+  const handleFile = (f, overridePreview = null) => {
     if (!f) return;
     if (f.size > MAX_MB * 1024 * 1024) {
       toast.error(`File too large — max ${MAX_MB} MB`);
@@ -77,7 +187,10 @@ export default function UploadReport() {
     }
     setFile(f);
     setResult(null);
-    if (f.type !== 'application/pdf') {
+
+    if (overridePreview) {
+      setPreview(overridePreview);
+    } else if (f.type !== 'application/pdf') {
       const reader = new FileReader();
       reader.onload = (e) => setPreview(e.target.result);
       reader.readAsDataURL(f);
@@ -107,9 +220,7 @@ export default function UploadReport() {
     try {
       const res = await api.post('/blood-report/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        onUploadProgress: (e) => {
-          setProgress(Math.round((e.loaded / e.total) * 100));
-        },
+        onUploadProgress: (e) => setProgress(Math.round((e.loaded / e.total) * 100)),
       });
       setResult(res.data);
       toast.success(`Extracted ${res.data.count} blood parameters`);
@@ -126,75 +237,100 @@ export default function UploadReport() {
     });
   };
 
-  // No session — came here directly without context
-  if (!sessionId) {
-    return (
-      <div className="max-w-2xl mx-auto text-center py-20">
-        <div className="text-5xl mb-4">📄</div>
-        <p className="text-slate-500 mb-4">No session found. Please start from your dashboard.</p>
-        <button
-          onClick={() => navigate('/patient/dashboard')}
-          className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-blue-700"
-        >
-          Go to My Sessions
-        </button>
-      </div>
-    );
-  }
+  const switchMode = (m) => {
+    setFile(null);
+    setPreview(null);
+    setResult(null);
+    setMode(m);
+  };
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-slate-400">
         <button onClick={() => navigate('/patient/dashboard')} className="hover:text-blue-600 transition-colors">
-          My Sessions
+          Dashboard
         </button>
-        <span>›</span>
-        <button onClick={() => navigate(`/patient/tests/${sessionId}`)} className="hover:text-blue-600 transition-colors">
-          Blood Tests
-        </button>
+        {!standalone && (
+          <>
+            <span>›</span>
+            <button onClick={() => navigate(`/patient/tests/${sessionId}`)} className="hover:text-blue-600 transition-colors">
+              Blood Tests
+            </button>
+          </>
+        )}
         <span>›</span>
         <span className="text-slate-600 font-medium">Upload Report</span>
       </nav>
 
       {/* Header */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
-        <h1 className="text-xl font-bold text-slate-800">Upload Blood Report</h1>
+        <h1 className="text-xl font-bold text-slate-800">
+          {standalone ? 'Analyze My Blood Report' : 'Upload Blood Report'}
+        </h1>
         <p className="text-sm text-slate-500 mt-1">
-          Upload your lab report and our AI will extract all values for analysis.
+          {standalone
+            ? 'Upload or photograph your lab report — AI will extract all values and provide a full analysis.'
+            : 'Upload or photograph your lab report — AI will extract all values for analysis.'}
         </p>
-        {loadingDb && (
-          <p className="text-xs text-slate-400 mt-1 animate-pulse">Loading session context…</p>
-        )}
-        {disease && (
-          <p className="text-xs text-blue-600 mt-1 font-medium">
-            For: {disease.disease}
-          </p>
-        )}
+        {loadingDb && <p className="text-xs text-slate-400 mt-1 animate-pulse">Loading session context…</p>}
+        {disease && <p className="text-xs text-blue-600 mt-1 font-medium">For: {disease.disease}</p>}
         <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
           ⚠️ Educational use only. AI extraction may not be 100% accurate. Always verify with your lab report.
         </div>
       </div>
 
-      {/* Drop zone */}
+      {/* Mode toggle */}
       {!result && (
+        <div className="flex gap-2 bg-slate-100 p-1 rounded-xl w-fit">
+          <button
+            onClick={() => switchMode('file')}
+            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
+              mode === 'file'
+                ? 'bg-white text-slate-800 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
+            </svg>
+            Upload File
+          </button>
+          <button
+            onClick={() => switchMode('camera')}
+            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
+              mode === 'camera'
+                ? 'bg-white text-slate-800 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+            </svg>
+            Use Camera
+          </button>
+        </div>
+      )}
+
+      {/* ── FILE MODE ── */}
+      {mode === 'file' && !result && (
         <div
           onDrop={onDrop}
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
-          onClick={() => !file && inputRef.current?.click()}
-          className={`bg-white rounded-2xl border-2 border-dashed transition-colors cursor-pointer p-10 text-center
+          onClick={() => !file && fileInputRef.current?.click()}
+          className={`bg-white rounded-2xl border-2 border-dashed transition-colors p-10 text-center
             ${dragging ? 'border-blue-400 bg-blue-50' : 'border-slate-200 hover:border-blue-300'}
-            ${file ? 'cursor-default' : ''}`}
+            ${!file ? 'cursor-pointer' : 'cursor-default'}`}
         >
           <input
-            ref={inputRef}
+            ref={fileInputRef}
             type="file"
             accept={ACCEPTED}
             className="hidden"
             onChange={(e) => handleFile(e.target.files[0])}
           />
-
           {!file ? (
             <>
               <div className="text-5xl mb-3">📄</div>
@@ -205,11 +341,7 @@ export default function UploadReport() {
           ) : (
             <div className="space-y-4">
               {preview && preview !== 'pdf' ? (
-                <img
-                  src={preview}
-                  alt="Report preview"
-                  className="max-h-64 mx-auto rounded-lg border border-slate-200 object-contain"
-                />
+                <img src={preview} alt="Report preview" className="max-h-64 mx-auto rounded-lg border border-slate-200 object-contain" />
               ) : (
                 <div className="text-6xl">📑</div>
               )}
@@ -228,6 +360,125 @@ export default function UploadReport() {
         </div>
       )}
 
+      {/* ── CAMERA MODE ── */}
+      {mode === 'camera' && !result && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow overflow-hidden">
+
+          {/* Camera error */}
+          {cameraError && (
+            <div className="p-6 text-center space-y-3">
+              <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto">
+                <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
+                </svg>
+              </div>
+              <p className="font-semibold text-slate-700">{cameraError}</p>
+              <button
+                onClick={startCamera}
+                className="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
+
+          {/* Live viewfinder */}
+          {!cameraError && !capturedImage && (
+            <>
+              <div className="relative bg-black">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full max-h-[420px] object-cover"
+                />
+
+                {/* Alignment guide overlay */}
+                {cameraReady && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="border-2 border-white/60 rounded-lg"
+                      style={{ width: '80%', height: '70%', boxShadow: '0 0 0 9999px rgba(0,0,0,0.35)' }}>
+                      <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-black/50 text-white text-xs px-3 py-1 rounded-full whitespace-nowrap">
+                        Align report inside the frame
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Loading spinner while camera initialises */}
+                {!cameraReady && !cameraError && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/70">
+                    <div className="flex flex-col items-center gap-3 text-white">
+                      <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <p className="text-sm">Starting camera…</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Flip camera button (top-right) */}
+                {cameraReady && (
+                  <button
+                    onClick={flipCamera}
+                    title="Flip camera"
+                    className="absolute top-3 right-3 w-10 h-10 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              {/* Capture bar */}
+              <div className="p-5 flex flex-col items-center gap-3">
+                <button
+                  onClick={capturePhoto}
+                  disabled={!cameraReady}
+                  className={`w-16 h-16 rounded-full border-4 border-slate-300 flex items-center justify-center transition-all
+                    ${cameraReady
+                      ? 'bg-white hover:bg-slate-50 hover:scale-105 active:scale-95 cursor-pointer shadow-md'
+                      : 'opacity-40 cursor-not-allowed'}`}
+                >
+                  <div className="w-10 h-10 rounded-full bg-blue-600" />
+                </button>
+                <p className="text-xs text-slate-400">Tap to capture</p>
+              </div>
+            </>
+          )}
+
+          {/* Captured image review */}
+          {capturedImage && !result && (
+            <div className="p-6 space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-2 h-2 rounded-full bg-green-500" />
+                <span className="text-sm font-semibold text-slate-700">Photo captured</span>
+              </div>
+              <img
+                src={capturedImage}
+                alt="Captured report"
+                className="w-full max-h-72 object-contain rounded-xl border border-slate-200 bg-slate-50"
+              />
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  onClick={retakePhoto}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                  </svg>
+                  Retake
+                </button>
+                <p className="text-xs text-slate-400 flex-1">Looks good? Click Analyze below.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Hidden canvas used for capture — never rendered visibly */}
+          <canvas ref={canvasRef} className="hidden" />
+        </div>
+      )}
+
       {/* Upload progress */}
       {uploading && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 space-y-4">
@@ -238,14 +489,11 @@ export default function UploadReport() {
             </p>
           </div>
           <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-            <div
-              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            />
+            <div className="bg-blue-500 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
           </div>
           {progress === 100 && (
             <p className="text-xs text-slate-400 text-center animate-pulse">
-              AI is extracting values from your blood report…
+              AI is reading your blood report values…
             </p>
           )}
         </div>
@@ -253,7 +501,10 @@ export default function UploadReport() {
 
       {/* Analyze button */}
       {file && !uploading && !result && (
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-xs text-slate-400">
+            {mode === 'camera' ? 'Camera capture ready for analysis' : `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB`}
+          </p>
           <button
             onClick={handleUpload}
             className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-3 rounded-xl transition-colors"

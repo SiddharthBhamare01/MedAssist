@@ -314,6 +314,72 @@ router.post('/vitals', verifyToken, async (req, res) => {
   }
 });
 
+// GET /api/patient/medications/sources — meds from prescriptions + blood reports not yet tracked
+router.get('/medications/sources', verifyToken, async (req, res) => {
+  try {
+    const { rows: tracked } = await pool.query(
+      'SELECT LOWER(medication_name) AS name FROM medication_logs WHERE patient_id = $1',
+      [req.user.userId]
+    );
+    const trackedNames = new Set(tracked.map(r => r.name));
+
+    const { rows: rxRows } = await pool.query(
+      `SELECT p.id, p.medications, p.issued_at,
+        u.full_name AS doctor_name
+       FROM prescriptions p
+       JOIN users u ON u.id = p.doctor_id
+       WHERE p.patient_id = $1 ORDER BY p.issued_at DESC`,
+      [req.user.userId]
+    );
+    const fromPrescriptions = [];
+    for (const rx of rxRows) {
+      let meds = rx.medications;
+      if (typeof meds === 'string') { try { meds = JSON.parse(meds); } catch { meds = []; } }
+      if (!Array.isArray(meds)) meds = [];
+      for (const m of meds) {
+        const name = m.drug_name || m.name;
+        if (name && !trackedNames.has(name.toLowerCase())) {
+          fromPrescriptions.push({
+            drug_name: name, dosage: m.dosage || null,
+            frequency: m.frequency || null, duration: m.duration || null,
+            prescriptionId: rx.id, doctorName: rx.doctor_name, issuedAt: rx.issued_at,
+          });
+          trackedNames.add(name.toLowerCase());
+        }
+      }
+    }
+
+    const { rows: brRows } = await pool.query(
+      `SELECT id, tablet_recommendations, created_at
+       FROM blood_reports WHERE patient_id = $1 AND tablet_recommendations IS NOT NULL
+       ORDER BY created_at DESC`,
+      [req.user.userId]
+    );
+    const fromBloodReports = [];
+    for (const br of brRows) {
+      let meds = br.tablet_recommendations;
+      if (typeof meds === 'string') { try { meds = JSON.parse(meds); } catch { meds = []; } }
+      if (!Array.isArray(meds)) meds = [];
+      for (const m of meds) {
+        const name = m.drug_name || m.medication || m.name;
+        if (name && !trackedNames.has(name.toLowerCase())) {
+          fromBloodReports.push({
+            drug_name: name, dosage: m.dosage || m.dose || null,
+            frequency: m.frequency || null, duration: m.duration || null,
+            reportId: br.id, createdAt: br.created_at,
+          });
+          trackedNames.add(name.toLowerCase());
+        }
+      }
+    }
+
+    res.json({ fromPrescriptions, fromBloodReports });
+  } catch (err) {
+    console.error('Medications sources error:', err);
+    res.status(500).json({ error: 'Failed to fetch medication sources' });
+  }
+});
+
 // GET /api/patient/medications — get patient's active medications
 router.get('/medications', verifyToken, async (req, res) => {
   try {
@@ -370,11 +436,28 @@ router.put('/medications/:id/toggle', verifyToken, async (req, res) => {
   }
 });
 
+// DELETE /api/patient/medications/:id — remove a medication entry
+router.delete('/medications/:id', verifyToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'DELETE FROM medication_logs WHERE id = $1 AND patient_id = $2 RETURNING id',
+      [req.params.id, req.user.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Medication not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Delete medication error:', err);
+    res.status(500).json({ error: 'Failed to delete medication' });
+  }
+});
+
 // GET /api/patient/medical-id — get patient's medical ID
 router.get('/medical-id', verifyToken, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, patient_id, emergency_name, emergency_phone, blood_type, organ_donor, critical_notes FROM medical_id WHERE patient_id = $1',
+      `SELECT id, patient_id, emergency_name, emergency_phone, blood_type, organ_donor, critical_notes,
+        (pin_hash IS NOT NULL) AS has_pin_set
+       FROM medical_id WHERE patient_id = $1`,
       [req.user.userId]
     );
     res.json({ medicalId: rows[0] || null });

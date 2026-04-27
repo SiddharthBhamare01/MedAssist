@@ -1,91 +1,134 @@
 const fetch = require('node-fetch');
 const { sortByDistance } = require('./locationService');
 
-// Public Overpass API mirrors — tried in order
 const OVERPASS_MIRRORS = [
-  'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass.private.coffee/api/interpreter',
+  'https://overpass-api.de/api/interpreter',
 ];
 
-// Simple in-memory cache: key → { data, expiresAt }
+// OSM API policy requires identifying the app; some mirrors reject requests without it
+const USER_AGENT = 'MedAssist/1.0 (CS595 academic project; contact: sbhamare1@hawk.illinoistech.edu)';
+
+// Per-mirror timeout — all three race in parallel, so worst-case is one timeout, not three
+const MIRROR_TIMEOUT_MS = 14000;
+
+// Circuit breaker: after all mirrors fail, skip Overpass for this many ms
+const CIRCUIT_RESET_MS = 10 * 60 * 1000; // 10 minutes
+let circuitOpenUntil = 0;
+
+// In-memory cache: long TTL so a single successful call serves many subsequent requests
 const cache = new Map();
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 function cacheKey(lat, lng, radiusMeters) {
-  // Round to ~1 km grid so nearby requests reuse cached results
   return `${lat.toFixed(2)},${lng.toFixed(2)},${radiusMeters}`;
 }
 
 function buildQuery(lat, lng, radiusMeters) {
   return `
-[out:json][timeout:30];
+[out:json][timeout:12];
 (
-  node["amenity"~"^(doctors|clinic|hospital)$"](around:${radiusMeters},${lat},${lng});
-  node["healthcare"~"^(doctor|clinic|hospital)$"](around:${radiusMeters},${lat},${lng});
-  way["amenity"~"^(clinic|hospital)$"](around:${radiusMeters},${lat},${lng});
+  node["amenity"~"^(doctors|clinic|hospital|pharmacy|dentist|physiotherapist|optometrist|laboratory|blood_bank)$"](around:${radiusMeters},${lat},${lng});
+  node["healthcare"~"^(doctor|clinic|hospital|pharmacy|dentist|physiotherapist|optometrist|laboratory|blood_bank|centre|yes)$"](around:${radiusMeters},${lat},${lng});
+  way["amenity"~"^(clinic|hospital|pharmacy)$"](around:${radiusMeters},${lat},${lng});
+  way["healthcare"~"^(clinic|hospital|centre)$"](around:${radiusMeters},${lat},${lng});
 );
 out center body;
 `;
 }
 
 /**
- * Try each Overpass mirror with a 20-second timeout.
- * Returns parsed JSON or throws if all mirrors fail.
+ * Fetch one Overpass mirror. Resolves with parsed JSON or rejects on any failure.
+ * Aborted immediately if clientSignal fires.
  */
-async function fetchFromOverpass(query) {
-  const body = `data=${encodeURIComponent(query)}`;
-  let lastErr;
+async function fetchMirror(url, body, clientSignal) {
+  const timeoutCtrl = new AbortController();
+  const timer = setTimeout(() => timeoutCtrl.abort(), MIRROR_TIMEOUT_MS);
 
-  for (const url of OVERPASS_MIRRORS) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30000);
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body,
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
+  const onClientAbort = () => timeoutCtrl.abort();
+  clientSignal?.addEventListener('abort', onClientAbort, { once: true });
 
-      if (response.status === 429) {
-        // Rate-limited on this mirror — try next
-        lastErr = new Error(`429 from ${url}`);
-        continue;
-      }
-      if (!response.ok) {
-        lastErr = new Error(`${response.status} from ${url}`);
-        continue;
-      }
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': USER_AGENT,
+      },
+      body,
+      signal: timeoutCtrl.signal,
+    });
 
-      return await response.json();
-    } catch (err) {
-      clearTimeout(timer);
-      lastErr = err;
-      console.warn(`Overpass mirror failed (${url}):`, err.message);
+    clearTimeout(timer);
+    clientSignal?.removeEventListener('abort', onClientAbort);
+
+    if (!res.ok) {
+      const err = new Error(`HTTP ${res.status} from ${url}`);
+      console.warn(`[osmService] mirror failed (${url}): ${res.status}`);
+      throw err;
     }
+
+    const json = await res.json();
+    console.log(`[osmService] mirror succeeded: ${url}`);
+    return json;
+  } catch (err) {
+    clearTimeout(timer);
+    clientSignal?.removeEventListener('abort', onClientAbort);
+
+    if (clientSignal?.aborted) throw new Error('Client disconnected');
+
+    const label = err.name === 'AbortError' ? 'timed out' : err.message;
+    if (err.name === 'AbortError') console.warn(`[osmService] mirror failed (${url}): timed out`);
+    throw err;
+  }
+}
+
+/**
+ * Race all mirrors in parallel — whichever answers first wins.
+ * Promise.any rejects only when every mirror fails (AggregateError).
+ */
+async function fetchFromOverpass(query, clientSignal) {
+  if (clientSignal?.aborted) throw new Error('Client disconnected');
+
+  // Circuit breaker: if mirrors were all down recently, fail fast
+  if (Date.now() < circuitOpenUntil) {
+    const secsLeft = Math.ceil((circuitOpenUntil - Date.now()) / 1000);
+    throw new Error(`Overpass circuit open — retrying in ${secsLeft}s`);
   }
 
-  throw lastErr || new Error('All Overpass mirrors failed');
+  const body = `data=${encodeURIComponent(query)}`;
+  const attempts = OVERPASS_MIRRORS.map(url => fetchMirror(url, body, clientSignal));
+
+  try {
+    const json = await Promise.any(attempts);
+    // At least one mirror worked — reset circuit
+    circuitOpenUntil = 0;
+    return json;
+  } catch (aggErr) {
+    if (clientSignal?.aborted) throw new Error('Client disconnected');
+    // All mirrors failed — open circuit for 2 minutes
+    circuitOpenUntil = Date.now() + CIRCUIT_RESET_MS;
+    console.warn(`[osmService] all mirrors failed — circuit open for ${CIRCUIT_RESET_MS / 1000}s`);
+    throw new Error('All Overpass mirrors failed');
+  }
 }
 
 /**
  * Return nearby healthcare providers from OpenStreetMap via Overpass API.
- * Results are cached for 5 minutes per lat/lng/radius bucket.
+ * Results are cached 5 min per lat/lng/radius bucket.
  */
-async function getNearbyDoctors(lat, lng, radiusMeters = 10000) {
+async function getNearbyDoctors(lat, lng, radiusMeters = 10000, clientSignal = null) {
   const key = cacheKey(lat, lng, radiusMeters);
 
-  // Return cached result if still fresh
   const cached = cache.get(key);
   if (cached && Date.now() < cached.expiresAt) {
     console.log(`[osmService] cache hit for ${key}`);
     return cached.data;
   }
 
-  const query = buildQuery(lat, lng, radiusMeters);
-  const json   = await fetchFromOverpass(query);
+  const query  = buildQuery(lat, lng, radiusMeters);
+  const json   = await fetchFromOverpass(query, clientSignal);
   const elements = json.elements || [];
 
   const doctors = elements
@@ -102,7 +145,7 @@ async function getNearbyDoctors(lat, lng, radiusMeters = 10000) {
         tags['healthcare:speciality'] ||
         tags['speciality']            ||
         tags['specialty']             ||
-        mapAmenityToSpecialty(tags.amenity, tags.healthcare);
+        mapTagsToSpecialty(tags);
 
       const addressParts = [tags['addr:housenumber'], tags['addr:street']].filter(Boolean);
 
@@ -135,9 +178,7 @@ async function getNearbyDoctors(lat, lng, radiusMeters = 10000) {
 
   const sorted = sortByDistance(unique, lat, lng);
 
-  // Store in cache
   cache.set(key, { data: sorted, expiresAt: Date.now() + CACHE_TTL_MS });
-  // Evict old entries if cache grows large
   if (cache.size > 200) {
     const oldest = [...cache.entries()].sort((a, b) => a[1].expiresAt - b[1].expiresAt)[0][0];
     cache.delete(oldest);
@@ -146,13 +187,20 @@ async function getNearbyDoctors(lat, lng, radiusMeters = 10000) {
   return sorted;
 }
 
-function mapAmenityToSpecialty(amenity, healthcare) {
-  if (amenity === 'hospital')   return 'Hospital';
-  if (amenity === 'clinic')     return 'Clinic';
-  if (amenity === 'doctors')    return 'General Physician';
-  if (healthcare === 'doctor')  return 'General Physician';
-  if (healthcare === 'clinic')  return 'Clinic';
-  if (healthcare === 'hospital')return 'Hospital';
+function mapTagsToSpecialty(tags) {
+  const amenity    = tags.amenity    || '';
+  const healthcare = tags.healthcare || '';
+
+  if (amenity === 'hospital'        || healthcare === 'hospital')        return 'Hospital';
+  if (amenity === 'clinic'          || healthcare === 'clinic')          return 'Clinic';
+  if (amenity === 'pharmacy'        || healthcare === 'pharmacy')        return 'Pharmacy';
+  if (amenity === 'dentist'         || healthcare === 'dentist')         return 'Dental';
+  if (amenity === 'doctors'         || healthcare === 'doctor')          return 'General Physician';
+  if (amenity === 'physiotherapist' || healthcare === 'physiotherapist') return 'Physiotherapy';
+  if (amenity === 'optometrist'     || healthcare === 'optometrist')     return 'Ophthalmology';
+  if (amenity === 'laboratory'      || healthcare === 'laboratory')      return 'Lab & Diagnostics';
+  if (healthcare === 'blood_bank')                                       return 'Blood Bank';
+  if (healthcare === 'centre')                                           return 'Health Centre';
   return 'Healthcare Provider';
 }
 

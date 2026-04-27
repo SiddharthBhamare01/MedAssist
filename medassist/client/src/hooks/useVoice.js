@@ -49,7 +49,7 @@ export function useVoice() {
     setIsSpeaking(true);
 
     try {
-      const response = await api.post('/voice/speak', { text }, { responseType: 'arraybuffer' });
+      const response = await api.post('/voice/speak', { text }, { responseType: 'arraybuffer', timeout: 8000 });
 
       // AudioContext must already exist (created by initAudio on click)
       if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
@@ -112,31 +112,49 @@ export function useVoice() {
       setIsListening(true);
       setTranscript('');
 
-      const timeout = setTimeout(() => {
+      // Guard against double-resolve (onresult + onend both firing)
+      let settled = false;
+      const settle = (fn, val) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(stopTimer);
+        clearTimeout(hardTimer);
+        fn(val);
+      };
+
+      // Soft stop: ask recognition to finish after maxSeconds
+      const stopTimer = setTimeout(() => {
         recognition.stop();
       }, maxSeconds * 1000);
 
+      // Hard guard: if onend never fires (browser bug), force-resolve after maxSeconds + 5s
+      const hardTimer = setTimeout(() => {
+        try { recognition.abort(); } catch {}
+        setIsListening(false);
+        recognitionRef.current = null;
+        settle(resolve, '');
+      }, (maxSeconds + 5) * 1000);
+
       recognition.onresult = (event) => {
-        clearTimeout(timeout);
         const text = event.results[0][0].transcript;
         setTranscript(text);
-        resolve(text);
+        settle(resolve, text);
       };
 
       recognition.onerror = (event) => {
-        clearTimeout(timeout);
         setIsListening(false);
         if (event.error === 'no-speech') {
-          resolve('');    // treat silence as empty answer
+          settle(resolve, '');
         } else {
-          reject(new Error(`Speech recognition error: ${event.error}`));
+          settle(reject, new Error(`Speech recognition error: ${event.error}`));
         }
       };
 
+      // onend fires when recognition stops — resolve with '' if onresult never came
       recognition.onend = () => {
-        clearTimeout(timeout);
         setIsListening(false);
         recognitionRef.current = null;
+        settle(resolve, '');
       };
 
       recognition.start();

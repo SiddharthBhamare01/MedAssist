@@ -20,13 +20,19 @@ router.get('/nearby', async (req, res) => {
     return res.status(400).json({ error: 'lat and lng query params are required and must be numbers' });
   }
 
-  const radiusMeters = Math.min(parseInt(radius, 10) || 10000, 50000); // cap at 50 km
+  // Match frontend's max of 50 mi (~80 km); hard cap at 100 km to stay within Overpass limits
+  const radiusMeters = Math.min(parseInt(radius, 10) || 10000, 100000);
+
+  // Propagate client disconnect to stop Overpass fetches early
+  const clientCtrl = new AbortController();
+  req.on('close', () => clientCtrl.abort());
+
+  const clientGone = () => clientCtrl.signal.aborted || res.writableEnded;
 
   try {
     let doctors = [];
 
     if (source === 'db') {
-      // ── Seeded demo doctors from Supabase ──────────────────────────────────
       const result = await pool.query(`
         SELECT
           dp.id,
@@ -46,11 +52,11 @@ router.get('/nearby', async (req, res) => {
       `);
       doctors = sortByDistance(result.rows, userLat, userLng);
     } else {
-      // ── Real-time OpenStreetMap data via Overpass API ──────────────────────
-      doctors = await getNearbyDoctors(userLat, userLng, radiusMeters);
+      doctors = await getNearbyDoctors(userLat, userLng, radiusMeters, clientCtrl.signal);
     }
 
-    // Optional specialty filter (case-insensitive substring)
+    if (clientGone()) return; // client already moved on — nothing to send
+
     if (specialty && specialty.trim() && specialty !== 'All Specializations') {
       const filter = specialty.trim().toLowerCase();
       doctors = doctors.filter(d =>
@@ -60,11 +66,20 @@ router.get('/nearby', async (req, res) => {
 
     res.json({ doctors, total: doctors.length, source });
   } catch (err) {
-    console.error('GET /api/doctors/nearby error:', err.message);
+    // Client disconnected — nothing to send, not an error
+    if (clientGone()) return;
 
-    // If Overpass fails, fall back to DB seeded data automatically
-    if (source === 'osm') {
-      console.warn('Overpass API failed — falling back to DB demo data');
+    const isCircuitOpen   = err.message.startsWith('Overpass circuit open');
+    const isClientAbort   = err.message.includes('Client disconnected');
+    const isOverpassError = source === 'osm' && !isClientAbort;
+
+    // Only log genuine unexpected failures; circuit-open skips are expected/silent
+    if (!isCircuitOpen && !isClientAbort) {
+      console.error('[doctors] OSM fetch failed:', err.message);
+    }
+
+    if (isOverpassError) {
+      // Silent fallback to DB — no warn log during circuit-open period
       try {
         const result = await pool.query(`
           SELECT dp.id, u.full_name AS name, dp.specialization, dp.hospital_name,
@@ -74,13 +89,14 @@ router.get('/nearby', async (req, res) => {
           WHERE dp.latitude IS NOT NULL AND dp.longitude IS NOT NULL AND dp.available = TRUE
         `);
         const doctors = sortByDistance(result.rows, userLat, userLng);
-        return res.json({ doctors, total: doctors.length, source: 'db_fallback' });
+        if (!clientGone()) res.json({ doctors, total: doctors.length, source: 'db_fallback' });
+        return;
       } catch (dbErr) {
-        console.error('DB fallback also failed:', dbErr.message);
+        console.error('[doctors] DB fallback also failed:', dbErr.message);
       }
     }
 
-    res.status(500).json({ error: 'Failed to fetch nearby doctors' });
+    if (!clientGone()) res.status(500).json({ error: 'Failed to fetch nearby doctors' });
   }
 });
 

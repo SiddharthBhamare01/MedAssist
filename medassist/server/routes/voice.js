@@ -8,7 +8,7 @@
 const router  = require('express').Router();
 const https   = require('https');
 const verifyToken = require('../middleware/auth');
-const { getProviders, getAvailableProviders } = require('../utils/aiClients');
+const { getProviders, getAvailableVoiceProviders } = require('../utils/aiClients');
 
 const ELEVENLABS_VOICE_ID = 'W1TKxm4MpGXSlpN7iVQy'; // MedAssist custom voice
 const ELEVENLABS_MODEL    = 'eleven_turbo_v2';
@@ -16,7 +16,7 @@ const ELEVENLABS_MODEL    = 'eleven_turbo_v2';
 // ── callWithFallback — tries each provider in order until one succeeds ──────
 // Handles 429 rate-limit by automatically moving to the next provider.
 async function callWithFallback(messages, options = {}) {
-  const available = getAvailableProviders();
+  const available = getAvailableVoiceProviders();
   const providers = getProviders();
   let lastErr = null;
 

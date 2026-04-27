@@ -155,19 +155,20 @@ export default function Analysis() {
   };
 
   const handleExportPDF = async () => {
-    if (!sessionId) {
-      toast.error('Session ID required for PDF export');
-      return;
-    }
     setExporting(true);
     try {
-      const response = await api.get(`/patient/sessions/${sessionId}/export-pdf`, {
-        responseType: 'blob',
-      });
+      const endpoint = sessionId
+        ? `/patient/sessions/${sessionId}/export-pdf`
+        : `/blood-report/${reportId}/export-pdf`;
+      const filename = sessionId
+        ? `MedAssist_Report_${sessionId.slice(0, 8)}.pdf`
+        : `MedAssist_BloodReport_${reportId}.pdf`;
+
+      const response = await api.get(endpoint, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `MedAssist_Report_${sessionId.slice(0, 8)}.pdf`);
+      link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
       link.remove();

@@ -183,6 +183,22 @@ async function groqCreateWithRetry(client, params, maxRetries = 2) {
         throw err;
       }
 
+      // 4xx client errors not handled above (e.g. OpenRouter 404 "no endpoints support tool use")
+      // — skip to the next provider immediately, don't retry.
+      if (status >= 400 && status < 500) {
+        if (currentProviderName) markProviderLimited(currentProviderName);
+        console.warn(`[agentRunner] ${status} client error on ${currentProviderName || 'unknown'} — skipping to next provider…`);
+        const next = getNextProvider();
+        if (next) {
+          groq = next.client;
+          currentModel = next.model;
+          currentProviderName = next.providerName;
+          attempt = -1;
+          continue;
+        }
+        throw err;
+      }
+
       // 5xx server error — retry, then try next provider as last resort
       if (status >= 500 && attempt < maxRetries) {
         const backoff = Math.min(3 * Math.pow(2, attempt), 15);

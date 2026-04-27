@@ -18,31 +18,52 @@ export default function MedicalID() {
     critical_notes: '',
     pin: '',
   });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [loading,   setLoading]   = useState(true);
+  const [saving,    setSaving]    = useState(false);
+  const [copied,    setCopied]    = useState(false);
+  const [hasPinSet, setHasPinSet] = useState(false);
+  const [isNew,     setIsNew]     = useState(true); // no Medical ID saved yet
 
   useEffect(() => {
-    const fetchMedicalID = async () => {
+    const load = async () => {
       try {
-        const { data } = await api.get('/patient/medical-id');
-        if (data.medicalId) {
+        // Load medical ID and patient profile in parallel
+        const [midRes, profileRes] = await Promise.allSettled([
+          api.get('/patient/medical-id'),
+          api.get('/patient/profile'),
+        ]);
+
+        const mid     = midRes.status === 'fulfilled' ? midRes.value.data.medicalId : null;
+        const profile = profileRes.status === 'fulfilled' ? profileRes.value.data.profile : null;
+
+        if (mid) {
+          setIsNew(false);
+          setHasPinSet(!!mid.has_pin_set);
           setForm({
-            emergency_name: data.medicalId.emergency_name || '',
-            emergency_phone: data.medicalId.emergency_phone || '',
-            blood_type: data.medicalId.blood_type || '',
-            organ_donor: data.medicalId.organ_donor || false,
-            critical_notes: data.medicalId.critical_notes || '',
+            emergency_name:  mid.emergency_name  || '',
+            emergency_phone: mid.emergency_phone || '',
+            blood_type:      mid.blood_type      || (profile?.blood_group || ''),
+            organ_donor:     mid.organ_donor     || false,
+            critical_notes:  mid.critical_notes  || '',
             pin: '',
           });
+        } else if (profile) {
+          // Pre-fill from profile for a new Medical ID
+          setForm(prev => ({
+            ...prev,
+            blood_type:     profile.blood_group || '',
+            critical_notes: profile.allergies?.length
+              ? `Allergies: ${profile.allergies.join(', ')}`
+              : '',
+          }));
         }
       } catch {
-        // First time — form starts empty
+        // ignore
       } finally {
         setLoading(false);
       }
     };
-    fetchMedicalID();
+    load();
   }, []);
 
   const handleChange = (e) => {
@@ -56,10 +77,16 @@ export default function MedicalID() {
       toast.error('PIN must be exactly 4 digits');
       return;
     }
+    if (isNew && !form.pin) {
+      toast.error('Set a 4-digit PIN so the public link works');
+      return;
+    }
     setSaving(true);
     try {
       await api.put('/patient/medical-id', form);
-      toast.success('Medical ID updated');
+      if (form.pin) setHasPinSet(true);
+      setIsNew(false);
+      toast.success('Medical ID saved');
     } catch (err) {
       toast.error(err.message || 'Failed to save');
     } finally {
@@ -88,34 +115,62 @@ export default function MedicalID() {
     <motion.div variants={fadeIn} initial="hidden" animate="visible" className="max-w-2xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-800">Medical ID</h1>
-        <p className="text-sm text-slate-500 mt-1">Emergency information accessible via a shareable link</p>
+        <p className="text-sm text-slate-500 mt-1">Emergency information accessible by first responders via a shareable link</p>
       </div>
 
       {/* Share Link Card */}
-      <div className="bg-teal-50 border border-teal-200/60 rounded-2xl p-5">
+      <div className={`rounded-2xl p-5 border ${isNew ? 'bg-slate-50 border-slate-200' : hasPinSet ? 'bg-teal-50 border-teal-200/60' : 'bg-amber-50 border-amber-200'}`}>
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-6 h-6 bg-teal-100 rounded-lg flex items-center justify-center shrink-0">
-            <svg className="w-3.5 h-3.5 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
-            </svg>
+          <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${isNew ? 'bg-slate-200' : hasPinSet ? 'bg-teal-100' : 'bg-amber-100'}`}>
+            {isNew ? (
+              <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+              </svg>
+            ) : hasPinSet ? (
+              <svg className="w-3.5 h-3.5 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+            )}
           </div>
-          <h3 className="text-sm font-semibold text-teal-800">Shareable Emergency Link</h3>
+          <h3 className={`text-sm font-semibold ${isNew ? 'text-slate-600' : hasPinSet ? 'text-teal-800' : 'text-amber-800'}`}>
+            {isNew ? 'Save your Medical ID to activate this link'
+              : hasPinSet ? 'Shareable Emergency Link — Active'
+              : 'PIN not set — link will not work'}
+          </h3>
+          {!isNew && hasPinSet && (
+            <span className="ml-auto text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+              PIN set ✓
+            </span>
+          )}
         </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            readOnly
-            value={shareLink}
-            className="flex-1 bg-white border border-teal-200/80 rounded-xl px-3 py-2 text-sm text-slate-600 font-mono truncate focus:outline-none"
-          />
-          <button
-            onClick={copyLink}
-            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-xl transition-colors shrink-0"
-          >
-            {copied ? 'Copied!' : 'Copy'}
-          </button>
-        </div>
-        <p className="text-xs text-teal-600/70 mt-2">Anyone with this link will need your PIN to view your emergency info.</p>
+
+        {isNew ? (
+          <p className="text-xs text-slate-500">Fill in your emergency information and set a PIN below, then save.</p>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <input
+                type="text" readOnly value={shareLink}
+                className="flex-1 bg-white border border-teal-200/80 rounded-xl px-3 py-2 text-sm text-slate-600 font-mono truncate focus:outline-none"
+              />
+              <button
+                onClick={copyLink}
+                disabled={!hasPinSet}
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors shrink-0"
+              >
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+            {hasPinSet
+              ? <p className="text-xs text-teal-600/70 mt-2">Anyone with this link must enter your PIN to view emergency info.</p>
+              : <p className="text-xs text-amber-700 mt-2">Set a PIN in the Access PIN section below, then save — the link won't work until then.</p>
+            }
+          </>
+        )}
       </div>
 
       {/* Form */}
@@ -126,10 +181,7 @@ export default function MedicalID() {
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Emergency Contact Name</label>
             <input
-              type="text"
-              name="emergency_name"
-              value={form.emergency_name}
-              onChange={handleChange}
+              type="text" name="emergency_name" value={form.emergency_name} onChange={handleChange}
               placeholder="Jane Doe"
               className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
             />
@@ -137,10 +189,7 @@ export default function MedicalID() {
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Emergency Contact Phone</label>
             <input
-              type="tel"
-              name="emergency_phone"
-              value={form.emergency_phone}
-              onChange={handleChange}
+              type="tel" name="emergency_phone" value={form.emergency_phone} onChange={handleChange}
               placeholder="+1 (555) 123-4567"
               className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
             />
@@ -151,9 +200,7 @@ export default function MedicalID() {
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Blood Type</label>
             <select
-              name="blood_type"
-              value={form.blood_type}
-              onChange={handleChange}
+              name="blood_type" value={form.blood_type} onChange={handleChange}
               className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white"
             >
               <option value="">Select blood type</option>
@@ -166,11 +213,8 @@ export default function MedicalID() {
             <label className="flex items-center gap-3 cursor-pointer py-2.5">
               <div className="relative">
                 <input
-                  type="checkbox"
-                  name="organ_donor"
-                  checked={form.organ_donor}
-                  onChange={handleChange}
-                  className="sr-only peer"
+                  type="checkbox" name="organ_donor" checked={form.organ_donor}
+                  onChange={handleChange} className="sr-only peer"
                 />
                 <div className="w-11 h-6 bg-slate-200 rounded-full peer-checked:bg-teal-600 transition-colors" />
                 <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow peer-checked:translate-x-5 transition-transform" />
@@ -183,9 +227,7 @@ export default function MedicalID() {
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Critical Notes / Allergies</label>
           <textarea
-            name="critical_notes"
-            value={form.critical_notes}
-            onChange={handleChange}
+            name="critical_notes" value={form.critical_notes} onChange={handleChange}
             rows={3}
             placeholder="e.g., Allergic to penicillin, diabetic, pacemaker"
             className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none"
@@ -193,26 +235,36 @@ export default function MedicalID() {
         </div>
 
         <div className="border-t border-slate-200 pt-4">
-          <h3 className="text-sm font-semibold text-slate-700 mb-2">Access PIN</h3>
-          <p className="text-xs text-slate-400 mb-2">Set a 4-digit PIN to protect your public Medical ID page. Leave blank to keep current PIN.</p>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-slate-700">Access PIN</h3>
+            {hasPinSet && (
+              <span className="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+                PIN currently set ✓
+              </span>
+            )}
+            {!hasPinSet && !isNew && (
+              <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                No PIN — set one to enable sharing
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-400 mb-2">
+            {hasPinSet ? 'Enter a new 4-digit PIN to change it, or leave blank to keep the current one.'
+              : 'Required — set a 4-digit PIN to protect your public emergency page.'}
+          </p>
           <input
-            type="password"
-            name="pin"
-            value={form.pin}
-            onChange={handleChange}
-            maxLength={4}
-            pattern="\d{4}"
-            placeholder="4-digit PIN"
-            className="w-32 border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-center tracking-widest focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+            type="password" name="pin" value={form.pin} onChange={handleChange}
+            maxLength={4} pattern="\d{4}"
+            placeholder={hasPinSet ? '••••  (leave blank to keep)' : '4-digit PIN (required)'}
+            className="w-48 border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-center tracking-widest focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
           />
         </div>
 
         <button
-          type="submit"
-          disabled={saving}
+          type="submit" disabled={saving}
           className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl transition-colors"
         >
-          {saving ? 'Saving...' : 'Save Medical ID'}
+          {saving ? 'Saving...' : isNew ? 'Create Medical ID' : 'Save Changes'}
         </button>
       </form>
     </motion.div>

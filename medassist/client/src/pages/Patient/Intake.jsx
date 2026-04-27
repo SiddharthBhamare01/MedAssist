@@ -608,6 +608,7 @@ export default function Intake() {
       onStep2Done={data => { handleStep2(data); }}
       onStep3Done={symptoms => { handleStep3(symptoms); }}
       onClose={() => {}}
+      onFailure={() => navigate('/patient/dashboard')}
       onLiveUpdate={handleVoiceLive}
     />
     </>

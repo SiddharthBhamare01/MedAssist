@@ -5,6 +5,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import PasswordInput from '../../components/PasswordInput';
+import healthcareIcon from '../../assets/healthcare_icon.png';
 
 export default function Login() {
   const { login } = useAuth();
@@ -123,11 +124,7 @@ export default function Login() {
       <div className="relative bg-white/80 backdrop-blur-sm p-8 sm:p-10 rounded-3xl shadow-card-hover w-full max-w-md border border-white/60">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-gradient-to-br from-teal-500 to-teal-700 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-glow-teal">
-            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.627 48.627 0 0 1 12 20.904a48.627 48.627 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5" />
-            </svg>
-          </div>
+          <img src={healthcareIcon} alt="MedAssist" className="w-16 h-16 object-contain mx-auto mb-4 rounded-2xl drop-shadow-md" />
           <h1 className="text-2xl font-bold font-display text-gradient">MedAssist AI</h1>
           <p className="text-slate-400 mt-1 text-sm">CS 595 — Medical Informatics & AI</p>
         </div>

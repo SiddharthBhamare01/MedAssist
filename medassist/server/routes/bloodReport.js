@@ -220,6 +220,71 @@ router.post('/follow-up', verifyToken, async (req, res) => {
   }
 });
 
+// GET /api/blood-report/standalone — list standalone reports (no session) for the logged-in patient
+router.get('/standalone', verifyToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, created_at, extracted_values, analysis, tablet_recommendations
+         FROM blood_reports
+        WHERE patient_id = $1 AND session_id IS NULL
+        ORDER BY created_at DESC
+        LIMIT 20`,
+      [req.user.userId]
+    );
+
+    const reports = rows.map((r) => {
+      const extracted = r.extracted_values || [];
+      const abnormalCount = extracted.filter(
+        (v) => v.status && v.status !== 'normal'
+      ).length;
+      return {
+        id: r.id,
+        created_at: r.created_at,
+        total_parameters: extracted.length,
+        abnormal_count: abnormalCount,
+        analyzed: !!(r.analysis && (r.analysis.summary || r.analysis.abnormal_findings?.length > 0)),
+      };
+    });
+
+    return res.json({ reports });
+  } catch (err) {
+    console.error('Standalone reports error:', err);
+    return res.status(500).json({ error: 'Failed to fetch reports' });
+  }
+});
+
+// GET /api/blood-report/:id/export-pdf — standalone PDF (no session required)
+router.get('/:id/export-pdf', verifyToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM blood_reports WHERE id = $1 AND patient_id = $2',
+      [req.params.id, req.user.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Report not found' });
+
+    const report = rows[0];
+    const { rows: userRows } = await pool.query('SELECT full_name FROM users WHERE id = $1', [req.user.userId]);
+    const { generateSessionPDF } = require('../services/pdfService');
+
+    const pdfBuffer = await generateSessionPDF({
+      patientName: userRows[0]?.full_name || 'Patient',
+      disease: 'Standalone Blood Report Analysis',
+      symptoms: [],
+      analysis: report.analysis || {},
+      tabletRecommendations: report.tablet_recommendations || [],
+      riskScores: report.risk_scores || null,
+      followUp: report.follow_up || null,
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=MedAssist_BloodReport_${req.params.id}.pdf`);
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error('Blood report PDF export error:', err);
+    return res.status(500).json({ error: 'Failed to generate PDF' });
+  }
+});
+
 // GET /api/blood-report/:id
 router.get('/:id', verifyToken, async (req, res) => {
   try {

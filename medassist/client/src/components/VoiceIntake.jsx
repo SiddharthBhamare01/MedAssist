@@ -83,7 +83,7 @@ function ThinkingDots() {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function VoiceIntake({
-  step, onStep1Done, onStep2Done, onStep3Done, onClose, onLiveUpdate, step1Data, step2Data,
+  step, onStep1Done, onStep2Done, onStep3Done, onClose, onFailure = () => {}, onLiveUpdate, step1Data, step2Data,
 }) {
   const { speak, listen, stopSpeaking, stopListening, initAudio, isSpeaking, isListening, supported } = useVoice();
 
@@ -105,16 +105,24 @@ export default function VoiceIntake({
   const askAndListen = useCallback(async (questionText) => {
     if (cancelRef.current) return null;
     setCurrentQ(questionText);
-    await speak(questionText);
-    if (cancelRef.current) return null;
-    try {
-      const heard = await listen({ maxSeconds: 20 });
-      setTranscript(heard || '');
-      return heard || '';
-    } catch (err) {
-      console.warn('[VoiceIntake] listen error:', err.message);
-      return '';
-    }
+
+    const task = async () => {
+      await speak(questionText);
+      if (cancelRef.current) return null;
+      try {
+        const heard = await listen({ maxSeconds: 20 });
+        setTranscript(heard || '');
+        return heard || '';
+      } catch (err) {
+        console.warn('[VoiceIntake] listen error:', err.message);
+        return '';
+      }
+    };
+
+    // Safety net: if the entire ask+listen cycle freezes for 30s, unblock with ''
+    // This triggers the retry loop which will re-ask the same question
+    const stuckGuard = new Promise(resolve => setTimeout(() => resolve(''), 30000));
+    return Promise.race([task(), stuckGuard]);
   }, [speak, listen]);
 
   // ── Retry logic ────────────────────────────────────────────────────────────
@@ -137,14 +145,15 @@ export default function VoiceIntake({
     return null;
   }, [askAndListen]);
 
-  const closeWithHint = useCallback(async (reason) => {
+  const closeWithHint = useCallback(async (reason, redirect = false) => {
     cancelRef.current = true;
     setCurrentQ('');
     await speak(reason);
     running.current = false;
     setPhase('idle');
-    onClose();
-  }, [speak, onClose]);
+    if (redirect) onFailure();
+    else onClose();
+  }, [speak, onClose, onFailure]);
 
   // ── Step runners ───────────────────────────────────────────────────────────
   const runStep1 = useCallback(async () => {
@@ -160,21 +169,38 @@ export default function VoiceIntake({
       const heard = await askWithRetry(q);
       if (cancelRef.current) return;
       if (heard === null) {
-        await closeWithHint('I was unable to hear your response after three attempts. Please try voice mode again, or fill in the form manually. Closing now.');
+        await closeWithHint('I was unable to hear your response after three attempts. Please try voice mode again, or fill in the form manually.', true);
         return;
       }
       if (heard.toLowerCase().includes('skip')) { collected[key] = null; continue; }
 
       setIsThinking(true);
+      let parsedVal = null;
       try {
-        const { data } = await api.post('/voice/parse', { step: 'step1', text: heard, context: q });
+        const { data } = await api.post('/voice/parse', { step: 'step1', text: heard, context: q }, { timeout: 10000 });
         const parsed = data.parsed || {};
-        if (parsed[key] !== undefined && parsed[key] !== null) {
-          collected[key] = parsed[key];
-          onLiveUpdate?.('step1', key, parsed[key]);
-        }
+        if (parsed[key] !== undefined && parsed[key] !== null) parsedVal = parsed[key];
       } catch (err) { console.warn('[VoiceIntake] parse error:', err.message); }
       setIsThinking(false);
+
+      // Clarification: heard something but couldn't extract a value
+      if (parsedVal === null && !cancelRef.current) {
+        const clarifyHeard = await askAndListen("I didn't quite understand that. Could you please repeat your answer more clearly?");
+        if (!cancelRef.current && clarifyHeard && clarifyHeard.trim() && !clarifyHeard.toLowerCase().includes('skip')) {
+          setIsThinking(true);
+          try {
+            const { data } = await api.post('/voice/parse', { step: 'step1', text: clarifyHeard, context: q }, { timeout: 10000 });
+            const parsed = data.parsed || {};
+            if (parsed[key] !== undefined && parsed[key] !== null) parsedVal = parsed[key];
+          } catch (err) { console.warn('[VoiceIntake] clarification parse error:', err.message); }
+          setIsThinking(false);
+        }
+      }
+
+      if (parsedVal !== null) {
+        collected[key] = parsedVal;
+        onLiveUpdate?.('step1', key, parsedVal);
+      }
       setCollectedData(prev => ({ ...prev, [key]: collected[key] }));
     }
 
@@ -183,7 +209,7 @@ export default function VoiceIntake({
     await speak(`Great! I've recorded: ${summary || 'your basic information'}. Moving to medical history.`);
     if (cancelRef.current) return;
     onStep1Done({ age: collected.age || step1Data?.age || '', gender: collected.gender || step1Data?.gender || '', weightKg: collected.weightKg || step1Data?.weightKg || '', heightCm: collected.heightCm || step1Data?.heightCm || '', bloodGroup: collected.bloodGroup || step1Data?.bloodGroup || '' });
-  }, [askWithRetry, speak, closeWithHint, onStep1Done, step1Data, onLiveUpdate]);
+  }, [askWithRetry, askAndListen, speak, closeWithHint, onStep1Done, step1Data, onLiveUpdate]);
 
   const runStep2 = useCallback(async () => {
     const api = (await import('../services/api')).default;
@@ -198,20 +224,36 @@ export default function VoiceIntake({
       const heard = await askWithRetry(q);
       if (cancelRef.current) return;
       if (heard === null) {
-        await closeWithHint('I was unable to hear your response. Please try voice mode again, or fill in the form manually. Closing now.');
+        await closeWithHint('I was unable to hear your response after three attempts. Please try voice mode again, or fill in the form manually.', true);
         return;
       }
 
       setIsThinking(true);
+      let rawVal = undefined;
       try {
-        const { data } = await api.post('/voice/parse', { step: parseStep, text: heard, context: q });
-        const raw = data.parsed;
-        if (Array.isArray(raw)) collected[key] = raw;
-        else if (typeof raw === 'string') collected[key] = raw.trim().toLowerCase();
-        else if (raw != null) collected[key] = raw;
-        if (collected[key] !== undefined) onLiveUpdate?.('step2', key, collected[key]);
+        const { data } = await api.post('/voice/parse', { step: parseStep, text: heard, context: q }, { timeout: 10000 });
+        rawVal = data.parsed;
       } catch (err) { console.warn('[VoiceIntake] parse error:', err.message); }
       setIsThinking(false);
+
+      // Clarification: heard something but parse returned empty/null
+      const isEmpty2 = rawVal == null || (Array.isArray(rawVal) && rawVal.length === 0) || rawVal === '';
+      if (isEmpty2 && !cancelRef.current) {
+        const clarifyHeard = await askAndListen("I didn't quite understand. Could you please repeat your answer?");
+        if (!cancelRef.current && clarifyHeard && clarifyHeard.trim() && !clarifyHeard.toLowerCase().includes('skip')) {
+          setIsThinking(true);
+          try {
+            const { data } = await api.post('/voice/parse', { step: parseStep, text: clarifyHeard, context: q }, { timeout: 10000 });
+            rawVal = data.parsed;
+          } catch (err) { console.warn('[VoiceIntake] clarification parse error:', err.message); }
+          setIsThinking(false);
+        }
+      }
+
+      if (Array.isArray(rawVal)) collected[key] = rawVal;
+      else if (typeof rawVal === 'string') collected[key] = rawVal.trim().toLowerCase();
+      else if (rawVal != null) collected[key] = rawVal;
+      if (collected[key] !== undefined) onLiveUpdate?.('step2', key, collected[key]);
       setCollectedData(prev => ({ ...prev, [key]: collected[key] }));
     }
 
@@ -219,7 +261,7 @@ export default function VoiceIntake({
     await speak("Thank you. Now let's talk about your current symptoms.");
     if (cancelRef.current) return;
     onStep2Done({ existingConditions: collected.existingConditions ?? step2Data?.existingConditions ?? [], allergies: collected.allergies ?? step2Data?.allergies ?? [], currentMedications: collected.currentMedications ?? step2Data?.currentMedications ?? [], smokingStatus: collected.smokingStatus ?? step2Data?.smokingStatus ?? '', alcoholUse: collected.alcoholUse ?? step2Data?.alcoholUse ?? '' });
-  }, [askWithRetry, speak, closeWithHint, onStep2Done, step2Data, onLiveUpdate]);
+  }, [askWithRetry, askAndListen, speak, closeWithHint, onStep2Done, step2Data, onLiveUpdate]);
 
   const runStep3 = useCallback(async () => {
     const api = (await import('../services/api')).default;
@@ -229,20 +271,37 @@ export default function VoiceIntake({
     const heard1 = await askWithRetry(SYMPTOM_Q);
     if (cancelRef.current) return;
     if (heard1 === null) {
-      await closeWithHint('I was unable to hear your symptoms. Please use the form to select them manually. Closing now.');
+      await closeWithHint('I was unable to hear your symptoms after three attempts. Please use the form to select them manually.', true);
       return;
     }
 
     let symptomNames = [];
     setIsThinking(true);
     try {
-      const { data } = await api.post('/voice/parse', { step: 'step3symptoms', text: heard1, context: SYMPTOM_Q });
+      const { data } = await api.post('/voice/parse', { step: 'step3symptoms', text: heard1, context: SYMPTOM_Q }, { timeout: 10000 });
       symptomNames = Array.isArray(data.parsed) ? data.parsed : [];
     } catch (err) { console.warn('[VoiceIntake] symptom parse error:', err.message); }
     setIsThinking(false);
 
+    // Clarification: heard something but couldn't extract any symptom names
+    if (!symptomNames.length && !cancelRef.current) {
+      const clarifyHeard = await askAndListen("I didn't catch any symptoms. Could you list them again? For example: fever, headache, cough.");
+      if (!cancelRef.current && clarifyHeard && clarifyHeard.trim()) {
+        setIsThinking(true);
+        try {
+          const { data } = await api.post('/voice/parse', { step: 'step3symptoms', text: clarifyHeard, context: SYMPTOM_Q }, { timeout: 10000 });
+          symptomNames = Array.isArray(data.parsed) ? data.parsed : [];
+        } catch (err) { console.warn('[VoiceIntake] symptom clarify error:', err.message); }
+        setIsThinking(false);
+      }
+    }
+
     if (!symptomNames.length) {
-      await speak('I could not detect any symptoms. Please try again or use the form to select them.');
+      await speak('I could not detect any symptoms. Please use the form to select them manually. Closing now.');
+      cancelRef.current = true;
+      running.current = false;
+      setPhase('idle');
+      onFailure();
       return;
     }
 
@@ -262,7 +321,7 @@ export default function VoiceIntake({
       if (heard2 !== null && heard2.trim()) {
         setIsThinking(true);
         try {
-          const { data } = await api.post('/voice/parse', { step: 'step3detail', text: heard2, symptomName: name });
+          const { data } = await api.post('/voice/parse', { step: 'step3detail', text: heard2, symptomName: name }, { timeout: 10000 });
           details = { ...details, ...(data.parsed || {}) };
         } catch (err) { console.warn('[VoiceIntake] detail parse error:', err.message); }
         setIsThinking(false);
@@ -274,7 +333,7 @@ export default function VoiceIntake({
     await speak('All done! Sending your symptoms for analysis now.');
     if (cancelRef.current) return;
     onStep3Done(finalSymptoms);
-  }, [askWithRetry, speak, closeWithHint, onStep3Done]);
+  }, [askWithRetry, askAndListen, speak, closeWithHint, onStep3Done, onFailure]);
 
   // ── Start / Stop ──────────────────────────────────────────────────────────
   const startVoice = useCallback(async () => {
