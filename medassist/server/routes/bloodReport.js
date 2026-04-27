@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const path = require('path');
+const fs = require('fs');
 const verifyToken = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const { extractBloodValuesFromImage } = require('../services/geminiService');
@@ -18,13 +19,13 @@ router.post('/upload', verifyToken, upload.single('report'), async (req, res) =>
   const { sessionId } = req.body;
   const filePath = req.file.path;
   const mimeType = req.file.mimetype;
-  const relativePath = path.relative(
-    path.join(__dirname, '..'),
-    filePath
-  ).replace(/\\/g, '/');
+  const relativePath = req.file.originalname;
 
   try {
     const extractedValues = await extractBloodValuesFromImage(filePath, mimeType);
+
+    // Delete the file immediately after OCR — Render's disk is ephemeral anyway
+    fs.unlink(filePath, () => {});
 
     const { rows } = await pool.query(
       `INSERT INTO blood_reports
