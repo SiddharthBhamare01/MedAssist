@@ -6,6 +6,10 @@ const rateLimit = require('express-rate-limit');
 
 const app = express();
 
+// Trust Render's (and any reverse proxy's) X-Forwarded-For header so
+// express-rate-limit can identify real client IPs correctly.
+app.set('trust proxy', 1);
+
 // CORS — allow dev server + production frontend URL
 const ALLOWED_ORIGINS = [
   process.env.CLIENT_URL,

@@ -33,8 +33,8 @@ async function callWithFallback(messages, options = {}) {
       return completion.choices[0].message.content.trim();
     } catch (err) {
       const status = err?.status || err?.response?.status;
-      if (status === 429 || status === 503) {
-        console.warn(`[voice/parse] ${name} rate-limited (${status}), trying next provider…`);
+      if (status === 401 || status === 429 || status === 503) {
+        console.warn(`[voice/parse] ${name} unavailable (${status}), trying next provider…`);
         lastErr = err;
         continue;
       }
