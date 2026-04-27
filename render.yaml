@@ -15,7 +15,7 @@ services:
     region: oregon
     plan: free
     rootDir: medassist/server
-    buildCommand: npm ci
+    buildCommand: npm ci && npx puppeteer browsers install chrome
     startCommand: node index.js
     healthCheckPath: /api/health
     envVars:
@@ -23,8 +23,6 @@ services:
         value: production
       - key: PORT
         value: 10000
-      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
-        value: false
       # Secrets — set in Render dashboard (Environment tab)
       - key: DATABASE_URL
         sync: false

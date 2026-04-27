@@ -580,7 +580,7 @@ export default function Analysis() {
                   <div className="relative w-32 h-32 shrink-0">
                     <svg className="w-32 h-32 -rotate-90" viewBox="0 0 120 120">
                       <circle cx="60" cy="60" r="52" fill="none" stroke="#e2e8f0" strokeWidth="10" />
-                      <circle cx="60" cy="60" r="52" fill="none" className={ls.ring} strokeWidth="10"
+                      <circle cx="60" cy="60" r="52" fill="none" stroke="currentColor" className={ls.ring} strokeWidth="10"
                         strokeDasharray={`${(s || 0) * 3.267} 326.7`}
                         strokeLinecap="round" />
                     </svg>
