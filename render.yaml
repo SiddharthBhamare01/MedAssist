@@ -2,10 +2,11 @@
 ## Docs: https://render.com/docs/blueprint-spec
 ##
 ## After connecting this repo in Render dashboard, set these env vars:
-##   DATABASE_URL, JWT_SECRET, GROQ_API_KEY, GEMINI_API_KEY,
-##   CEREBRAS_API_KEY, SAMBANOVA_API_KEY, OPENROUTER_API_KEY,
-##   GITHUB_TOKEN, HELICONE_API_KEY, CLIENT_URL (= your Vercel frontend URL),
-##   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, EMAIL_USER, EMAIL_PASS
+##   DATABASE_URL, JWT_SECRET, CEREBRAS_API_KEY, SAMBANOVA_API_KEY,
+##   OPENROUTER_API_KEY, GITHUB_TOKEN, HELICONE_API_KEY,
+##   CLIENT_URL (= your Vercel frontend URL), GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+##   SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS,
+##   ELEVENLABS_API_KEY, OPENFDA_API_KEY
 
 services:
   - type: web
@@ -28,10 +29,6 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: JWT_SECRET
-        sync: false
-      - key: GROQ_API_KEY
-        sync: false
-      - key: GEMINI_API_KEY
         sync: false
       - key: CEREBRAS_API_KEY
         sync: false
@@ -59,4 +56,8 @@ services:
       - key: SMTP_USER
         sync: false
       - key: SMTP_PASS
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: OPENFDA_API_KEY
         sync: false
