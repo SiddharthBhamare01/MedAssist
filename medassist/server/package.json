@@ -30,7 +30,8 @@
     "pdf-parse": "^1.1.1",
     "pdfkit": "^0.18.0",
     "pg": "^8.20.0",
-    "puppeteer": "^24.42.0",
+    "@sparticuz/chromium": "^133.0.0",
+    "puppeteer-core": "^24.42.0",
     "qrcode": "^1.5.4",
     "speakeasy": "^2.0.0"
   },

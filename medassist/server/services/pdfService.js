@@ -1,4 +1,5 @@
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
+const chromium = require('@sparticuz/chromium');
 
 /** Sanitize a string — strip garbled unicode, keep printable ASCII + common medical symbols */
 function sanitize(str) {
@@ -354,60 +355,42 @@ function buildHtml({ patientName, disease, symptoms, analysis, tabletRecommendat
 </html>`;
 }
 
-// Browser resolution order:
-//   1. Puppeteer's own bundled Chrome (works on Linux/Render; blocked on Windows by App Control)
-//   2. Windows system Chrome / Edge (fallback for Windows dev)
-//   3. Linux system Chromium (fallback for servers without puppeteer download)
-const SYSTEM_BROWSERS = [
-  // Windows
+// Local system browsers for development (Windows / macOS / Linux desktop)
+const LOCAL_BROWSERS = [
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
   'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-  // Linux (Render, Railway, Ubuntu)
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/usr/bin/google-chrome-stable',
   '/usr/bin/google-chrome',
   '/usr/bin/chromium-browser',
   '/usr/bin/chromium',
-  '/snap/bin/chromium',
-  // macOS
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 ];
 
-function findBrowser() {
+function findLocalBrowser() {
   const fs = require('fs');
-  // 1. Try puppeteer's bundled Chrome (downloaded via npm install)
-  try {
-    const bundled = puppeteer.executablePath();
-    if (bundled && fs.existsSync(bundled)) return bundled;
-  } catch { /* not available */ }
-  // 2. Fall back to system browsers
-  for (const p of SYSTEM_BROWSERS) {
+  for (const p of LOCAL_BROWSERS) {
     if (fs.existsSync(p)) return p;
   }
   return null;
 }
 
-/**
- * Generate a polished PDF from session/report data.
- * Uses Puppeteer with the best available Chrome/Chromium for the current platform.
- * Returns a Promise<Buffer>.
- */
 async function generateSessionPDF(sessionData) {
   const html = buildHtml(sessionData);
 
-  const executablePath = findBrowser();
-  if (!executablePath) {
-    throw new Error(
-      'No Chrome/Chromium found. Install Chrome or run: npx puppeteer browsers install chrome'
-    );
-  }
+  // On cloud (Render, Lambda) use @sparticuz/chromium; locally fall back to system Chrome.
+  const localPath = findLocalBrowser();
+  const executablePath = localPath || (await chromium.executablePath());
+  const launchArgs = localPath
+    ? ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+    : chromium.args;
 
   console.log('[pdfService] Using browser:', executablePath);
   const browser = await puppeteer.launch({
-    headless: true,
+    headless: localPath ? true : chromium.headless,
     executablePath,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    args: launchArgs,
   });
 
   try {

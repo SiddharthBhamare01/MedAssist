@@ -15,7 +15,7 @@ services:
     region: oregon
     plan: free
     rootDir: medassist/server
-    buildCommand: npm ci && npx puppeteer browsers install chrome
+    buildCommand: npm ci
     startCommand: node index.js
     healthCheckPath: /api/health
     envVars:
