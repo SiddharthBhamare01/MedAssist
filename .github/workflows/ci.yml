@@ -100,7 +100,7 @@ jobs:
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}")
           echo "Render response: $STATUS"
-          [ "$STATUS" = "200" ] || [ "$STATUS" = "201" ] || \
+          [ "$STATUS" = "200" ] || [ "$STATUS" = "201" ] || [ "$STATUS" = "202" ] || \
             { echo "Deploy hook failed ($STATUS)"; exit 1; }
 
       - name: Wait for backend to come online
