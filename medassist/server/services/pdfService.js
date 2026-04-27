@@ -354,17 +354,34 @@ function buildHtml({ patientName, disease, symptoms, analysis, tabletRecommendat
 </html>`;
 }
 
-// System browser paths — Puppeteer's bundled Chromium is blocked by Windows Application Control,
-// so we use the installed Chrome or Edge (both are signed system binaries).
+// Browser resolution order:
+//   1. Puppeteer's own bundled Chrome (works on Linux/Render; blocked on Windows by App Control)
+//   2. Windows system Chrome / Edge (fallback for Windows dev)
+//   3. Linux system Chromium (fallback for servers without puppeteer download)
 const SYSTEM_BROWSERS = [
+  // Windows
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
   'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+  // Linux (Render, Railway, Ubuntu)
+  '/usr/bin/google-chrome-stable',
+  '/usr/bin/google-chrome',
+  '/usr/bin/chromium-browser',
+  '/usr/bin/chromium',
+  '/snap/bin/chromium',
+  // macOS
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 ];
 
-function findSystemBrowser() {
+function findBrowser() {
   const fs = require('fs');
+  // 1. Try puppeteer's bundled Chrome (downloaded via npm install)
+  try {
+    const bundled = puppeteer.executablePath();
+    if (bundled && fs.existsSync(bundled)) return bundled;
+  } catch { /* not available */ }
+  // 2. Fall back to system browsers
   for (const p of SYSTEM_BROWSERS) {
     if (fs.existsSync(p)) return p;
   }
@@ -373,17 +390,20 @@ function findSystemBrowser() {
 
 /**
  * Generate a polished PDF from session/report data.
- * Uses Puppeteer with the system Chrome/Edge (avoids Application Control blocks on bundled Chromium).
+ * Uses Puppeteer with the best available Chrome/Chromium for the current platform.
  * Returns a Promise<Buffer>.
  */
 async function generateSessionPDF(sessionData) {
   const html = buildHtml(sessionData);
 
-  const executablePath = findSystemBrowser();
+  const executablePath = findBrowser();
   if (!executablePath) {
-    throw new Error('No supported browser found. Install Chrome or Edge to enable PDF export.');
+    throw new Error(
+      'No Chrome/Chromium found. Install Chrome or run: npx puppeteer browsers install chrome'
+    );
   }
 
+  console.log('[pdfService] Using browser:', executablePath);
   const browser = await puppeteer.launch({
     headless: true,
     executablePath,

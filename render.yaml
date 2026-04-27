@@ -1,0 +1,56 @@
+## Render.com — Backend only (frontend is on Vercel)
+## Docs: https://render.com/docs/blueprint-spec
+##
+## After connecting this repo in Render dashboard, set these env vars:
+##   DATABASE_URL, JWT_SECRET, GROQ_API_KEY, GEMINI_API_KEY,
+##   CEREBRAS_API_KEY, SAMBANOVA_API_KEY, OPENROUTER_API_KEY,
+##   GITHUB_TOKEN, HELICONE_API_KEY, CLIENT_URL (= your Vercel frontend URL),
+##   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, EMAIL_USER, EMAIL_PASS
+
+services:
+  - type: web
+    name: medassist-backend
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: medassist/server
+    buildCommand: npm ci
+    startCommand: node index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: false
+      # Secrets — set in Render dashboard (Environment tab)
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CEREBRAS_API_KEY
+        sync: false
+      - key: SAMBANOVA_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: HELICONE_API_KEY
+        sync: false
+      # CLIENT_URL = your Vercel frontend URL, e.g. https://medassist.vercel.app
+      - key: CLIENT_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false

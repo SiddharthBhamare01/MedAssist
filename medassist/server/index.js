@@ -6,10 +6,20 @@ const rateLimit = require('express-rate-limit');
 
 const app = express();
 
-// CORS — allow React dev server
+// CORS — allow dev server + production frontend URL
+const ALLOWED_ORIGINS = [
+  process.env.CLIENT_URL,
+  'http://localhost:5173',
+  'http://localhost:5174',
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
-  credentials: true
+  origin: (origin, cb) => {
+    // Allow server-to-server calls (no Origin header) and listed origins
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    cb(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  credentials: true,
 }));
 
 app.use(express.json({ limit: '10mb' }));
