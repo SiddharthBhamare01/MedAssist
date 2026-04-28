@@ -59,7 +59,7 @@ export default function SharedReport() {
     );
   }
 
-  const { analysis, tabletRecommendations, disease, patientName } = data || {};
+  const { analysis, disease, patientName } = data || {};
   const summary = analysis?.summary;
 
   return (
@@ -134,29 +134,6 @@ export default function SharedReport() {
           </div>
         )}
 
-        {/* Tablets */}
-        {tabletRecommendations?.length > 0 && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
-            <h2 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">
-              Tablet Recommendations
-            </h2>
-            <div className="space-y-3">
-              {tabletRecommendations.map((med, i) => (
-                <div key={i} className="border border-slate-200 rounded-xl p-4 bg-slate-50">
-                  <h3 className="font-bold text-slate-800">{med.name}</h3>
-                  <div className="grid grid-cols-3 gap-2 text-sm mt-2">
-                    <div><span className="text-xs text-slate-400">Dosage:</span> <span className="text-slate-700">{med.dosage || '--'}</span></div>
-                    <div><span className="text-xs text-slate-400">Frequency:</span> <span className="text-slate-700">{med.frequency || '--'}</span></div>
-                    <div><span className="text-xs text-slate-400">Duration:</span> <span className="text-slate-700">{med.duration || '--'}</span></div>
-                  </div>
-                  {med.reason && (
-                    <p className="text-xs text-slate-500 mt-2 border-t border-slate-200 pt-2">{med.reason}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Diet */}
         {analysis?.diet_plan && (

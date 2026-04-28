@@ -98,7 +98,7 @@ export default function Analysis() {
             applyResult({
               reportId: data.id,
               analysis: a,
-              tabletRecommendations: data.tablet_recommendations || [],
+
               doctorReferralNeeded: data.complexity_flag || false,
               riskScores: data.risk_scores || null,
               followUp: data.follow_up || null,
