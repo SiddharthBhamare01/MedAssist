@@ -1,4 +1,4 @@
-const { getPrimaryProvider } = require('../utils/aiClients');
+const { getProviders, getAvailableProviders } = require('../utils/aiClients');
 
 const SYSTEM_PROMPT = `You are a medical follow-up scheduler. Given a patient's abnormal blood report findings and their current medication plan, recommend a follow-up testing schedule.
 
@@ -30,7 +30,8 @@ Guidelines:
  * @returns {Array} follow-up schedule
  */
 async function runFollowUpAgent({ abnormalFindings, tabletRecommendations }) {
-  const provider = getPrimaryProvider();
+  const providers = getProviders();
+  const available = getAvailableProviders();
 
   const userMessage = `Abnormal Findings:
 ${JSON.stringify(abnormalFindings, null, 2)}
@@ -40,39 +41,52 @@ ${JSON.stringify(tabletRecommendations, null, 2)}
 
 Generate a follow-up testing schedule.`;
 
-  const response = await provider.client.chat.completions.create({
-    model: provider.model,
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: userMessage },
-    ],
-    temperature: 0.2,
-    max_tokens: 1200,
-  });
+  let lastErr;
+  for (const name of available) {
+    const provider = providers[name];
+    try {
+      const response = await provider.client.chat.completions.create({
+        model: provider.model,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: userMessage },
+        ],
+        temperature: 0.2,
+        max_tokens: 1200,
+      });
 
-  const content = response.choices[0]?.message?.content || '[]';
+      const content = response.choices[0]?.message?.content || '[]';
+      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+      const jsonStr = jsonMatch ? jsonMatch[1].trim() : content;
 
-  // Extract JSON from response
-  let jsonStr = content;
-  const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (jsonMatch) {
-    jsonStr = jsonMatch[1].trim();
+      try {
+        const parsed = JSON.parse(jsonStr);
+        console.log(`[followUpAgent] Success via ${provider.name}`);
+        return Array.isArray(parsed) ? parsed.slice(0, 3) : [];
+      } catch {
+        console.error(`[followUpAgent] ${provider.name} returned non-JSON:`, content.slice(0, 200));
+        lastErr = new Error('Non-JSON response from follow-up model');
+        continue;
+      }
+    } catch (err) {
+      if (err.status === 429 || err.status === 503 || err.status === 400) {
+        console.warn(`[followUpAgent] ${provider.name} rate-limited (${err.status}), trying next`);
+        lastErr = err;
+        continue;
+      }
+      throw err;
+    }
   }
 
-  try {
-    const parsed = JSON.parse(jsonStr);
-    return Array.isArray(parsed) ? parsed.slice(0, 3) : [];
-  } catch (err) {
-    console.error('[followUpAgent] Failed to parse JSON:', content);
-    return [
-      {
-        test: 'Comprehensive Metabolic Panel',
-        recheck_in: '3 months',
-        reason: 'General follow-up (AI response could not be parsed)',
-        priority: 'routine',
-      },
-    ];
-  }
+  console.error('[followUpAgent] All providers failed:', lastErr?.message);
+  return [
+    {
+      test: 'Comprehensive Metabolic Panel',
+      recheck_in: '3 months',
+      reason: 'General follow-up (service temporarily unavailable)',
+      priority: 'routine',
+    },
+  ];
 }
 
 module.exports = { runFollowUpAgent };
