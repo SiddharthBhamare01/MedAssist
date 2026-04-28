@@ -2,13 +2,22 @@
  * geminiService.js — Blood report OCR service
  *
  * Strategy:
- *   PDF   → pdf-parse extracts raw text → Cerebras (primary provider) parses structured values
- *   Image → Gemini Vision if key works, otherwise clear error asking user to upload PDF
+ *   Text PDF   → pdf-parse text → Cerebras/text AI parsing (fast)
+ *   Scanned PDF → pdftoppm converts first page to JPEG → OpenRouter vision OCR
+ *   JPEG/PNG   → OpenRouter vision OCR directly
+ *
+ * Vision models (OpenRouter free tier):
+ *   1. meta-llama/llama-3.2-11b-vision-instruct:free
+ *   2. qwen/qwen-2-vl-7b-instruct:free
+ *   Fallback: Gemini 1.5 Flash (if GEMINI_API_KEY is set)
  */
 
 const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const OpenAI = require('openai');
 
-const PARSE_PROMPT = `You are a medical data extraction AI.
+const TEXT_PARSE_PROMPT = `You are a medical data extraction AI.
 Below is raw text extracted from a blood test report.
 Extract ALL blood test values and return a JSON array ONLY — no markdown, no explanation.
 
@@ -29,20 +38,184 @@ Rules:
 - If a field is missing or unclear, use "" (empty string) for that field
 - Return ONLY the JSON array, nothing else`;
 
-/**
- * Extract blood values from a PDF using pdf-parse + Cerebras (primary AI provider).
- */
-async function extractFromPDF(filePath) {
-  const pdfParse = require('pdf-parse');
-  const buffer = fs.readFileSync(filePath);
-  const data = await pdfParse(buffer);
-  const rawText = data.text.trim();
+const VISION_PARSE_PROMPT = `You are a medical data extraction AI analyzing a blood test report.
+Look carefully at the entire image and extract ALL blood test values visible.
+Return a JSON array ONLY — no markdown, no explanation, no preamble.
 
-  if (!rawText) {
-    throw new Error('PDF appears to be a scanned image with no extractable text. Please upload a text-based PDF.');
+Required structure per item:
+{
+  "parameter": "Hemoglobin",
+  "abbreviation": "Hb",
+  "value": "13.2",
+  "unit": "g/dL",
+  "normal_range": "13.5–17.5",
+  "status": "low"
+}
+
+Rules:
+- "status" must be one of: "normal", "low", "high", "critical_low", "critical_high"
+- Determine status by comparing value to normal_range
+- Include ALL parameters visible (CBC, LFT, KFT, lipid panel, thyroid, etc.)
+- If a field is missing or unclear, use "" (empty string) for that field
+- Return ONLY the JSON array, nothing else`;
+
+// OpenRouter free vision models in priority order
+const OPENROUTER_VISION_MODELS = [
+  'meta-llama/llama-3.2-11b-vision-instruct:free',
+  'qwen/qwen-2-vl-7b-instruct:free',
+  'google/gemini-flash-1.5:free',
+];
+
+function getOpenRouterClient() {
+  if (!process.env.OPENROUTER_API_KEY) return null;
+  return new OpenAI({
+    apiKey: process.env.OPENROUTER_API_KEY,
+    baseURL: 'https://openrouter.ai/api/v1',
+    defaultHeaders: {
+      'HTTP-Referer': process.env.CLIENT_URL || 'https://medassist-ai.onrender.com',
+      'X-Title': 'MedAssist AI CS595',
+    },
+  });
+}
+
+/**
+ * Use OpenRouter free vision models to OCR a blood report image.
+ */
+async function extractWithOpenRouterVision(imageBuffer, mimeType) {
+  const client = getOpenRouterClient();
+  if (!client) {
+    throw new Error('OPENROUTER_API_KEY is not configured. Cannot process image/scanned documents.');
   }
 
-  // Truncate to ~15 000 chars — enough for any blood report, avoids provider token limits
+  const base64 = imageBuffer.toString('base64');
+  const dataUrl = `data:${mimeType};base64,${base64}`;
+
+  console.log(`[geminiService] OpenRouter Vision OCR — ${mimeType}, ${Math.round(imageBuffer.length / 1024)}KB`);
+
+  let lastErr;
+  for (const model of OPENROUTER_VISION_MODELS) {
+    try {
+      const response = await client.chat.completions.create({
+        model,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: VISION_PARSE_PROMPT },
+              { type: 'image_url', image_url: { url: dataUrl } },
+            ],
+          },
+        ],
+        temperature: 0.1,
+        max_tokens: 8000,
+      });
+
+      const raw = response.choices[0].message.content.trim();
+      const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+
+      let parsed;
+      try {
+        parsed = JSON.parse(clean);
+      } catch {
+        console.error(`[geminiService] ${model} returned non-JSON:`, raw.slice(0, 300));
+        lastErr = new Error('Vision model returned non-JSON response');
+        continue;
+      }
+
+      if (!Array.isArray(parsed)) {
+        lastErr = new Error('Vision model returned unexpected format — expected array');
+        continue;
+      }
+
+      console.log(`[geminiService] OpenRouter Vision (${model}) extracted ${parsed.length} values`);
+      return parsed;
+    } catch (err) {
+      const status = err.status || err.code;
+      if (status === 429 || status === 503 || status === 400 || status === 404 || status === 402) {
+        console.warn(`[geminiService] ${model} failed (${status}), trying next vision model`);
+        lastErr = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr || new Error('All OpenRouter vision models failed');
+}
+
+/**
+ * Use Gemini Vision as a fallback (requires GEMINI_API_KEY).
+ */
+async function extractWithGeminiVision(buffer, mimeType) {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error(
+      'All vision models failed and GEMINI_API_KEY is not set. ' +
+      'For scanned PDFs, try photographing the report and uploading as JPEG instead.'
+    );
+  }
+
+  const { GoogleGenerativeAI } = require('@google/generative-ai');
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+  console.log('[geminiService] Gemini Vision fallback OCR');
+
+  const result = await model.generateContent([
+    VISION_PARSE_PROMPT,
+    { inlineData: { data: buffer.toString('base64'), mimeType } },
+  ]);
+
+  const raw = result.response.text().trim();
+  const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+
+  let parsed;
+  try {
+    parsed = JSON.parse(clean);
+  } catch {
+    throw new Error('Gemini Vision could not extract structured values from this document.');
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error('Gemini Vision returned unexpected format.');
+  }
+
+  console.log(`[geminiService] Gemini Vision extracted ${parsed.length} values`);
+  return parsed;
+}
+
+/**
+ * Convert first page of a scanned PDF to JPEG using pdftoppm (available on Linux/Render).
+ * Returns null if pdftoppm is not available.
+ */
+async function convertScannedPDFToImage(pdfPath) {
+  const { execSync } = require('child_process');
+  const tmpDir = os.tmpdir();
+  const outBase = path.join(tmpDir, `pdf_ocr_${Date.now()}`);
+
+  try {
+    execSync(`pdftoppm -jpeg -r 200 -singlefile -f 1 -l 1 "${pdfPath}" "${outBase}"`, {
+      timeout: 30000,
+      stdio: 'pipe',
+    });
+
+    // pdftoppm outputs outBase.jpg or outBase-1.jpg depending on version
+    let jpegPath = `${outBase}.jpg`;
+    if (!fs.existsSync(jpegPath)) jpegPath = `${outBase}-1.jpg`;
+    if (!fs.existsSync(jpegPath)) throw new Error('pdftoppm produced no output file');
+
+    const buffer = fs.readFileSync(jpegPath);
+    fs.unlink(jpegPath, () => {});
+    console.log(`[geminiService] pdftoppm: PDF → JPEG (${Math.round(buffer.length / 1024)}KB)`);
+    return buffer;
+  } catch (err) {
+    console.warn('[geminiService] pdftoppm unavailable or failed:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Parse raw text from a text-based PDF using Cerebras/SambaNova/OpenRouter.
+ */
+async function parseTextWithAI(rawText) {
   const truncatedText = rawText.length > 15000 ? rawText.slice(0, 15000) + '\n[truncated]' : rawText;
 
   const { getProviders, getAvailableProviders } = require('../utils/aiClients');
@@ -56,7 +229,7 @@ async function extractFromPDF(filePath) {
       const response = await provider.client.chat.completions.create({
         model: provider.model,
         messages: [
-          { role: 'system', content: PARSE_PROMPT },
+          { role: 'system', content: TEXT_PARSE_PROMPT },
           { role: 'user', content: `Blood report text:\n\n${truncatedText}` },
         ],
         temperature: 0.1,
@@ -76,28 +249,75 @@ async function extractFromPDF(filePath) {
       }
 
       if (!Array.isArray(parsed)) { lastErr = new Error('Expected array from AI parser'); continue; }
-      console.log(`[geminiService] PDF parsed by ${provider.name}`);
+      console.log(`[geminiService] Text PDF parsed by ${provider.name}`);
       return parsed;
     } catch (err) {
       if (err.status === 429 || err.status === 503 || err.status === 400) { lastErr = err; continue; }
       throw err;
     }
   }
-  throw lastErr || new Error('All AI providers failed to parse PDF');
+  throw lastErr || new Error('All AI providers failed to parse PDF text');
+}
+
+/**
+ * Extract blood values from a PDF.
+ * Fast path: pdf-parse text → AI text parser.
+ * Scanned path: pdftoppm → JPEG → vision OCR.
+ */
+async function extractFromPDF(filePath) {
+  const pdfParse = require('pdf-parse');
+  const buffer = fs.readFileSync(filePath);
+  const data = await pdfParse(buffer);
+  const rawText = data.text.trim();
+
+  if (rawText && rawText.length > 50) {
+    console.log('[geminiService] Text PDF detected, using text extraction path');
+    return await parseTextWithAI(rawText);
+  }
+
+  // Scanned PDF — no extractable text layer
+  console.log('[geminiService] Scanned PDF detected, converting to image for OCR');
+
+  const jpegBuffer = await convertScannedPDFToImage(filePath);
+  if (jpegBuffer) {
+    try {
+      return await extractWithOpenRouterVision(jpegBuffer, 'image/jpeg');
+    } catch (err) {
+      console.warn('[geminiService] OpenRouter vision failed, trying Gemini fallback:', err.message);
+      return await extractWithGeminiVision(jpegBuffer, 'image/jpeg');
+    }
+  }
+
+  // pdftoppm not available — try raw PDF with Gemini Vision
+  try {
+    return await extractWithGeminiVision(buffer, 'application/pdf');
+  } catch (err) {
+    throw new Error(
+      'Could not process this scanned PDF. ' +
+      'Please photograph your report and upload as JPEG/PNG instead.'
+    );
+  }
 }
 
 /**
  * Main export: routes to correct extractor based on file type.
- * Image OCR is not supported (no vision model configured) — PDF only.
  */
 async function extractBloodValuesFromImage(filePath, mimeType) {
   if (mimeType === 'application/pdf') {
     return await extractFromPDF(filePath);
   }
 
-  throw new Error(
-    'Image uploads are not supported. Please convert your blood report to a text-based PDF and upload that instead.'
-  );
+  if (mimeType === 'image/jpeg' || mimeType === 'image/png') {
+    const buffer = fs.readFileSync(filePath);
+    try {
+      return await extractWithOpenRouterVision(buffer, mimeType);
+    } catch (err) {
+      console.warn('[geminiService] OpenRouter vision failed, trying Gemini fallback:', err.message);
+      return await extractWithGeminiVision(buffer, mimeType);
+    }
+  }
+
+  throw new Error(`Unsupported file type: ${mimeType}. Please upload a PDF, JPEG, or PNG.`);
 }
 
 module.exports = { extractBloodValuesFromImage };
