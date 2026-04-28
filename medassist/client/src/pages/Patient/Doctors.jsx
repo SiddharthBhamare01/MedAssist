@@ -293,6 +293,8 @@ function DoctorCard({ doctor, selected, onClick, directionsUrl }) {
 export default function Doctors() {
   const [userLocation, setUserLocation]     = useState(null);
   const [locationStatus, setLocationStatus] = useState('idle');
+  const [cityQuery, setCityQuery]           = useState('');
+  const [geocoding, setGeocoding]           = useState(false);
 
   const [allDoctors, setAllDoctors] = useState([]);
   const [loading, setLoading]       = useState(false);
@@ -415,6 +417,31 @@ export default function Doctors() {
     );
   }
 
+  async function searchByCity(e) {
+    e.preventDefault();
+    if (!cityQuery.trim()) return;
+    setGeocoding(true);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cityQuery.trim())}&format=json&limit=1`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
+      const data = await res.json();
+      if (!data.length) { toast.error('City not found. Try a different name.'); return; }
+      const { lat, lon, display_name } = data[0];
+      const coords = [parseFloat(lat), parseFloat(lon)];
+      setUserLocation(coords);
+      setLocationStatus('granted');
+      hasFetchedRef.current = true;
+      fetchDoctors(coords[0], coords[1], radius);
+      toast.success(`Showing results near ${display_name.split(',')[0]}`);
+    } catch {
+      toast.error('Geocoding failed. Check your connection.');
+    } finally {
+      setGeocoding(false);
+    }
+  }
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { requestLocation(); }, []);
 
@@ -442,19 +469,47 @@ export default function Doctors() {
 
   // ── Pre-location screen ──────────────────────────────────────────────────────
 
-  if (locationStatus === 'idle' || locationStatus === 'locating') {
+  if (locationStatus === 'idle' || locationStatus === 'locating' || locationStatus === 'denied') {
     return (
       <div className="flex-1 flex items-center justify-center bg-slate-50 min-h-screen">
-        <div className="text-center space-y-4 p-8 max-w-sm">
-          <div className="w-20 h-20 bg-teal-100 rounded-full flex items-center justify-center mx-auto text-4xl">📍</div>
-          <h2 className="text-xl font-bold text-slate-800">Allow location access</h2>
+        <div className="text-center space-y-4 p-8 max-w-sm w-full">
+          <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto text-4xl ${locationStatus === 'denied' ? 'bg-amber-100' : 'bg-teal-100'}`}>
+            {locationStatus === 'denied' ? '🔒' : '📍'}
+          </div>
+          <h2 className="text-xl font-bold text-slate-800">
+            {locationStatus === 'denied' ? 'Location access blocked' : 'Allow location access'}
+          </h2>
           <p className="text-slate-500 text-sm leading-relaxed">
-            MedAssist needs your location to show real doctors, clinics, and pharmacies near you using live OpenStreetMap data.
+            {locationStatus === 'denied'
+              ? 'Your browser blocked location access. You can enable it in browser settings, or search by city below.'
+              : 'MedAssist needs your location to show real doctors, clinics, and pharmacies near you using live OpenStreetMap data.'}
           </p>
           {locationStatus === 'locating' && (
             <div className="flex items-center justify-center gap-2 text-teal-600 text-sm">
               <div className="animate-spin w-4 h-4 border-2 border-teal-600 border-t-transparent rounded-full" />
               Waiting for browser permission…
+            </div>
+          )}
+          {locationStatus === 'denied' && (
+            <div className="space-y-3">
+              <button onClick={() => requestLocation({ highAccuracy: false })}
+                className="w-full flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors">
+                📍 Try allowing location again
+              </button>
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <div className="flex-1 h-px bg-slate-200" /> or search by city <div className="flex-1 h-px bg-slate-200" />
+              </div>
+              <form onSubmit={searchByCity} className="flex gap-2">
+                <input
+                  type="text" value={cityQuery} onChange={e => setCityQuery(e.target.value)}
+                  placeholder="e.g. Chicago, New York..."
+                  className="flex-1 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+                <button type="submit" disabled={geocoding || !cityQuery.trim()}
+                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors">
+                  {geocoding ? '…' : 'Go'}
+                </button>
+              </form>
             </div>
           )}
         </div>
