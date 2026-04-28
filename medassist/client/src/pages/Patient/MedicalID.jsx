@@ -22,7 +22,15 @@ export default function MedicalID() {
   const [saving,    setSaving]    = useState(false);
   const [copied,    setCopied]    = useState(false);
   const [hasPinSet, setHasPinSet] = useState(false);
-  const [isNew,     setIsNew]     = useState(true); // no Medical ID saved yet
+  const [isNew,     setIsNew]     = useState(true);
+  const [qrUrl,     setQrUrl]     = useState(null);
+
+  const fetchQr = async () => {
+    try {
+      const res = await api.get('/patient/medical-id/qr', { responseType: 'blob' });
+      setQrUrl(URL.createObjectURL(res.data));
+    } catch { /* ignore — QR is non-critical */ }
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -38,7 +46,9 @@ export default function MedicalID() {
 
         if (mid) {
           setIsNew(false);
-          setHasPinSet(!!mid.has_pin_set);
+          const pinSet = !!mid.has_pin_set;
+          setHasPinSet(pinSet);
+          if (pinSet) fetchQr();
           setForm({
             emergency_name:  mid.emergency_name  || '',
             emergency_phone: mid.emergency_phone || '',
@@ -84,7 +94,7 @@ export default function MedicalID() {
     setSaving(true);
     try {
       await api.put('/patient/medical-id', form);
-      if (form.pin) setHasPinSet(true);
+      if (form.pin) { setHasPinSet(true); fetchQr(); }
       setIsNew(false);
       toast.success('Medical ID saved');
     } catch (err) {
@@ -169,10 +179,10 @@ export default function MedicalID() {
               ? <p className="text-xs text-teal-600/70 mt-2">Anyone with this link must enter your PIN to view emergency info.</p>
               : <p className="text-xs text-amber-700 mt-2">Set a PIN in the Access PIN section below, then save — the link won't work until then.</p>
             }
-            {hasPinSet && (
+            {hasPinSet && qrUrl && (
               <div className="mt-4 flex items-center gap-4">
                 <img
-                  src={`${import.meta.env.VITE_API_URL}/api/patient/medical-id/qr`}
+                  src={qrUrl}
                   alt="QR code for Medical ID"
                   className="w-24 h-24 rounded-xl border border-teal-200 bg-white p-1"
                 />
