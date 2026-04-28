@@ -274,6 +274,26 @@ router.post('/reset-password', async (req, res) => {
     await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, resetToken.user_id]);
     await pool.query('UPDATE password_reset_tokens SET used = true WHERE id = $1', [resetToken.id]);
 
+    // Fetch email to send confirmation — fire-and-forget, don't block the response
+    pool.query('SELECT email, full_name FROM users WHERE id = $1', [resetToken.user_id])
+      .then(({ rows }) => {
+        if (!rows.length) return;
+        const { email, full_name } = rows[0];
+        sendEmail({
+          to: email,
+          subject: 'MedAssist AI — Your password was changed',
+          html: `
+            <h2>Password Changed Successfully</h2>
+            <p>Hi ${full_name || 'there'},</p>
+            <p>Your MedAssist AI account password was just reset successfully.</p>
+            <p>If you made this change, no action is needed.</p>
+            <p style="color:#dc2626;font-weight:bold;">If you did NOT request this change, your account may be compromised. Please contact support immediately or use "Forgot Password" to secure your account.</p>
+            <p style="color:#666;font-size:12px;margin-top:24px;">— MedAssist AI Team</p>
+          `,
+        }).catch((e) => console.warn('[auth] Password change email failed:', e.message));
+      })
+      .catch(() => {});
+
     res.json({ message: 'Password has been reset successfully' });
   } catch (err) {
     console.error('Reset password error:', err);
