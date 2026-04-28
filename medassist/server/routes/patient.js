@@ -467,9 +467,27 @@ router.get('/medical-id', verifyToken, async (req, res) => {
   }
 });
 
+// GET /api/patient/medical-id/qr — return QR code PNG for the public Medical ID link
+router.get('/medical-id/qr', verifyToken, async (req, res) => {
+  try {
+    const QRCode = require('qrcode');
+    const link = `${process.env.CLIENT_URL || 'http://localhost:5173'}/medical-id/${req.user.userId}`;
+    const png = await QRCode.toBuffer(link, { width: 300, margin: 2 });
+    res.setHeader('Content-Type', 'image/png');
+    res.send(png);
+  } catch (err) {
+    console.error('QR code error:', err);
+    res.status(500).json({ error: 'Failed to generate QR code' });
+  }
+});
+
 // PUT /api/patient/medical-id — save/update medical ID
 router.put('/medical-id', verifyToken, async (req, res) => {
   const { emergency_name, emergency_phone, blood_type, organ_donor, critical_notes, pin } = req.body;
+
+  if (pin && !/^\d{4}$/.test(String(pin))) {
+    return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
+  }
 
   try {
     let pinHash = null;

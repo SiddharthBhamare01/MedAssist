@@ -169,6 +169,18 @@ export default function MedicalID() {
               ? <p className="text-xs text-teal-600/70 mt-2">Anyone with this link must enter your PIN to view emergency info.</p>
               : <p className="text-xs text-amber-700 mt-2">Set a PIN in the Access PIN section below, then save — the link won't work until then.</p>
             }
+            {hasPinSet && (
+              <div className="mt-4 flex items-center gap-4">
+                <img
+                  src={`${import.meta.env.VITE_API_URL}/api/patient/medical-id/qr`}
+                  alt="QR code for Medical ID"
+                  className="w-24 h-24 rounded-xl border border-teal-200 bg-white p-1"
+                />
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Save or print this QR code. First responders can scan it to open your emergency page directly — no typing needed.
+                </p>
+              </div>
+            )}
           </>
         )}
       </div>

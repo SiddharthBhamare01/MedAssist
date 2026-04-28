@@ -64,7 +64,14 @@ app.use('/api/doctor-assist', require('./routes/doctorAssist'));
 app.use('/api/agent', require('./routes/agentStatus'));
 app.use('/api/appointments', require('./routes/appointments'));
 app.use('/api/admin', require('./routes/admin'));
-app.use('/api/shared', require('./routes/shared'));
+// PIN brute-force protection — 10 attempts per 15 min per IP
+const pinLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many PIN attempts. Please try again in 15 minutes.' },
+  skipSuccessfulRequests: true,
+});
+app.use('/api/shared', pinLimiter, require('./routes/shared'));
 app.use('/api/voice',  require('./routes/voice'));
 
 // Health check
