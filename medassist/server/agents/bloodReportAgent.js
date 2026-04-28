@@ -1,6 +1,5 @@
 const { runAgent, MAX_TURNS } = require('./agentRunner');
 const { runEnsembleWithConsensus } = require('./ensembleRunner');
-const { getProviders, getAvailableProviders } = require('../utils/aiClients');
 
 const { definitions: allDefinitions, handlers } = require('./tools/medicalTools');
 const pool = require('../db/pool');
@@ -88,13 +87,13 @@ Call tools in this order (keep it concise — max 5 tool calls total):
 
 When all tool calls are done, respond with exactly: TOOLS_COMPLETE`;
 
-// Phase 2a — medical sections only (summary + findings + tablets) ~1500 tokens output
+// Phase 2a — medical sections only (summary + findings) ~1000 tokens output
 const PHASE2A_SYSTEM = `You are a medical report formatter. Output ONLY valid JSON — no markdown, no extra text.
 
 Output this exact structure:
-{"summary":{"overall_assessment":"2-3 sentences","root_cause":"string","complexity":"Low|Medium|High","doctor_referral_needed":false,"referral_reason":null},"abnormal_findings":[{"parameter":"","your_value":"","normal_range":"","status":"high|low|critical_high|critical_low","interpretation":"1 sentence"}],"treatment_solutions":["advice 1","advice 2","advice 3"],"tablet_recommendations":[{"name":"","generic_name":"","dosage":"","frequency":"","duration":"","fda_approved":true,"contraindication_note":"","reason":""}]}
+{"summary":{"overall_assessment":"2-3 sentences","root_cause":"string","complexity":"Low|Medium|High","doctor_referral_needed":false,"referral_reason":null},"abnormal_findings":[{"parameter":"","your_value":"","normal_range":"","status":"high|low|critical_high|critical_low","interpretation":"1 sentence"}]}
 
-Rules: one tablet per abnormal condition (min 3 tablets), personalize dosage by weight/age, never use drugs patient is allergic to, doctor_referral_needed true if 3+ critical values.`;
+Rules: doctor_referral_needed true if 3+ critical values. Do NOT include treatment or medication fields.`;
 
 // Phase 2b — lifestyle sections only (diet + recovery) ~1500 tokens output
 const PHASE2B_SYSTEM = `You are a medical nutrition advisor. Output ONLY valid JSON — no markdown, no extra text.
@@ -103,130 +102,6 @@ Output this exact structure:
 {"diet_plan":{"overview":"1 sentence","foods_to_eat":[{"food":"","reason":"","frequency":""}],"foods_to_avoid":[{"food":"","reason":""}],"meal_schedule":[{"meal":"Breakfast","suggestion":""},{"meal":"Lunch","suggestion":""},{"meal":"Dinner","suggestion":""},{"meal":"Snacks","suggestion":""}]},"recovery_ingredients":[{"ingredient":"","benefit":"","how_to_use":"","targets":[""]}]}
 
 Rules: min 4 foods_to_eat, 3 foods_to_avoid, all 4 meal_schedule entries, min 3 recovery_ingredients. Target the specific abnormal parameters listed.`;
-
-// Phase 2c — Dedicated treatment solutions with FDA-approved medications
-const TREATMENT_SYSTEM = `You are a clinical pharmacologist. You MUST output ONLY valid JSON — no markdown fences, no explanation.
-
-Your task: generate a treatment plan with FDA-approved medications personalized to the patient's medical history.
-
-Output this EXACT structure:
-{"treatment_solutions":[{"condition":"the abnormal finding being treated","medication":"FDA-approved drug name","generic_name":"generic/chemical name","dosage":"personalized dose based on patient weight/age/gender","frequency":"e.g. twice daily, every 8 hours","duration":"e.g. 4 weeks, 3 months, ongoing","route":"oral|topical|injection|inhaled","fda_approved":true,"evidence":"brief clinical rationale","precautions":"contraindications considering patient allergies and existing conditions"}]}
-
-CRITICAL RULES:
-- Generate 3-5 treatment solutions, one per abnormal condition
-- ONLY FDA-approved medications — no supplements, no herbal remedies in this section
-- Personalize dosage by patient weight (mg/kg), age, and gender
-- Check patient allergies — NEVER recommend a drug the patient is allergic to
-- Check existing medications — flag potential interactions
-- Check existing conditions — adjust doses for renal/hepatic impairment if applicable
-- Include duration: acute conditions (1-4 weeks), chronic conditions (ongoing with review date)
-- If no medication is appropriate, recommend "Lifestyle modification + physician consult" with reason`;
-
-/**
- * Get the OpenRouter provider specifically. Falls back to any available provider.
- */
-function getOpenRouterOrFallback() {
-  const providers = getProviders();
-  const available = getAvailableProviders();
-
-  // Prefer OpenRouter to avoid burdening primary providers
-  if (available.includes('openrouter') && providers.openrouter?.client) {
-    return providers.openrouter;
-  }
-  // Fallback: use last available provider (least loaded)
-  if (available.length > 0) {
-    const last = available[available.length - 1];
-    return providers[last];
-  }
-  return null;
-}
-
-/**
- * Run treatment generation on OpenRouter with ensemble consensus.
- * Uses a dedicated judge to validate FDA approval and dosage safety.
- */
-async function generateTreatmentSolutions(sharedContext, conditionsList, patientProfile) {
-  const provider = getOpenRouterOrFallback();
-  if (!provider) {
-    console.warn('[bloodReportAgent] No provider available for treatment generation');
-    return null;
-  }
-
-  const allergyWarning = patientProfile?.allergies?.length
-    ? `\nPATIENT ALLERGIES (MUST AVOID): ${patientProfile.allergies.join(', ')}`
-    : '';
-  const medicationWarning = patientProfile?.current_medications?.length
-    ? `\nCURRENT MEDICATIONS (CHECK INTERACTIONS): ${patientProfile.current_medications.join(', ')}`
-    : '';
-  const conditionWarning = patientProfile?.existing_conditions?.length
-    ? `\nEXISTING CONDITIONS (ADJUST DOSES): ${patientProfile.existing_conditions.join(', ')}`
-    : '';
-
-  const treatmentUserMsg = `${sharedContext}
-${allergyWarning}${medicationWarning}${conditionWarning}
-
-Conditions requiring treatment: ${conditionsList}
-
-Generate the treatment JSON now. Remember: FDA-approved drugs ONLY, personalized dosages.`;
-
-  // Try ensemble if multiple providers available, otherwise single call
-  const available = getAvailableProviders();
-  if (available.length >= 2) {
-    try {
-      const { consensusRaw, agentCount } = await runEnsembleWithConsensus(
-        TREATMENT_SYSTEM,
-        treatmentUserMsg,
-        'treatment_plan',
-        3000
-      );
-      console.log(`[bloodReportAgent] Treatment ensemble (${agentCount} providers), length: ${consensusRaw.length}`);
-      try {
-        return JSON.parse(consensusRaw);
-      } catch {
-        const repaired = repairTruncatedJSON(consensusRaw);
-        if (repaired) return repaired;
-      }
-    } catch (err) {
-      console.warn('[bloodReportAgent] Treatment ensemble failed, trying single provider:', err.message);
-    }
-  }
-
-  // Single-provider fallback: use OpenRouter directly
-  try {
-    const modelsToTry = provider.fallbackModels || [provider.model];
-    let lastErr;
-    for (const model of modelsToTry) {
-      try {
-        const response = await provider.client.chat.completions.create({
-          model,
-          messages: [
-            { role: 'system', content: TREATMENT_SYSTEM },
-            { role: 'user', content: treatmentUserMsg },
-          ],
-          temperature: 0.2,
-          max_tokens: 3000,
-        });
-        const text = response.choices[0]?.message?.content || '';
-        const clean = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
-        try {
-          return JSON.parse(clean);
-        } catch {
-          const repaired = repairTruncatedJSON(clean);
-          if (repaired) return repaired;
-        }
-      } catch (err) {
-        lastErr = err;
-        if (err.status === 429 || err.status === 503 || err.status === 404) continue;
-        throw err;
-      }
-    }
-    console.warn('[bloodReportAgent] Treatment single-provider failed:', lastErr?.message);
-  } catch (err) {
-    console.warn('[bloodReportAgent] Treatment generation failed:', err.message);
-  }
-
-  return null;
-}
 
 /**
  * Run the Blood Report Agent (multi-phase: tool calls → medical → lifestyle → treatment).
@@ -278,7 +153,6 @@ Call the tools now to gather reference ranges and drug data.`;
   const toolSummary = steps.map((s) =>
     `${s.tool}(${JSON.stringify(s.args).slice(0, 80)}): ${JSON.stringify(s.result).slice(0, 200)}`
   ).join('\n');
-  const conditionsList = abnormal.map((v) => v.parameter).join(', ');
 
   const sharedContext = `Patient: ${profileText}
 Abnormal results: ${abnormalText}
@@ -295,20 +169,17 @@ Tool data: ${toolSummary || 'none'}`;
   try {
     const { consensusRaw: raw2a, agentCount: ac2a } = await runEnsembleWithConsensus(
       PHASE2A_SYSTEM,
-      `${sharedContext}\nConditions to address with tablets: ${conditionsList}\nGenerate the medical JSON now.`,
+      `${sharedContext}\nGenerate the medical JSON now.`,
       'blood_analysis',
-      4000
+      2000
     );
     console.log(`[bloodReportAgent] Phase 2a ensemble (${ac2a} providers), length: ${raw2a.length}`);
     try {
       medical = JSON.parse(raw2a);
     } catch {
-      // JSON truncated by token limit — attempt repair
       console.log('[bloodReportAgent] Phase 2a: attempting JSON repair...');
       medical = repairTruncatedJSON(raw2a);
-      if (medical) {
-        console.log(`[bloodReportAgent] Phase 2a: JSON repaired — tabs:${medical.tablet_recommendations?.length ?? 0}`);
-      }
+      if (medical) console.log('[bloodReportAgent] Phase 2a: JSON repaired');
     }
   } catch (err) {
     console.error('[bloodReportAgent] Phase 2a ensemble failed:', err.message);
@@ -335,23 +206,7 @@ Tool data: ${toolSummary || 'none'}`;
     console.error('[bloodReportAgent] Phase 2b ensemble failed:', err.message);
   }
 
-  // ── Phase 2c: Treatment solutions — dedicated OpenRouter call with ensemble ─
-  emitter.emit('step', {
-    tool: '_treatment',
-    args: {},
-    result: { message: 'Generating FDA-approved treatment plan with personalized dosages…' },
-    timestamp: new Date().toISOString(),
-  });
-
-  let treatmentData = null;
-  try {
-    treatmentData = await generateTreatmentSolutions(sharedContext, conditionsList, patientProfile);
-    console.log(`[bloodReportAgent] Phase 2c treatment — solutions:${treatmentData?.treatment_solutions?.length ?? 0}`);
-  } catch (err) {
-    console.error('[bloodReportAgent] Phase 2c treatment failed:', err.message);
-  }
-
-  console.log(`[bloodReportAgent] Final — tabs:${medical?.tablet_recommendations?.length ?? 0} treatment:${treatmentData?.treatment_solutions?.length ?? 0} diet:${!!lifestyle?.diet_plan} recovery:${lifestyle?.recovery_ingredients?.length ?? 0}`);
+  console.log(`[bloodReportAgent] Final — diet:${!!lifestyle?.diet_plan} recovery:${lifestyle?.recovery_ingredients?.length ?? 0}`);
 
   // ── Merge results with fallbacks ─────────────────────────────────────────
   const doctorReferralNeeded = medical?.summary?.doctor_referral_needed || false;
@@ -370,11 +225,9 @@ Tool data: ${toolSummary || 'none'}`;
       status: v.status,
       interpretation: 'Manual review required',
     })),
-    treatment_solutions: treatmentData?.treatment_solutions || medical?.treatment_solutions || ['Consult a qualified physician for personalized treatment'],
     diet_plan: lifestyle?.diet_plan || null,
     recovery_ingredients: lifestyle?.recovery_ingredients || [],
   };
-  const tabletRecommendations = medical?.tablet_recommendations || [];
 
   // Save to DB
   try {
@@ -382,7 +235,7 @@ Tool data: ${toolSummary || 'none'}`;
       `UPDATE blood_reports
        SET analysis = $1, tablet_recommendations = $2, complexity_flag = $3
        WHERE id = $4`,
-      [JSON.stringify(analysis), JSON.stringify(tabletRecommendations), doctorReferralNeeded, reportId]
+      [JSON.stringify(analysis), JSON.stringify([]), doctorReferralNeeded, reportId]
     );
     await pool.query(
       `INSERT INTO agent_logs (session_id, agent_name, steps, total_turns)
@@ -391,11 +244,10 @@ Tool data: ${toolSummary || 'none'}`;
     );
   } catch (dbErr) {
     console.error('[bloodReportAgent] DB save error:', dbErr.message);
-    // Don't throw — analysis result is still valid even if DB write fails
   }
 
-  emitter.emit('done', { analysis, tabletRecommendations, doctorReferralNeeded });
-  return { analysis, tabletRecommendations, doctorReferralNeeded, steps, turns };
+  emitter.emit('done', { analysis, tabletRecommendations: [], doctorReferralNeeded });
+  return { analysis, tabletRecommendations: [], doctorReferralNeeded, steps, turns };
 }
 
 module.exports = { runBloodReportAgent };
