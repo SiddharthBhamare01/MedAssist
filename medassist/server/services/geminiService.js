@@ -59,11 +59,13 @@ Rules:
 - If a field is missing or unclear, use "" (empty string) for that field
 - Return ONLY the JSON array, nothing else`;
 
-// OpenRouter free vision models in priority order
+// OpenRouter vision models in priority order (mix of free and low-cost)
 const OPENROUTER_VISION_MODELS = [
   'meta-llama/llama-3.2-11b-vision-instruct:free',
-  'qwen/qwen-2-vl-7b-instruct:free',
-  'google/gemini-flash-1.5:free',
+  'meta-llama/llama-3.2-90b-vision-instruct:free',
+  'qwen/qwen2-vl-7b-instruct:free',
+  'google/gemini-2.0-flash-001',
+  'google/gemini-flash-1.5',
 ];
 
 function getOpenRouterClient() {
@@ -143,7 +145,8 @@ async function extractWithOpenRouterVision(imageBuffer, mimeType) {
 }
 
 /**
- * Use Gemini Vision as a fallback (requires GEMINI_API_KEY).
+ * Use Gemini Vision (primary when GEMINI_API_KEY is set).
+ * Tries gemini-2.0-flash first, then falls back to older models.
  */
 async function extractWithGeminiVision(buffer, mimeType) {
   if (!process.env.GEMINI_API_KEY) {
@@ -155,31 +158,46 @@ async function extractWithGeminiVision(buffer, mimeType) {
 
   const { GoogleGenerativeAI } = require('@google/generative-ai');
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-  console.log('[geminiService] Gemini Vision fallback OCR');
+  const geminiModels = ['gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro-latest'];
+  let lastGeminiErr;
 
-  const result = await model.generateContent([
-    VISION_PARSE_PROMPT,
-    { inlineData: { data: buffer.toString('base64'), mimeType } },
-  ]);
+  for (const modelName of geminiModels) {
+    try {
+      console.log(`[geminiService] Gemini Vision OCR — ${modelName}`);
+      const model = genAI.getGenerativeModel({ model: modelName });
 
-  const raw = result.response.text().trim();
-  const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+      const result = await model.generateContent([
+        VISION_PARSE_PROMPT,
+        { inlineData: { data: buffer.toString('base64'), mimeType } },
+      ]);
 
-  let parsed;
-  try {
-    parsed = JSON.parse(clean);
-  } catch {
-    throw new Error('Gemini Vision could not extract structured values from this document.');
+      const raw = result.response.text().trim();
+      const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+
+      let parsed;
+      try {
+        parsed = JSON.parse(clean);
+      } catch {
+        console.error(`[geminiService] ${modelName} returned non-JSON:`, raw.slice(0, 300));
+        lastGeminiErr = new Error('Gemini Vision returned non-JSON response');
+        continue;
+      }
+
+      if (!Array.isArray(parsed)) {
+        lastGeminiErr = new Error('Gemini Vision returned unexpected format');
+        continue;
+      }
+
+      console.log(`[geminiService] Gemini Vision (${modelName}) extracted ${parsed.length} values`);
+      return parsed;
+    } catch (err) {
+      console.warn(`[geminiService] ${modelName} failed:`, err.message);
+      lastGeminiErr = err;
+    }
   }
 
-  if (!Array.isArray(parsed)) {
-    throw new Error('Gemini Vision returned unexpected format.');
-  }
-
-  console.log(`[geminiService] Gemini Vision extracted ${parsed.length} values`);
-  return parsed;
+  throw lastGeminiErr || new Error('All Gemini Vision models failed');
 }
 
 /**
@@ -280,23 +298,26 @@ async function extractFromPDF(filePath) {
 
   const jpegBuffer = await convertScannedPDFToImage(filePath);
   if (jpegBuffer) {
-    try {
-      return await extractWithOpenRouterVision(jpegBuffer, 'image/jpeg');
-    } catch (err) {
-      console.warn('[geminiService] OpenRouter vision failed, trying Gemini fallback:', err.message);
-      return await extractWithGeminiVision(jpegBuffer, 'image/jpeg');
+    // Try Gemini first (more accurate), fall back to OpenRouter
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        return await extractWithGeminiVision(jpegBuffer, 'image/jpeg');
+      } catch (err) {
+        console.warn('[geminiService] Gemini Vision failed, trying OpenRouter:', err.message);
+      }
     }
+    return await extractWithOpenRouterVision(jpegBuffer, 'image/jpeg');
   }
 
-  // pdftoppm not available — try raw PDF with Gemini Vision
-  try {
+  // pdftoppm not available — send raw PDF to Gemini Vision
+  if (process.env.GEMINI_API_KEY) {
     return await extractWithGeminiVision(buffer, 'application/pdf');
-  } catch (err) {
-    throw new Error(
-      'Could not process this scanned PDF. ' +
-      'Please photograph your report and upload as JPEG/PNG instead.'
-    );
   }
+
+  throw new Error(
+    'Could not process this scanned PDF. ' +
+    'Please photograph your report and upload as JPEG/PNG instead.'
+  );
 }
 
 /**
@@ -309,12 +330,15 @@ async function extractBloodValuesFromImage(filePath, mimeType) {
 
   if (mimeType === 'image/jpeg' || mimeType === 'image/png') {
     const buffer = fs.readFileSync(filePath);
-    try {
-      return await extractWithOpenRouterVision(buffer, mimeType);
-    } catch (err) {
-      console.warn('[geminiService] OpenRouter vision failed, trying Gemini fallback:', err.message);
-      return await extractWithGeminiVision(buffer, mimeType);
+    // Try Gemini first (key is set), fall back to OpenRouter
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        return await extractWithGeminiVision(buffer, mimeType);
+      } catch (err) {
+        console.warn('[geminiService] Gemini Vision failed, trying OpenRouter:', err.message);
+      }
     }
+    return await extractWithOpenRouterVision(buffer, mimeType);
   }
 
   throw new Error(`Unsupported file type: ${mimeType}. Please upload a PDF, JPEG, or PNG.`);
