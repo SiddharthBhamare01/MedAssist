@@ -30,6 +30,8 @@ export default function Vitals() {
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [insight, setInsight] = useState(null);
+  const [loadingInsight, setLoadingInsight] = useState(false);
 
   const typeConfig = VITAL_TYPES.find((t) => t.value === selectedType);
 
@@ -54,6 +56,15 @@ export default function Vitals() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    setInsight(null);
+    setLoadingInsight(true);
+    api.get(`/patient/vitals/insights?type=${selectedType}`)
+      .then(({ data }) => setInsight(data.insight || null))
+      .catch(() => {})
+      .finally(() => setLoadingInsight(false));
+  }, [selectedType]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -207,6 +218,28 @@ export default function Vitals() {
           )}
         </div>
       </div>
+
+      {/* Blood Report Correlation Insight */}
+      {(loadingInsight || insight) && (
+        <div className="bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200 rounded-2xl p-5">
+          <div className="flex items-start gap-3">
+            <span className="text-xl shrink-0">🔗</span>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-semibold text-teal-800 mb-1">
+                Correlation with Your Latest Blood Report
+              </h3>
+              {loadingInsight ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-teal-400 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm text-teal-600">Analysing correlation...</span>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-700 leading-relaxed">{insight}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

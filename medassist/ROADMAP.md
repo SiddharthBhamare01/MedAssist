@@ -2,7 +2,7 @@
 ## Blood Report Analysis · Patient Engagement Plan
 
 > **Purpose:** This file tracks the full refocus plan. Update the checkboxes as each task is completed.
-> Last updated: 2026-04-28 (Phase 3 complete)
+> Last updated: 2026-04-28 (Phase 4 complete — ALL DONE)
 
 ---
 
@@ -160,9 +160,9 @@ The project covers two journeys: (1) symptom-based disease diagnosis and (2) blo
 ### Feature 10 — Vitals ↔ Blood Report Correlation
 **Small insight banner in Vitals.jsx**
 
-- [ ] **Backend:** `GET /api/patient/vitals/insights` — reads recent vitals + latest blood report, returns 1-2 sentence LLM-generated correlation
-- [ ] **Frontend:** Add insight banner below each chart in Vitals.jsx
-- [ ] Example: *"Your HbA1c was 7.2% last report — daily glucose readings of 140–160 mg/dL are consistent with this."*
+- [x] **Backend:** `GET /api/patient/vitals/insights` — reads recent vitals + latest blood report, returns 1-2 sentence LLM-generated correlation
+- [x] **Frontend:** Add insight banner below each chart in Vitals.jsx
+- [x] Example: *"Your HbA1c was 7.2% last report — daily glucose readings of 140–160 mg/dL are consistent with this."*
 
 ---
 
@@ -228,7 +228,7 @@ client/src/components/CompareModal.jsx         Side-by-side report comparison
 | Phase 1 — Cleanup | 25 | 25 ✅ |
 | Phase 2 — New core features | 12 | 12 ✅ |
 | Phase 3 — Engagement loops | 14 | 14 ✅ |
-| Phase 4 — Infrastructure | 3 | 0 |
-| **Total** | **54** | **51** |
+| Phase 4 — Infrastructure | 3 | 3 ✅ |
+| **Total** | **54** | **54** ✅ |
 
 > Update checkboxes above as you complete each task. Update the counts in this table.

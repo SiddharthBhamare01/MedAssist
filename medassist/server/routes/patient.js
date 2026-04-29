@@ -49,6 +49,116 @@ router.put('/profile', verifyToken, async (req, res) => {
   }
 });
 
+// In-memory 2h insight cache: `${patientId}-${type}` → { insight, expiresAt }
+const vitalsInsightsCache = new Map();
+
+// GET /api/patient/vitals/insights?type=glucose — LLM-generated blood report correlation
+router.get('/vitals/insights', verifyToken, async (req, res) => {
+  const patientId = req.user.userId;
+  const { type } = req.query;
+  if (!type) return res.status(400).json({ error: 'type is required' });
+
+  const cacheKey = `${patientId}-${type}`;
+  const cached = vitalsInsightsCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return res.json({ insight: cached.insight, cached: true });
+  }
+
+  try {
+    const { rows: vitalsRows } = await pool.query(
+      `SELECT value, value2, recorded_at FROM vitals_logs
+        WHERE patient_id = $1 AND type = $2
+        ORDER BY recorded_at DESC LIMIT 7`,
+      [patientId, type]
+    );
+    if (!vitalsRows.length) return res.json({ insight: null });
+
+    const { rows: reportRows } = await pool.query(
+      `SELECT extracted_values FROM blood_reports
+        WHERE patient_id = $1 AND session_id IS NULL AND extracted_values IS NOT NULL
+        ORDER BY created_at DESC LIMIT 1`,
+      [patientId]
+    );
+    if (!reportRows.length) return res.json({ insight: null });
+
+    const TYPE_LABEL = {
+      glucose: 'blood glucose', blood_pressure: 'blood pressure',
+      heart_rate: 'heart rate', weight: 'weight',
+      spo2: 'oxygen saturation (SpO2)', temperature: 'body temperature',
+    };
+    const RELEVANT_KEYWORDS = {
+      glucose:        ['hba1c', 'glucose', 'insulin', 'glycat'],
+      blood_pressure: ['cholesterol', 'ldl', 'hdl', 'triglyceride', 'creatinine', 'sodium', 'potassium'],
+      heart_rate:     ['hemoglobin', 'tsh', 'thyroid', 'potassium', 'sodium', 'calcium'],
+      weight:         ['cholesterol', 'triglyceride', 'glucose', 'insulin'],
+      spo2:           ['hemoglobin', 'rbc', 'wbc', 'hematocrit'],
+      temperature:    ['wbc', 'neutrophil', 'lymphocyte', 'crp', 'esr'],
+    };
+
+    const keywords = RELEVANT_KEYWORDS[type] || [];
+    const extractedValues = reportRows[0].extracted_values || [];
+
+    let relevantFindings = extractedValues.filter((v) =>
+      keywords.some((k) => (v.parameter || '').toLowerCase().includes(k))
+    ).slice(0, 5);
+
+    if (!relevantFindings.length) {
+      relevantFindings = extractedValues.filter((v) => v.status && v.status !== 'normal').slice(0, 3);
+    }
+    if (!relevantFindings.length) return res.json({ insight: null });
+
+    const readingsSummary = vitalsRows.slice(0, 5).map((v) => {
+      const date = new Date(v.recorded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return v.value2 ? `${v.value}/${v.value2} (${date})` : `${v.value} (${date})`;
+    }).join(', ');
+
+    const findingsSummary = relevantFindings.map((f) =>
+      `${f.parameter}: ${f.value}${f.unit ? ' ' + f.unit : ''} [${f.status || 'normal'}]`
+    ).join('; ');
+
+    const prompt = `Explain in 1-2 sentences how this patient's recent ${TYPE_LABEL[type] || type} readings relate to their blood test results. Reference actual numbers. Do NOT give medical advice.
+
+Recent ${TYPE_LABEL[type] || type}: ${readingsSummary}
+Blood test results: ${findingsSummary}
+
+Respond with exactly 1-2 sentences, under 50 words.`;
+
+    const { getProviders, getAvailableProviders } = require('../utils/aiClients');
+    const providers = getProviders();
+    const available = getAvailableProviders();
+
+    let insight = null;
+    for (const name of available) {
+      const provider = providers[name];
+      try {
+        const response = await provider.client.chat.completions.create({
+          model: provider.model,
+          messages: [
+            { role: 'system', content: 'You generate concise medical data correlations. Return only 1-2 sentences, no preamble.' },
+            { role: 'user', content: prompt },
+          ],
+          temperature: 0.4,
+          max_tokens: 100,
+        });
+        insight = response.choices[0]?.message?.content?.trim() || null;
+        if (insight) break;
+      } catch (err) {
+        const status = err?.status || err?.response?.status;
+        if (status === 429 || status === 503) continue;
+        throw err;
+      }
+    }
+
+    if (insight) {
+      vitalsInsightsCache.set(cacheKey, { insight, expiresAt: Date.now() + 2 * 60 * 60 * 1000 });
+    }
+    return res.json({ insight: insight || null });
+  } catch (err) {
+    console.error('Vitals insights error:', err);
+    return res.status(500).json({ error: 'Failed to generate insight' });
+  }
+});
+
 // GET /api/patient/vitals — get patient's vitals (query: type, days)
 router.get('/vitals', verifyToken, async (req, res) => {
   try {
