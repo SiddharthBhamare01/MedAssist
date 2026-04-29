@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import AgentStatusPanel from '../../components/AgentStatus/AgentStatusPanel';
 import ShareModal from '../../components/ShareModal';
 import ReportChatbot from '../../components/ReportChatbot';
+import { playAudio, stopAudio as stopGlobalAudio } from '../../utils/audioManager';
 
 const STATUS_STYLE = {
   normal:        'bg-emerald-50 text-emerald-700',
@@ -56,7 +57,6 @@ export default function Analysis() {
   // Voice narration state
   const [isNarrating, setIsNarrating] = useState(false);
   const [isLoadingNarration, setIsLoadingNarration] = useState(false);
-  const audioRef = useRef(null);
 
   // Explain This modal state
   const [explainModal, setExplainModal] = useState({ open: false, loading: false, text: '', parameter: '' });
@@ -199,10 +199,7 @@ export default function Analysis() {
 
   const handleNarrate = async () => {
     if (isNarrating) {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
+      stopGlobalAudio();
       setIsNarrating(false);
       return;
     }
@@ -216,13 +213,10 @@ export default function Analysis() {
       );
       const blob = new Blob([response.data], { type: 'audio/mpeg' });
       const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audioRef.current = audio;
-      audio.onended = () => {
-        setIsNarrating(false);
-        URL.revokeObjectURL(url);
-      };
-      audio.play();
+      playAudio(url, {
+        onEnd: () => { setIsNarrating(false); URL.revokeObjectURL(url); },
+        onStop: () => setIsNarrating(false),
+      });
       setIsNarrating(true);
     } catch (err) {
       toast.error('Could not generate narration. Try again.');

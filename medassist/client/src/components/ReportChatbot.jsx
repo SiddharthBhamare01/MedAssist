@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import api from '../services/api';
 import toast from 'react-hot-toast';
+import { playAudio, stopAudio as stopGlobalAudio } from '../utils/audioManager';
 
 let _uid = 0;
 const uid = () => ++_uid;
@@ -25,7 +26,6 @@ export default function ReportChatbot({ reportId }) {
   const [playingId, setPlayingId] = useState(null);
 
   const bottomRef = useRef(null);
-  const audioRef = useRef(null);
   const srRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -33,22 +33,23 @@ export default function ReportChatbot({ reportId }) {
     if (open) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [msgs, open]);
 
-  const stopAudio = () => {
-    audioRef.current?.pause();
-    audioRef.current = null;
+  const stopLocalAudio = () => {
+    stopGlobalAudio();
     setPlayingId(null);
   };
 
   const playText = async (text, id) => {
-    stopAudio();
+    // Stop whatever is playing globally (narration or previous chat reply)
+    stopGlobalAudio();
+    setPlayingId(null);
     try {
       const res = await api.post('/voice/speak', { text }, { responseType: 'arraybuffer' });
       const url = URL.createObjectURL(new Blob([res.data], { type: 'audio/mpeg' }));
-      const audio = new Audio(url);
-      audioRef.current = audio;
       setPlayingId(id);
-      audio.onended = () => { setPlayingId(null); URL.revokeObjectURL(url); };
-      audio.play();
+      playAudio(url, {
+        onEnd: () => { setPlayingId(null); URL.revokeObjectURL(url); },
+        onStop: () => setPlayingId(null),
+      });
     } catch {
       toast.error('Audio playback failed.');
     }
@@ -58,7 +59,7 @@ export default function ReportChatbot({ reportId }) {
     const text = (override ?? input).trim();
     if (!text || busy) return;
     setInput('');
-    stopAudio();
+    stopLocalAudio();
 
     // Snapshot history BEFORE adding current user message
     const history = msgs.slice(1).map(({ role, text: content }) => ({ role, content }));
@@ -108,7 +109,7 @@ export default function ReportChatbot({ reportId }) {
     <>
       {/* Floating trigger button */}
       <button
-        onClick={() => { setOpen(o => !o); if (open) stopAudio(); }}
+        onClick={() => { setOpen(o => !o); if (open) stopLocalAudio(); }}
         className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-teal-600 hover:bg-teal-700 text-white shadow-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95"
         title="Report Assistant"
       >
@@ -161,7 +162,7 @@ export default function ReportChatbot({ reportId }) {
               </button>
               {/* Close */}
               <button
-                onClick={() => { setOpen(false); stopAudio(); }}
+                onClick={() => { setOpen(false); stopLocalAudio(); }}
                 className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -193,7 +194,7 @@ export default function ReportChatbot({ reportId }) {
                     </div>
                     {m.role === 'assistant' && (
                       <button
-                        onClick={() => playingId === m.id ? stopAudio() : playText(m.text, m.id)}
+                        onClick={() => playingId === m.id ? stopLocalAudio() : playText(m.text, m.id)}
                         className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-teal-600 transition-colors ml-1"
                       >
                         {playingId === m.id ? (

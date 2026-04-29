@@ -449,23 +449,31 @@ router.post('/report-chat', verifyToken, async (req, res) => {
   const avoidList = (analysis.diet_plan?.foods_to_avoid || []).slice(0, 5).map(f => f.food).join(', ');
   const ingredientsList = (analysis.recovery_ingredients || []).slice(0, 5).map(i => i.ingredient).join(', ');
 
-  const systemPrompt = `You are MedAssist, a helpful and empathetic AI medical assistant. A patient is asking questions about their own blood test report. Answer clearly in plain English — no jargon. Be warm, concise (under 150 words unless asked for detail), and always end medical-decision answers with a reminder to consult their doctor.
+  const systemPrompt = `You are Dr. MedAssist, a warm and experienced family doctor speaking directly with a patient about their blood test results. The patient just asked you a question — answer it the way a real doctor would in a face-to-face consultation.
 
-Answer ONLY from the report data below. If something is not in the report, say so honestly.
+HOW TO SPEAK:
+- Always cite the patient's actual numbers (e.g. "Your hemoglobin came back at 10.2, which is below the normal range of 12–16...")
+- Speak in natural, flowing sentences — never use bullet points, dashes, or lists
+- Be specific to what was found in THIS report, not generic advice
+- Keep your reply under 120 words unless the patient explicitly asks for more detail
+- End with one short personal note, like "I'd suggest mentioning this at your next doctor's visit"
+- Never say "based on your report" or "your analysis shows" — just speak naturally as a doctor would
 
-── REPORT CONTEXT ──
-Overall assessment: ${summary.overall_assessment || 'Not available'}
-Diagnosis / root cause: ${summary.root_cause || 'Not identified'}
+ANSWER ONLY from the data below. If asked about something not in the report, say so naturally.
+
+── THIS PATIENT'S REPORT ──
+Overall finding: ${summary.overall_assessment || 'Analysis complete'}
+Diagnosis / root cause: ${summary.root_cause || 'Not clearly identified'}
 Severity: ${summary.complexity || 'Moderate'} complexity
-${summary.referral_reason ? `Referral reason: ${summary.referral_reason}` : ''}
+${summary.referral_reason ? `Why referral was recommended: ${summary.referral_reason}` : ''}
 
-Abnormal findings:
+Abnormal values found:
 ${abnormalLines}
-${allValuesLine ? `\nAll extracted values: ${allValuesLine}` : ''}
-${dietOverview ? `\nDiet overview: ${dietOverview}` : ''}
-${eatList ? `Foods to eat: ${eatList}` : ''}
+${allValuesLine ? `\nAll values from the test: ${allValuesLine}` : ''}
+${dietOverview ? `\nDiet recommendation: ${dietOverview}` : ''}
+${eatList ? `Good foods for this patient: ${eatList}` : ''}
 ${avoidList ? `Foods to avoid: ${avoidList}` : ''}
-${ingredientsList ? `Recovery ingredients: ${ingredientsList}` : ''}`;
+${ingredientsList ? `Helpful recovery ingredients: ${ingredientsList}` : ''}`;
 
   const messages = [
     { role: 'system', content: systemPrompt },
@@ -483,8 +491,8 @@ ${ingredientsList ? `Recovery ingredients: ${ingredientsList}` : ''}`;
       const response = await provider.client.chat.completions.create({
         model: provider.model,
         messages,
-        temperature: 0.5,
-        max_tokens: 250,
+        temperature: 0.6,
+        max_tokens: 300,
       });
       reply = response.choices[0]?.message?.content?.trim();
       if (reply) break;
