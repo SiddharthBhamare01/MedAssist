@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import api from '../../services/api';
 import AgentStatusPanel from '../../components/AgentStatus/AgentStatusPanel';
 import ShareModal from '../../components/ShareModal';
+import ReportChatbot from '../../components/ReportChatbot';
 
 const STATUS_STYLE = {
   normal:        'bg-emerald-50 text-emerald-700',
@@ -708,6 +709,9 @@ export default function Analysis() {
           )}
         </>
       )}
+
+      {/* Floating report chatbot — always visible once reportId is known */}
+      <ReportChatbot reportId={reportId} />
     </div>
   );
 }

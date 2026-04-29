@@ -59,7 +59,7 @@ router.post('/speak', verifyToken, async (req, res) => {
   }
 
   const body = JSON.stringify({
-    text: text.slice(0, 1000),        // guard against huge strings
+    text: text.slice(0, 3000),
     model_id: ELEVENLABS_MODEL,
     voice_settings: { stability: 0.5, similarity_boost: 0.75 },
   });
@@ -405,6 +405,101 @@ Be warm, clear, and reassuring. Do not recommend specific treatments or drugs.`;
   }
 
   return res.json({ explanation });
+});
+
+
+// ─── POST /api/voice/report-chat ───────────────────────────────────────────
+// Conversational Q&A about an analyzed blood report.
+// Body: { reportId, message, history: [{role, content}] }
+// Returns: { reply: string }
+router.post('/report-chat', verifyToken, async (req, res) => {
+  const { reportId, message, history = [] } = req.body;
+  if (!reportId || !message) {
+    return res.status(400).json({ error: 'reportId and message are required' });
+  }
+
+  const pool = require('../db/pool');
+  let report;
+  try {
+    const { rows } = await pool.query(
+      'SELECT analysis, extracted_values FROM blood_reports WHERE id = $1 AND patient_id = $2',
+      [reportId, req.user.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Report not found' });
+    report = rows[0];
+  } catch {
+    return res.status(500).json({ error: 'Failed to fetch report' });
+  }
+
+  const analysis = report.analysis || {};
+  const summary = analysis.summary || {};
+  const abnormal = analysis.abnormal_findings || [];
+  const extractedValues = Array.isArray(report.extracted_values) ? report.extracted_values : [];
+
+  const abnormalLines = abnormal.map(f =>
+    `  • ${f.parameter}: ${f.your_value} (normal ${f.normal_range}) — ${f.status}${f.interpretation ? `. ${f.interpretation}` : ''}`
+  ).join('\n') || '  • None — all values within normal range';
+
+  const allValuesLine = extractedValues.length
+    ? extractedValues.map(v => `${v.parameter}: ${v.value}${v.unit ? ' ' + v.unit : ''}`).join(', ')
+    : '';
+
+  const dietOverview = analysis.diet_plan?.overview || '';
+  const eatList = (analysis.diet_plan?.foods_to_eat || []).slice(0, 5).map(f => f.food).join(', ');
+  const avoidList = (analysis.diet_plan?.foods_to_avoid || []).slice(0, 5).map(f => f.food).join(', ');
+  const ingredientsList = (analysis.recovery_ingredients || []).slice(0, 5).map(i => i.ingredient).join(', ');
+
+  const systemPrompt = `You are MedAssist, a helpful and empathetic AI medical assistant. A patient is asking questions about their own blood test report. Answer clearly in plain English — no jargon. Be warm, concise (under 150 words unless asked for detail), and always end medical-decision answers with a reminder to consult their doctor.
+
+Answer ONLY from the report data below. If something is not in the report, say so honestly.
+
+── REPORT CONTEXT ──
+Overall assessment: ${summary.overall_assessment || 'Not available'}
+Diagnosis / root cause: ${summary.root_cause || 'Not identified'}
+Severity: ${summary.complexity || 'Moderate'} complexity
+${summary.referral_reason ? `Referral reason: ${summary.referral_reason}` : ''}
+
+Abnormal findings:
+${abnormalLines}
+${allValuesLine ? `\nAll extracted values: ${allValuesLine}` : ''}
+${dietOverview ? `\nDiet overview: ${dietOverview}` : ''}
+${eatList ? `Foods to eat: ${eatList}` : ''}
+${avoidList ? `Foods to avoid: ${avoidList}` : ''}
+${ingredientsList ? `Recovery ingredients: ${ingredientsList}` : ''}`;
+
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...history.slice(-10),
+    { role: 'user', content: message },
+  ];
+
+  const providers = getProviders();
+  const available = getAvailableProviders();
+
+  let reply = null;
+  for (const name of available) {
+    const provider = providers[name];
+    try {
+      const response = await provider.client.chat.completions.create({
+        model: provider.model,
+        messages,
+        temperature: 0.5,
+        max_tokens: 250,
+      });
+      reply = response.choices[0]?.message?.content?.trim();
+      if (reply) break;
+    } catch (err) {
+      const status = err?.status || err?.response?.status;
+      if (status === 429 || status === 503) continue;
+      throw err;
+    }
+  }
+
+  if (!reply) {
+    return res.status(503).json({ error: 'Could not generate response. Try again.' });
+  }
+
+  return res.json({ reply });
 });
 
 module.exports = router;
