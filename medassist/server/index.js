@@ -86,7 +86,23 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`MedAssist server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+
+  // Run DB migrations for Phase 3 tables
+  try {
+    const migrate = require('./db/migrate');
+    await migrate();
+  } catch (err) {
+    console.error('[startup] Migration failed:', err.message);
+  }
+
+  // Start background email reminder loop
+  try {
+    const { startReminderLoop } = require('./services/reminderService');
+    startReminderLoop();
+  } catch (err) {
+    console.error('[startup] Reminder loop failed to start:', err.message);
+  }
 });

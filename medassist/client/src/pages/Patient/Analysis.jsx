@@ -5,6 +5,7 @@ import api from '../../services/api';
 import AgentStatusPanel from '../../components/AgentStatus/AgentStatusPanel';
 import ShareModal from '../../components/ShareModal';
 import ReportChatbot from '../../components/ReportChatbot';
+import ParameterProgress from '../../components/ParameterProgress';
 import { playAudio, stopAudio as stopGlobalAudio } from '../../utils/audioManager';
 
 const STATUS_STYLE = {
@@ -53,6 +54,9 @@ export default function Analysis() {
   const [loadingRisk, setLoadingRisk] = useState(false);
   const [loadingFollowUp, setLoadingFollowUp] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [summaryExporting, setSummaryExporting] = useState(false);
+  const [supplementLogs, setSupplementLogs] = useState(new Set());
+  const [supplementStreaks, setSupplementStreaks] = useState(new Map());
 
   // Voice narration state
   const [isNarrating, setIsNarrating] = useState(false);
@@ -170,6 +174,17 @@ export default function Analysis() {
     handleFollowUp();
   }, [result]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Fetch today's supplement logs when analysis is ready
+  useEffect(() => {
+    if (!result) return;
+    api.get('/patient/supplement-log')
+      .then(({ data }) => {
+        setSupplementLogs(new Set(data.today || []));
+        setSupplementStreaks(new Map(Object.entries(data.streaks || {})));
+      })
+      .catch(() => {});
+  }, [result]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleExportPDF = async () => {
     setExporting(true);
     try {
@@ -222,6 +237,40 @@ export default function Analysis() {
       toast.error('Could not generate narration. Try again.');
     } finally {
       setIsLoadingNarration(false);
+    }
+  };
+
+  const handleSummaryCard = async () => {
+    setSummaryExporting(true);
+    try {
+      const response = await api.get(`/blood-report/${reportId}/summary-card`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `MedAssist_Summary_${reportId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Summary card downloaded');
+    } catch {
+      toast.error('Summary card generation failed');
+    } finally {
+      setSummaryExporting(false);
+    }
+  };
+
+  const handleToggleSupplement = async (ingredientName) => {
+    try {
+      const { data } = await api.post('/patient/supplement-log', { ingredient_name: ingredientName });
+      setSupplementLogs((prev) => {
+        const next = new Set(prev);
+        if (data.taken) next.add(ingredientName);
+        else next.delete(ingredientName);
+        return next;
+      });
+    } catch {
+      toast.error('Could not update supplement log');
     }
   };
 
@@ -309,6 +358,16 @@ export default function Analysis() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 {exporting ? 'Exporting...' : 'Export PDF'}
+              </button>
+              <button
+                onClick={handleSummaryCard}
+                disabled={summaryExporting}
+                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-xl transition-all shadow-sm disabled:opacity-50"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                {summaryExporting ? 'Generating...' : 'Print Summary Card'}
               </button>
               <button
                 onClick={() => setShowShareModal(true)}
@@ -578,6 +637,17 @@ export default function Analysis() {
           )}
           </div>
 
+          {/* Parameter Progress gauges */}
+          {result?.analysis?.abnormal_findings?.length > 0 && (
+            <ParameterProgress extractedValues={result.analysis.abnormal_findings.map((f) => ({
+              parameter: f.parameter,
+              your_value: f.your_value,
+              normal_range: f.normal_range,
+              status: f.status,
+              unit: f.unit,
+            }))} />
+          )}
+
           {/* Row 3: Personalized Diet Plan + Recovery Ingredients */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {analysis?.diet_plan && (
@@ -637,26 +707,47 @@ export default function Analysis() {
           {analysis?.recovery_ingredients?.length > 0 && (
             <Section title="Recovery Ingredients" icon="🧬" className="max-h-[600px]">
               <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
-                {analysis.recovery_ingredients.map((item, i) => (
-                  <div key={i} className="border border-teal-100 bg-teal-50/50 rounded-xl p-4">
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <h3 className="font-bold text-slate-800">{item.ingredient}</h3>
-                      {item.targets?.length > 0 && (
-                        <div className="flex flex-wrap gap-1 justify-end">
-                          {item.targets.map((t, j) => (
-                            <span key={j} className="text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-lg font-medium">
-                              {t}
-                            </span>
-                          ))}
-                        </div>
+                {analysis.recovery_ingredients.map((item, i) => {
+                  const taken = supplementLogs.has(item.ingredient);
+                  const streak = supplementStreaks.get(item.ingredient) || 0;
+                  return (
+                    <div key={i} className="border border-teal-100 bg-teal-50/50 rounded-xl p-4">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <h3 className="font-bold text-slate-800">{item.ingredient}</h3>
+                        {item.targets?.length > 0 && (
+                          <div className="flex flex-wrap gap-1 justify-end">
+                            {item.targets.map((t, j) => (
+                              <span key={j} className="text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-lg font-medium">
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-sm text-slate-600">{item.benefit}</p>
+                      {item.how_to_use && (
+                        <p className="text-xs text-teal-700 mt-1.5 font-medium">How to use: {item.how_to_use}</p>
                       )}
+                      <div className="flex items-center gap-3 mt-3">
+                        <button
+                          onClick={() => handleToggleSupplement(item.ingredient)}
+                          className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-all ${
+                            taken
+                              ? 'bg-teal-600 text-white'
+                              : 'bg-white border border-teal-200 text-teal-700 hover:bg-teal-50'
+                          }`}
+                        >
+                          {taken ? '✓ Taken today' : 'Mark as taken'}
+                        </button>
+                        {streak > 1 && (
+                          <span className="text-xs text-amber-600 font-semibold">
+                            🔥 {streak}-day streak
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-sm text-slate-600">{item.benefit}</p>
-                    {item.how_to_use && (
-                      <p className="text-xs text-teal-700 mt-1.5 font-medium">How to use: {item.how_to_use}</p>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </Section>
           )}

@@ -214,6 +214,35 @@ router.post('/follow-up', verifyToken, async (req, res) => {
       [JSON.stringify(followUp), reportId]
     );
 
+    // Schedule email reminders — delete existing unsent ones first (idempotent)
+    try {
+      await pool.query('DELETE FROM reminders WHERE report_id = $1 AND sent = false', [reportId]);
+      const items = Array.isArray(followUp) ? followUp : [followUp];
+      for (const item of items) {
+        const recheckIn = item.recheck_in || item.timeframe || '';
+        const m = recheckIn.match(/(\d+)\s*(day|week|month)s?/i);
+        if (!m) continue;
+        let days = parseInt(m[1]);
+        const unit = m[2].toLowerCase();
+        if (unit === 'week') days *= 7;
+        if (unit === 'month') days *= 30;
+        // Send reminder 3 days before the recheck date
+        const sendAt = new Date();
+        sendAt.setDate(sendAt.getDate() + Math.max(1, days - 3));
+        await pool.query(
+          'INSERT INTO reminders (patient_id, report_id, message, send_at) VALUES ($1, $2, $3, $4)',
+          [
+            req.user.userId,
+            reportId,
+            `Reminder: Time to recheck "${item.test || item.name}" — recommended recheck: ${recheckIn}.`,
+            sendAt,
+          ]
+        );
+      }
+    } catch (reminderErr) {
+      console.warn('[bloodReport] Could not schedule reminders:', reminderErr.message);
+    }
+
     return res.json({ reportId, followUp });
   } catch (err) {
     console.error('Follow-up error:', err);
@@ -296,7 +325,7 @@ router.get('/compare', verifyToken, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT id, created_at, extracted_values
          FROM blood_reports
-        WHERE id = ANY($1::int[]) AND patient_id = $2`,
+        WHERE id = ANY($1::uuid[]) AND patient_id = $2`,
       [[id1, id2], req.user.userId]
     );
 
@@ -458,6 +487,37 @@ Return ONLY a JSON array of 3 strings. Example format:
   } catch (err) {
     console.error('Daily tips error:', err);
     return res.status(500).json({ error: 'Failed to generate tips' });
+  }
+});
+
+// GET /api/blood-report/:id/summary-card — 1-page patient-friendly summary PDF
+router.get('/:id/summary-card', verifyToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM blood_reports WHERE id = $1 AND patient_id = $2',
+      [req.params.id, req.user.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Report not found' });
+
+    const report = rows[0];
+    const { rows: userRows } = await pool.query('SELECT full_name FROM users WHERE id = $1', [req.user.userId]);
+    const { generateSummaryCardPDF } = require('../services/pdfService');
+
+    const pdfBuffer = await generateSummaryCardPDF({
+      patientName: userRows[0]?.full_name || 'Patient',
+      score: report.risk_scores?.composite_score ?? null,
+      riskLevel: report.risk_scores?.risk_level ?? null,
+      findings: (report.analysis?.abnormal_findings || []).slice(0, 3),
+      dietPlan: report.analysis?.diet_plan || null,
+      followUp: report.follow_up || null,
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=MedAssist_SummaryCard_${req.params.id}.pdf`);
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error('Summary card PDF error:', err);
+    return res.status(500).json({ error: 'Failed to generate summary card' });
   }
 });
 

@@ -407,4 +407,145 @@ async function generateSessionPDF(sessionData) {
   }
 }
 
-module.exports = { generateSessionPDF };
+function buildSummaryCardHtml({ patientName, score, riskLevel, findings, dietPlan, followUp }) {
+  const levelColor = {
+    Low: '#10b981', Moderate: '#f59e0b', High: '#f97316', Critical: '#ef4444',
+  }[riskLevel] ?? '#64748b';
+
+  const circ = 2 * Math.PI * 48;
+  const dash = `${((score ?? 0) / 100) * circ} ${circ}`;
+
+  const findingsHtml = (findings || []).map((f) => {
+    const arrow = ['high', 'critical_high'].includes(f.status) ? '&#8593;' : '&#8595;';
+    const color = ['high', 'critical_high'].includes(f.status) ? '#dc2626' : '#d97706';
+    return `
+      <div style="display:flex;align-items:baseline;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9">
+        <span style="color:${color};font-size:16px;font-weight:700">${arrow}</span>
+        <div>
+          <span style="font-weight:700;color:#1e293b">${sanitize(f.parameter)}</span>
+          <span style="color:#64748b;margin-left:8px">${sanitize(f.your_value)}${f.unit ? ' ' + sanitize(f.unit) : ''}</span>
+          <span style="color:#94a3b8;font-size:11px;margin-left:4px">(normal: ${sanitize(f.normal_range || '')})</span>
+        </div>
+      </div>`;
+  }).join('');
+
+  const eatFoods = (dietPlan?.foods_to_eat || []).slice(0, 3);
+  const avoidFoods = (dietPlan?.foods_to_avoid || []).slice(0, 3);
+
+  const fuItems = Array.isArray(followUp) ? followUp : (followUp ? [followUp] : []);
+  const recheckHtml = fuItems.slice(0, 2).map((item) =>
+    `<p style="margin:0 0 6px;font-size:13px;color:#334155">
+      <b>${sanitize(item.test || item.name || 'Follow-up')}</b>
+      — recheck in <span style="color:#d97706">${sanitize(item.recheck_in || item.timeframe || 'TBD')}</span>
+    </p>`
+  ).join('');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #1e293b; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+</style>
+</head>
+<body>
+<div style="max-width:600px;margin:0 auto;padding:32px">
+
+  <!-- Header -->
+  <div style="background:#0f172a;color:#fff;padding:24px 28px;border-radius:14px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+    <div>
+      <p style="font-size:10px;letter-spacing:0.2em;color:#94a3b8;text-transform:uppercase;margin:0 0 4px;font-family:system-ui,sans-serif">MedAssist AI &bull; Patient Summary Card</p>
+      <h1 style="font-size:22px;font-weight:700;margin:0">${sanitize(patientName)}</h1>
+      <p style="margin:4px 0 0;color:#94a3b8;font-size:11px">${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+    </div>
+    ${score !== null ? `
+    <div style="position:relative;width:90px;height:90px;flex-shrink:0">
+      <svg width="90" height="90" viewBox="0 0 112 112" style="transform:rotate(-90deg)">
+        <circle cx="56" cy="56" r="48" fill="none" stroke="#1e293b" stroke-width="10"/>
+        <circle cx="56" cy="56" r="48" fill="none" stroke="${levelColor}" stroke-width="10"
+          stroke-dasharray="${dash}" stroke-linecap="round"/>
+      </svg>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+        <span style="font-size:22px;font-weight:700;color:${levelColor}">${score}</span>
+        <span style="font-size:9px;color:#64748b">/100</span>
+      </div>
+    </div>` : ''}
+  </div>
+
+  ${riskLevel ? `
+  <div style="text-align:center;margin-bottom:20px">
+    <span style="display:inline-block;padding:5px 20px;background:${levelColor};color:#fff;border-radius:99px;font-weight:700;font-size:13px;letter-spacing:0.05em">
+      ${sanitize(riskLevel)} Risk
+    </span>
+  </div>` : ''}
+
+  <!-- Key Findings -->
+  ${findingsHtml ? `
+  <div style="border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:20px">
+    <h2 style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.12em;margin:0 0 12px">Top Findings</h2>
+    ${findingsHtml}
+  </div>` : ''}
+
+  <!-- Foods -->
+  ${(eatFoods.length > 0 || avoidFoods.length > 0) ? `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
+    ${eatFoods.length > 0 ? `
+    <div style="border:1px solid #bbf7d0;border-radius:12px;padding:16px;background:#f0fdf4">
+      <h3 style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:0.1em;margin:0 0 10px">Eat More</h3>
+      ${eatFoods.map((f) => `<p style="margin:0 0 5px;font-size:12px;color:#334155">&#10003; ${sanitize(typeof f === 'string' ? f : f.food)}</p>`).join('')}
+    </div>` : ''}
+    ${avoidFoods.length > 0 ? `
+    <div style="border:1px solid #fecaca;border-radius:12px;padding:16px;background:#fef2f2">
+      <h3 style="font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:0.1em;margin:0 0 10px">Avoid</h3>
+      ${avoidFoods.map((f) => `<p style="margin:0 0 5px;font-size:12px;color:#334155">&#10005; ${sanitize(typeof f === 'string' ? f : f.food)}</p>`).join('')}
+    </div>` : ''}
+  </div>` : ''}
+
+  <!-- Next Recheck -->
+  ${recheckHtml ? `
+  <div style="border:1px solid #fcd34d;border-radius:12px;padding:16px;background:#fffbeb;margin-bottom:20px">
+    <h3 style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.1em;margin:0 0 10px">Next Recheck</h3>
+    ${recheckHtml}
+  </div>` : ''}
+
+  <!-- Footer -->
+  <p style="font-size:10px;color:#94a3b8;text-align:center;border-top:1px solid #e2e8f0;padding-top:14px;line-height:1.5">
+    Educational use only &mdash; AI-generated summary is not a substitute for professional medical advice.<br>
+    MedAssist AI &bull; CS 595 Medical Informatics Project
+  </p>
+</div>
+</body>
+</html>`;
+}
+
+async function generateSummaryCardPDF(data) {
+  const html = buildSummaryCardHtml(data);
+
+  const localPath = findLocalBrowser();
+  const executablePath = localPath || (await chromium.executablePath());
+  const launchArgs = localPath
+    ? ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+    : chromium.args;
+
+  const browser = await puppeteer.launch({
+    headless: localPath ? true : chromium.headless,
+    executablePath,
+    args: launchArgs,
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '0', right: '0', bottom: '0', left: '0' },
+    });
+    return pdfBuffer;
+  } finally {
+    await browser.close();
+  }
+}
+
+module.exports = { generateSessionPDF, generateSummaryCardPDF };

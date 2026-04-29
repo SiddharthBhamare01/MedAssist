@@ -2,7 +2,7 @@
 ## Blood Report Analysis · Patient Engagement Plan
 
 > **Purpose:** This file tracks the full refocus plan. Update the checkboxes as each task is completed.
-> Last updated: 2026-04-28 (Phase 2 complete)
+> Last updated: 2026-04-28 (Phase 3 complete)
 
 ---
 
@@ -107,8 +107,8 @@ The project covers two journeys: (1) symptom-based disease diagnosis and (2) blo
 ### Feature 5 — Parameter Progress Tracker
 **Component:** `ParameterProgress.jsx` → add to Analysis page
 
-- [ ] **Backend:** Extend `GET /api/blood-report/history` or new endpoint to return per-parameter history
-- [ ] **Frontend:** For each abnormal parameter, horizontal gauge showing current value relative to normal range
+- [x] **Backend:** Extend `GET /api/blood-report/history` or new endpoint to return per-parameter history
+- [x] **Frontend:** For each abnormal parameter, horizontal gauge showing current value relative to normal range
   - Visual: `[Low ←――●――――→ High]` with patient's value as the marker dot
   - If multiple reports: show arrow indicating direction of change
 
@@ -117,19 +117,19 @@ The project covers two journeys: (1) symptom-based disease diagnosis and (2) blo
 ### Feature 6 — Supplement / Recovery Ingredient Tracker
 **Toggle added to Recovery Ingredients cards in Analysis.jsx**
 
-- [ ] **DB:** New table `supplement_logs (id, patient_id, ingredient_name, taken_at)`
-- [ ] **Backend:** `POST /api/patient/supplement-log` + `GET /api/patient/supplement-log?date=YYYY-MM-DD`
-- [ ] **Frontend:** "✓ Taken today" toggle on each Recovery Ingredient card in Analysis.jsx
-- [ ] **Frontend:** Show streak counter ("5-day streak 🔥") on the card
+- [x] **DB:** New table `supplement_logs (id, patient_id, ingredient_name, taken_at)`
+- [x] **Backend:** `POST /api/patient/supplement-log` + `GET /api/patient/supplement-log?date=YYYY-MM-DD`
+- [x] **Frontend:** "✓ Taken today" toggle on each Recovery Ingredient card in Analysis.jsx
+- [x] **Frontend:** Show streak counter ("5-day streak 🔥") on the card
 
 ---
 
 ### Feature 7 — Smart Follow-up Email Reminders
 **Background feature — no UI change needed**
 
-- [ ] **DB:** New table `reminders (id, patient_id, report_id, message, send_at, sent BOOLEAN)`
-- [ ] **Backend:** After `followUpAgent` saves results, parse recheck timeframes → insert rows into `reminders`
-- [ ] **Backend:** Cron-style check (on server startup or periodic endpoint) — send emails for `send_at <= now AND sent = false`
+- [x] **DB:** New table `reminders (id, patient_id, report_id, message, send_at, sent BOOLEAN)`
+- [x] **Backend:** After `followUpAgent` saves results, parse recheck timeframes → insert rows into `reminders`
+- [x] **Backend:** Cron-style check (on server startup or periodic endpoint) — send emails for `send_at <= now AND sent = false`
 
 ---
 
@@ -143,15 +143,15 @@ The project covers two journeys: (1) symptom-based disease diagnosis and (2) blo
 | ✅ Improving | Any parameter moved closer to normal range between last 2 reports |
 | 🔁 Follow-up Champion | Uploaded a new report within the recommended recheck window |
 
-- [ ] **Backend:** `GET /api/patient/badges` — compute badges from `blood_reports` table
-- [ ] **Frontend:** Badge row on dashboard
+- [x] **Backend:** `GET /api/patient/badges` — compute badges from `blood_reports` table
+- [x] **Frontend:** Badge row on dashboard
 
 ---
 
 ### Feature 9 — Printable Patient-Friendly Summary Card
 
-- [ ] **Backend:** `GET /api/blood-report/:id/summary-card` — generates minimal 1-page PDF: Health Score + top 3 findings in plain English + 3 foods to eat/avoid + next recheck date
-- [ ] **Frontend:** "Print Summary Card" button in Analysis page header (next to Export PDF)
+- [x] **Backend:** `GET /api/blood-report/:id/summary-card` — generates minimal 1-page PDF: Health Score + top 3 findings in plain English + 3 foods to eat/avoid + next recheck date
+- [x] **Frontend:** "Print Summary Card" button in Analysis page header (next to Export PDF)
 
 ---
 
@@ -227,8 +227,8 @@ client/src/components/CompareModal.jsx         Side-by-side report comparison
 |-------|-------|------|
 | Phase 1 — Cleanup | 25 | 25 ✅ |
 | Phase 2 — New core features | 12 | 12 ✅ |
-| Phase 3 — Engagement loops | 14 | 0 |
+| Phase 3 — Engagement loops | 14 | 14 ✅ |
 | Phase 4 — Infrastructure | 3 | 0 |
-| **Total** | **54** | **37** |
+| **Total** | **54** | **51** |
 
 > Update checkboxes above as you complete each task. Update the counts in this table.

@@ -72,4 +72,23 @@ async function sendReportShared(email, shareToken) {
   });
 }
 
-module.exports = { sendEmail, sendAnalysisComplete, sendReportShared };
+/**
+ * Send a follow-up reminder to a patient.
+ */
+async function sendFollowUpReminder(email, patientName, message) {
+  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  return sendEmail({
+    to: email,
+    subject: 'MedAssist AI — Blood Test Recheck Reminder',
+    html: `
+      <h2>Time to Recheck Your Blood Tests</h2>
+      <p>Hi ${patientName},</p>
+      <p>${message}</p>
+      <p>Upload your latest report for an updated AI analysis.</p>
+      <p><a href="${clientUrl}/patient/upload-report" style="display:inline-block;padding:12px 24px;background:#0d9488;color:#fff;border-radius:6px;text-decoration:none;">Upload Report</a></p>
+      <p style="color:#666;font-size:12px;">MedAssist AI &mdash; Your AI Health Assistant</p>
+    `,
+  });
+}
+
+module.exports = { sendEmail, sendAnalysisComplete, sendReportShared, sendFollowUpReminder };

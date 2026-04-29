@@ -53,12 +53,16 @@ export default function PatientDashboard() {
   const navigate = useNavigate();
   const [standaloneReports, setStandaloneReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [badges, setBadges] = useState([]);
 
   useEffect(() => {
     api.get('/blood-report/standalone')
       .then((res) => setStandaloneReports(res.data.reports || []))
       .catch(() => toast.error('Could not load your reports'))
       .finally(() => setLoading(false));
+    api.get('/patient/badges')
+      .then((res) => setBadges(res.data.badges || []))
+      .catch(() => {});
   }, []);
 
   return (
@@ -114,6 +118,27 @@ export default function PatientDashboard() {
         <HealthScoreCard />
         <DailyTipsCard />
       </div>
+
+      {/* Engagement Badges */}
+      {badges.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow p-5">
+          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+            Your Achievements
+          </h2>
+          <div className="flex flex-wrap gap-3">
+            {badges.map((badge) => (
+              <div
+                key={badge.id}
+                className="flex items-center gap-2 bg-gradient-to-r from-slate-50 to-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-sm"
+                title={badge.description}
+              >
+                <span className="text-xl">{badge.icon}</span>
+                <span className="text-sm font-semibold text-slate-700">{badge.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Loading skeleton */}
       {loading && (
