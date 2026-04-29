@@ -8,7 +8,7 @@
 const router  = require('express').Router();
 const https   = require('https');
 const verifyToken = require('../middleware/auth');
-const { getProviders, getAvailableVoiceProviders } = require('../utils/aiClients');
+const { getProviders, getAvailableProviders, getAvailableVoiceProviders } = require('../utils/aiClients');
 
 const ELEVENLABS_VOICE_ID = 'W1TKxm4MpGXSlpN7iVQy'; // MedAssist custom voice
 const ELEVENLABS_MODEL    = 'eleven_turbo_v2';
@@ -240,6 +240,169 @@ router.post('/parse', verifyToken, async (req, res) => {
     console.error('[voice/parse] AI error:', err.message);
     res.status(500).json({ error: 'AI parse failed', details: err.message });
   }
+});
+
+// ─── POST /api/voice/narrate-report ────────────────────────────────────────
+// Generates a doctor-style audio narration of the patient's blood report.
+// Returns: audio/mpeg buffer
+router.post('/narrate-report', verifyToken, async (req, res) => {
+  const { reportId } = req.body;
+  if (!reportId) return res.status(400).json({ error: 'reportId is required' });
+
+  const pool = require('../db/pool');
+
+  let report;
+  try {
+    const { rows } = await pool.query(
+      'SELECT analysis, extracted_values FROM blood_reports WHERE id = $1 AND patient_id = $2',
+      [reportId, req.user.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Report not found' });
+    report = rows[0];
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to fetch report' });
+  }
+
+  const analysis = report.analysis || {};
+  const summary = analysis.summary || {};
+  const abnormal = analysis.abnormal_findings || [];
+
+  const abnormalText = abnormal.length > 0
+    ? abnormal.slice(0, 6).map(f =>
+        `${f.parameter}: ${f.your_value} (normal: ${f.normal_range}) — ${f.status}`
+      ).join('; ')
+    : 'All values within normal range.';
+
+  const scriptPrompt = `You are a warm, empathetic doctor speaking directly to a patient after reviewing their blood test results. Write a clear, calm 2-minute spoken narration (about 200-250 words) that:
+- Starts with a brief friendly greeting
+- Summarizes the overall picture in plain English
+- Mentions the 2-3 most important findings and what they mean for daily life
+- Gives one or two simple lifestyle tips based on the results
+- Ends with encouragement and a reminder to consult their doctor for any concerns
+
+Do NOT use medical jargon. Do NOT say "your analysis shows" — speak naturally as if talking to the patient in person.
+Do NOT include any JSON, bullet points, or formatting — just natural spoken sentences.
+
+Report data:
+Overall: ${summary.overall_assessment || 'Analysis complete.'}
+Root cause: ${summary.root_cause || 'Not identified.'}
+Complexity: ${summary.complexity || 'Moderate'}
+Key abnormal findings: ${abnormalText}`;
+
+  const providers = getProviders();
+  const available = getAvailableProviders();
+
+  let script = null;
+  for (const name of available) {
+    const provider = providers[name];
+    try {
+      const response = await provider.client.chat.completions.create({
+        model: provider.model,
+        messages: [
+          { role: 'system', content: 'You write warm, plain-English medical narrations for patients. Output ONLY the spoken text, no formatting.' },
+          { role: 'user', content: scriptPrompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 400,
+      });
+      script = response.choices[0]?.message?.content?.trim();
+      if (script) break;
+    } catch (err) {
+      const status = err?.status || err?.response?.status;
+      if (status === 429 || status === 503) continue;
+      throw err;
+    }
+  }
+
+  if (!script) {
+    return res.status(503).json({ error: 'Could not generate narration script. Try again.' });
+  }
+
+  const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+  if (!ELEVENLABS_API_KEY || ELEVENLABS_API_KEY === 'your_elevenlabs_api_key_here') {
+    return res.status(500).json({ error: 'TTS not configured' });
+  }
+
+  try {
+    const ttsRes = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
+      {
+        method: 'POST',
+        headers: {
+          'xi-api-key': ELEVENLABS_API_KEY,
+          'Content-Type': 'application/json',
+          'Accept': 'audio/mpeg',
+        },
+        body: JSON.stringify({
+          text: script,
+          model_id: ELEVENLABS_MODEL,
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+        }),
+      }
+    );
+
+    if (!ttsRes.ok) {
+      const errText = await ttsRes.text();
+      console.error('[voice/narrate-report] ElevenLabs error:', errText);
+      return res.status(502).json({ error: 'TTS service error' });
+    }
+
+    res.setHeader('Content-Type', 'audio/mpeg');
+    const audioBuffer = await ttsRes.arrayBuffer();
+    return res.send(Buffer.from(audioBuffer));
+  } catch (err) {
+    console.error('[voice/narrate-report] TTS fetch failed:', err.message);
+    return res.status(502).json({ error: 'TTS request failed' });
+  }
+});
+
+
+// ─── POST /api/voice/explain-finding ───────────────────────────────────────
+// Returns a plain-English explanation of a single abnormal blood finding.
+// Returns: { explanation: string }
+router.post('/explain-finding', verifyToken, async (req, res) => {
+  const { parameter, your_value, normal_range, status } = req.body;
+  if (!parameter) return res.status(400).json({ error: 'parameter is required' });
+
+  const prompt = `A patient's blood test shows: ${parameter} = ${your_value} (normal range: ${normal_range || 'not specified'}, status: ${status || 'abnormal'}).
+
+Write a 2-3 sentence plain-English explanation for the patient (no medical jargon) that covers:
+1. What this parameter does in the body
+2. What it means that it is ${status || 'abnormal'}
+3. One practical implication for daily life
+
+Be warm, clear, and reassuring. Do not recommend specific treatments or drugs.`;
+
+  const providers = getProviders();
+  const available = getAvailableProviders();
+
+  let explanation = null;
+  for (const name of available) {
+    const provider = providers[name];
+    try {
+      const response = await provider.client.chat.completions.create({
+        model: provider.model,
+        messages: [
+          { role: 'system', content: 'You explain blood test results in plain English to patients. Be concise (2-3 sentences), warm, and avoid jargon.' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.5,
+        max_tokens: 150,
+      });
+      explanation = response.choices[0]?.message?.content?.trim();
+      if (explanation) break;
+    } catch (err) {
+      const status = err?.status || err?.response?.status;
+      if (status === 429 || status === 503) continue;
+      throw err;
+    }
+  }
+
+  if (!explanation) {
+    return res.status(503).json({ error: 'Could not generate explanation. Try again.' });
+  }
+
+  return res.json({ explanation });
 });
 
 module.exports = router;

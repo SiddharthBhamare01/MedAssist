@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
@@ -51,6 +51,14 @@ export default function Analysis() {
   const [loadingRisk, setLoadingRisk] = useState(false);
   const [loadingFollowUp, setLoadingFollowUp] = useState(false);
   const [exporting, setExporting] = useState(false);
+
+  // Voice narration state
+  const [isNarrating, setIsNarrating] = useState(false);
+  const [isLoadingNarration, setIsLoadingNarration] = useState(false);
+  const audioRef = useRef(null);
+
+  // Explain This modal state
+  const [explainModal, setExplainModal] = useState({ open: false, loading: false, text: '', parameter: '' });
 
   if (!reportId) {
     return (
@@ -188,6 +196,56 @@ export default function Analysis() {
     }
   };
 
+  const handleNarrate = async () => {
+    if (isNarrating) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      setIsNarrating(false);
+      return;
+    }
+
+    setIsLoadingNarration(true);
+    try {
+      const response = await api.post(
+        '/voice/narrate-report',
+        { reportId },
+        { responseType: 'arraybuffer' }
+      );
+      const blob = new Blob([response.data], { type: 'audio/mpeg' });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => {
+        setIsNarrating(false);
+        URL.revokeObjectURL(url);
+      };
+      audio.play();
+      setIsNarrating(true);
+    } catch (err) {
+      toast.error('Could not generate narration. Try again.');
+    } finally {
+      setIsLoadingNarration(false);
+    }
+  };
+
+  const handleExplainFinding = async (finding) => {
+    setExplainModal({ open: true, loading: true, text: '', parameter: finding.parameter });
+    try {
+      const { data } = await api.post('/voice/explain-finding', {
+        parameter: finding.parameter,
+        your_value: finding.your_value,
+        normal_range: finding.normal_range,
+        status: finding.status,
+        interpretation: finding.interpretation,
+      });
+      setExplainModal((m) => ({ ...m, loading: false, text: data.explanation }));
+    } catch {
+      setExplainModal((m) => ({ ...m, loading: false, text: 'Could not load explanation. Please try again.' }));
+    }
+  };
+
   const { analysis, doctorReferralNeeded } = result || {};
   const summary = analysis?.summary;
 
@@ -222,6 +280,35 @@ export default function Analysis() {
           {!loading && result && (
             <div className="flex items-center gap-2 flex-wrap">
               <button
+                onClick={handleNarrate}
+                disabled={isLoadingNarration}
+                className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-xl transition-all shadow-sm disabled:opacity-50"
+              >
+                {isLoadingNarration ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                    </svg>
+                    Preparing...
+                  </>
+                ) : isNarrating ? (
+                  <>
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+                    </svg>
+                    Stop
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z"/>
+                    </svg>
+                    Listen to Report
+                  </>
+                )}
+              </button>
+              <button
                 onClick={handleExportPDF}
                 disabled={exporting}
                 className="flex items-center gap-1.5 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold rounded-xl transition-all shadow-sm disabled:opacity-50"
@@ -251,6 +338,47 @@ export default function Analysis() {
       {/* Share Modal */}
       {showShareModal && (
         <ShareModal sessionId={sessionId || reportId} onClose={() => setShowShareModal(false)} />
+      )}
+
+      {/* Explain This Modal */}
+      {explainModal.open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={() => setExplainModal({ open: false, loading: false, text: '', parameter: '' })}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4 animate-slide-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-slate-800">{explainModal.parameter}</h3>
+                <p className="text-xs text-teal-600 mt-0.5">Plain English Explanation</p>
+              </div>
+              <button
+                onClick={() => setExplainModal({ open: false, loading: false, text: '', parameter: '' })}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+
+            {explainModal.loading ? (
+              <div className="flex items-center gap-3 py-4">
+                <div className="w-5 h-5 border-2 border-teal-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                <p className="text-sm text-slate-500">Getting explanation...</p>
+              </div>
+            ) : (
+              <p className="text-slate-700 leading-relaxed">{explainModal.text}</p>
+            )}
+
+            <div className="pt-2 border-t border-slate-100">
+              <p className="text-xs text-slate-400">
+                AI-generated — always consult your doctor for medical advice.
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Loading */}
@@ -306,6 +434,7 @@ export default function Analysis() {
                       <th className="py-1.5 px-1.5 font-medium">Normal</th>
                       <th className="py-1.5 px-1.5 font-medium">Status</th>
                       <th className="py-1.5 px-1.5 font-medium">Interpretation</th>
+                      <th className="py-1.5 px-1.5 font-medium w-8"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
@@ -320,6 +449,15 @@ export default function Analysis() {
                           </span>
                         </td>
                         <td className="py-1.5 px-1.5 text-slate-600 max-w-[180px] truncate" title={f.interpretation}>{f.interpretation}</td>
+                        <td className="py-1.5 px-1.5">
+                          <button
+                            onClick={() => handleExplainFinding(f)}
+                            className="w-6 h-6 rounded-full bg-teal-50 hover:bg-teal-100 text-teal-600 text-xs font-bold flex items-center justify-center transition-colors"
+                            title="Explain in plain English"
+                          >
+                            ?
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
