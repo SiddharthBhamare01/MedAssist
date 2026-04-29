@@ -16,6 +16,7 @@ import EmailVerify from './pages/Auth/EmailVerify';
 
 // Patient pages
 import PatientDashboard from './pages/Patient/PatientDashboard';
+import ReportHistory from './pages/Patient/ReportHistory';
 import UploadReport from './pages/Patient/UploadReport';
 import Analysis from './pages/Patient/Analysis';
 import Doctors from './pages/Patient/Doctors';
@@ -97,6 +98,7 @@ export default function App() {
 
           {/* Patient */}
           <Route path="/patient/dashboard" element={<P><PatientDashboard /></P>} />
+          <Route path="/patient/history" element={<P><ReportHistory /></P>} />
           <Route path="/patient/vitals" element={<P><Vitals /></P>} />
           <Route path="/patient/profile" element={<P><PatientProfile /></P>} />
           <Route path="/patient/upload-report" element={<P><UploadReport /></P>} />

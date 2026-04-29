@@ -126,10 +126,11 @@ const Icons = {
 
 /* ─── Nav link definitions ───────────────────────────────────────────────── */
 const PATIENT_LINKS = [
-  { to: '/patient/dashboard',      label: 'My Reports',        icon: Icons.clipboard },
-  { to: '/patient/upload-report',  label: 'Upload Report',     icon: Icons.plusCircle },
-  { to: '/patient/vitals',         label: 'Vitals',            icon: Icons.heart },
-  { to: '/patient/profile',        label: 'My Profile',        icon: Icons.idCard },
+  { to: '/patient/dashboard',      label: 'Dashboard',           icon: Icons.clipboard },
+  { to: '/patient/upload-report',  label: 'Upload Report',       icon: Icons.plusCircle },
+  { to: '/patient/history',        label: 'My Reports',          icon: Icons.chartBar },
+  { to: '/patient/vitals',         label: 'Vitals',              icon: Icons.heart },
+  { to: '/patient/profile',        label: 'My Profile',          icon: Icons.idCard },
   { to: '/patient/doctors',        label: 'Find a Lab / Clinic', icon: Icons.building },
 ];
 

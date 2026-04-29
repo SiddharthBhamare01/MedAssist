@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
+import HealthScoreCard from '../../components/HealthScoreCard';
+import DailyTipsCard from '../../components/DailyTipsCard';
 
 function StandaloneReportCard({ report, index, onOpen }) {
   const date = new Date(report.created_at).toLocaleDateString('en-US', {
@@ -105,6 +107,12 @@ export default function PatientDashboard() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Health Score + Daily Tips */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <HealthScoreCard />
+        <DailyTipsCard />
       </div>
 
       {/* Loading skeleton */}

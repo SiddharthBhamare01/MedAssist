@@ -2,7 +2,7 @@
 ## Blood Report Analysis · Patient Engagement Plan
 
 > **Purpose:** This file tracks the full refocus plan. Update the checkboxes as each task is completed.
-> Last updated: 2026-04-28 (Phase 1 complete)
+> Last updated: 2026-04-28 (Phase 2 complete)
 
 ---
 
@@ -66,10 +66,10 @@ The project covers two journeys: (1) symptom-based disease diagnosis and (2) blo
 ### Feature 1 — Blood Report History & Trend Charts ⭐
 **Page:** `/patient/history` → `ReportHistory.jsx`
 
-- [ ] **Backend:** `GET /api/blood-report/history` — all reports for patient, sorted by date, with `extracted_values`
-- [ ] **Frontend:** New page listing all past reports as cards with date + parameter count + abnormal count
-- [ ] **Frontend:** Click a parameter → line chart (Recharts, reuse Vitals.jsx pattern) showing its value across all reports
-- [ ] **Frontend:** Add "My Reports" to navbar + `App.jsx` route `/patient/history`
+- [x] **Backend:** `GET /api/blood-report/history` — all reports for patient, sorted by date, with `extracted_values`
+- [x] **Frontend:** New page listing all past reports as cards with date + parameter count + abnormal count
+- [x] **Frontend:** Click a parameter → line chart (Recharts, reuse Vitals.jsx pattern) showing its value across all reports
+- [x] **Frontend:** Add "My Reports" to navbar + `App.jsx` route `/patient/history`
 
 **Key parameters to trend:** Hemoglobin, HbA1c, Cholesterol (Total/LDL/HDL), Glucose, Creatinine, WBC, Platelets
 
@@ -78,27 +78,27 @@ The project covers two journeys: (1) symptom-based disease diagnosis and (2) blo
 ### Feature 2 — Report Comparison (Side-by-Side) ⭐
 **Component:** `CompareModal.jsx`
 
-- [ ] **Backend:** `GET /api/blood-report/compare?id1=X&id2=Y` — returns merged parameter diff table
-- [ ] **Frontend:** "Compare" button on History page → opens modal
-- [ ] **Frontend:** Table: Parameter | Report A value | Report B value | Change (↑↓ with color)
+- [x] **Backend:** `GET /api/blood-report/compare?id1=X&id2=Y` — returns merged parameter diff table
+- [x] **Frontend:** "Compare" button on History page → opens modal
+- [x] **Frontend:** Table: Parameter | Report A value | Report B value | Change (↑↓ with color)
 
 ---
 
 ### Feature 3 — Health Score Card on Dashboard ⭐
 **Component:** `HealthScoreCard.jsx`
 
-- [ ] **Backend:** `GET /api/blood-report/latest-score` — returns latest `risk_scores.composite_score` + `risk_level` for patient
-- [ ] **Frontend:** Card on PatientDashboard with circular SVG gauge (reuse the ring from Analysis.jsx)
-- [ ] **Frontend:** Show score history sparkline if multiple reports exist
+- [x] **Backend:** `GET /api/blood-report/latest-score` — returns latest `risk_scores.composite_score` + `risk_level` for patient
+- [x] **Frontend:** Card on PatientDashboard with circular SVG gauge (reuse the ring from Analysis.jsx)
+- [x] **Frontend:** Show score history sparkline if multiple reports exist
 
 ---
 
 ### Feature 4 — Daily Personalized Health Tips ⭐
 **Component:** `DailyTipsCard.jsx`
 
-- [ ] **Backend:** `GET /api/blood-report/daily-tips` — reads most recent report, calls LLM, returns 3 one-liner tips (≤20 words each). Cache for 24h per patient in memory or DB.
-- [ ] **Frontend:** Card on PatientDashboard: tip text + "Refresh" button
-- [ ] Example tip: *"Your iron is low — try adding spinach or lentils to lunch today."*
+- [x] **Backend:** `GET /api/blood-report/daily-tips` — reads most recent report, calls LLM, returns 3 one-liner tips (≤20 words each). Cache for 24h per patient in memory or DB. Supports `?force=true` to bypass cache.
+- [x] **Frontend:** Card on PatientDashboard: tip text + "Refresh" button (sends `?force=true` to regenerate)
+- [x] Example tip: *"Your iron is low — try adding spinach or lentils to lunch today."*
 
 ---
 
@@ -226,9 +226,9 @@ client/src/components/CompareModal.jsx         Side-by-side report comparison
 | Phase | Tasks | Done |
 |-------|-------|------|
 | Phase 1 — Cleanup | 25 | 25 ✅ |
-| Phase 2 — New core features | 12 | 0 |
+| Phase 2 — New core features | 12 | 12 ✅ |
 | Phase 3 — Engagement loops | 14 | 0 |
 | Phase 4 — Infrastructure | 3 | 0 |
-| **Total** | **54** | **25** |
+| **Total** | **54** | **37** |
 
 > Update checkboxes above as you complete each task. Update the counts in this table.

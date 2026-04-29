@@ -254,6 +254,213 @@ router.get('/standalone', verifyToken, async (req, res) => {
   }
 });
 
+// GET /api/blood-report/history — all patient reports with extracted values (for trend charts)
+router.get('/history', verifyToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, created_at, extracted_values, analysis, risk_scores
+         FROM blood_reports
+        WHERE patient_id = $1 AND session_id IS NULL
+        ORDER BY created_at ASC
+        LIMIT 50`,
+      [req.user.userId]
+    );
+
+    const reports = rows.map((r) => {
+      const extracted = r.extracted_values || [];
+      return {
+        id: r.id,
+        created_at: r.created_at,
+        extracted_values: extracted,
+        total_parameters: extracted.length,
+        abnormal_count: extracted.filter((v) => v.status && v.status !== 'normal').length,
+        analyzed: !!(r.analysis && (r.analysis.summary || r.analysis.abnormal_findings?.length > 0)),
+        composite_score: r.risk_scores?.composite_score ?? null,
+        risk_level: r.risk_scores?.risk_level ?? null,
+      };
+    });
+
+    return res.json({ reports });
+  } catch (err) {
+    console.error('History error:', err);
+    return res.status(500).json({ error: 'Failed to fetch report history' });
+  }
+});
+
+// GET /api/blood-report/compare?id1=X&id2=Y — side-by-side parameter diff
+router.get('/compare', verifyToken, async (req, res) => {
+  const { id1, id2 } = req.query;
+  if (!id1 || !id2) return res.status(400).json({ error: 'id1 and id2 are required' });
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, created_at, extracted_values
+         FROM blood_reports
+        WHERE id = ANY($1::int[]) AND patient_id = $2`,
+      [[id1, id2], req.user.userId]
+    );
+
+    const a = rows.find((r) => String(r.id) === String(id1));
+    const b = rows.find((r) => String(r.id) === String(id2));
+    if (!a || !b) return res.status(404).json({ error: 'One or both reports not found' });
+
+    const aMap = {};
+    const bMap = {};
+    for (const v of (a.extracted_values || [])) aMap[v.parameter?.toLowerCase()] = v;
+    for (const v of (b.extracted_values || [])) bMap[v.parameter?.toLowerCase()] = v;
+
+    const allKeys = new Set([...Object.keys(aMap), ...Object.keys(bMap)]);
+    const diff = [...allKeys].sort().map((key) => {
+      const av = aMap[key];
+      const bv = bMap[key];
+      const aNum = av ? parseFloat(av.value) : null;
+      const bNum = bv ? parseFloat(bv.value) : null;
+      let trend = null;
+      if (aNum !== null && bNum !== null && !isNaN(aNum) && !isNaN(bNum)) {
+        trend = bNum > aNum ? 'up' : bNum < aNum ? 'down' : 'same';
+      }
+      return {
+        parameter: av?.parameter || bv?.parameter || key,
+        normal_range: av?.normal_range || bv?.normal_range || null,
+        a: av ? { value: av.value, unit: av.unit, status: av.status } : null,
+        b: bv ? { value: bv.value, unit: bv.unit, status: bv.status } : null,
+        trend,
+      };
+    });
+
+    return res.json({
+      report_a: { id: a.id, created_at: a.created_at },
+      report_b: { id: b.id, created_at: b.created_at },
+      diff,
+    });
+  } catch (err) {
+    console.error('Compare error:', err);
+    return res.status(500).json({ error: 'Failed to compare reports' });
+  }
+});
+
+// GET /api/blood-report/latest-score — latest composite health score + sparkline
+router.get('/latest-score', verifyToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, created_at, risk_scores
+         FROM blood_reports
+        WHERE patient_id = $1 AND risk_scores IS NOT NULL AND session_id IS NULL
+        ORDER BY created_at DESC LIMIT 10`,
+      [req.user.userId]
+    );
+
+    if (!rows.length) return res.json({ score: null });
+
+    const latest = rows[0];
+    const sparkline = [...rows].reverse().map((r) => ({
+      date: r.created_at,
+      score: r.risk_scores?.composite_score ?? null,
+    })).filter((d) => d.score !== null);
+
+    return res.json({
+      score: latest.risk_scores?.composite_score ?? null,
+      risk_level: latest.risk_scores?.risk_level ?? null,
+      summary: latest.risk_scores?.summary ?? null,
+      sparkline,
+    });
+  } catch (err) {
+    console.error('Latest score error:', err);
+    return res.status(500).json({ error: 'Failed to fetch health score' });
+  }
+});
+
+// In-memory 24h tips cache: patientId → { tips, expiresAt }
+const dailyTipsCache = new Map();
+
+// GET /api/blood-report/daily-tips — LLM-generated personalized tips, cached 24h
+router.get('/daily-tips', verifyToken, async (req, res) => {
+  const patientId = req.user.userId;
+
+  const forceRefresh = req.query.force === 'true';
+  const cached = dailyTipsCache.get(patientId);
+  if (!forceRefresh && cached && Date.now() < cached.expiresAt) {
+    return res.json({ tips: cached.tips, cached: true });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT analysis, extracted_values FROM blood_reports
+        WHERE patient_id = $1 AND analysis IS NOT NULL AND session_id IS NULL
+        ORDER BY created_at DESC LIMIT 1`,
+      [patientId]
+    );
+
+    if (!rows.length) {
+      return res.json({ tips: [], message: 'No analyzed reports found' });
+    }
+
+    const report = rows[0];
+    const abnormal = report.analysis?.abnormal_findings || [];
+    const summary = report.analysis?.summary?.overall_assessment || '';
+
+    const abnormalLines = abnormal.slice(0, 5)
+      .map((f) => `${f.parameter}: ${f.your_value} (${f.status})`)
+      .join(', ');
+
+    const prompt = `Based on this patient's recent blood test, generate exactly 3 short personalized health tips.
+Each tip must be under 20 words, directly reference the actual findings below, and be actionable today.
+Do NOT give generic advice — be specific to what was found.
+
+Findings: ${abnormalLines || summary || 'Values within normal range'}
+Overall assessment: ${summary}
+
+Return ONLY a JSON array of 3 strings. Example format:
+["Your hemoglobin is low — add spinach or lentils to your lunch today.", "...", "..."]`;
+
+    const { getProviders, getAvailableProviders } = require('../utils/aiClients');
+    const providers = getProviders();
+    const available = getAvailableProviders();
+
+    let tips = null;
+    for (const name of available) {
+      const provider = providers[name];
+      try {
+        const response = await provider.client.chat.completions.create({
+          model: provider.model,
+          messages: [
+            { role: 'system', content: 'You generate brief personalized health tips. Return ONLY a JSON array of 3 strings, no other text.' },
+            { role: 'user', content: prompt },
+          ],
+          temperature: 0.7,
+          max_tokens: 180,
+        });
+        const raw = response.choices[0]?.message?.content?.trim() || '';
+        const cleaned = raw.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
+        try {
+          const parsed = JSON.parse(cleaned);
+          if (Array.isArray(parsed) && parsed.length >= 3) { tips = parsed.slice(0, 3); break; }
+        } catch {
+          continue;
+        }
+      } catch (err) {
+        const status = err?.status || err?.response?.status;
+        if (status === 429 || status === 503) continue;
+        throw err;
+      }
+    }
+
+    if (!tips) {
+      tips = [
+        'Stay hydrated — drink at least 8 glasses of water daily.',
+        'Try adding more leafy greens to your meals this week.',
+        'A 20-minute walk after meals helps regulate blood sugar levels.',
+      ];
+    }
+
+    dailyTipsCache.set(patientId, { tips, expiresAt: Date.now() + 24 * 60 * 60 * 1000 });
+    return res.json({ tips });
+  } catch (err) {
+    console.error('Daily tips error:', err);
+    return res.status(500).json({ error: 'Failed to generate tips' });
+  }
+});
+
 // GET /api/blood-report/:id/export-pdf — standalone PDF (no session required)
 router.get('/:id/export-pdf', verifyToken, async (req, res) => {
   try {
