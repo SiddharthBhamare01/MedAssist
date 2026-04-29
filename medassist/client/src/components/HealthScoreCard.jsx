@@ -8,10 +8,12 @@ function ScoreGauge({ score, riskLevel }) {
   const pct = Math.min(Math.max(score ?? 0, 0), 100) / 100;
   const strokeDashoffset = circumference * (1 - pct);
 
+  const lvl = (riskLevel || '').toLowerCase();
   const color =
-    riskLevel === 'low' ? '#10b981'
-    : riskLevel === 'moderate' ? '#f59e0b'
-    : riskLevel === 'high' ? '#ef4444'
+    lvl === 'low'      ? '#10b981'
+    : lvl === 'moderate' ? '#f59e0b'
+    : lvl === 'high'     ? '#f97316'
+    : lvl === 'critical' ? '#ef4444'
     : '#0D9488';
 
   return (
@@ -80,9 +82,11 @@ export default function HealthScoreCard() {
     );
   }
 
+  const lvl = (data.risk_level || '').toLowerCase();
   const riskColor =
-    data.risk_level === 'low' ? 'text-emerald-600'
-    : data.risk_level === 'moderate' ? 'text-amber-600'
+    lvl === 'low'      ? 'text-emerald-600'
+    : lvl === 'moderate' ? 'text-amber-600'
+    : lvl === 'high'     ? 'text-orange-500'
     : 'text-red-600';
 
   const sparkData = (data.sparkline || []).map((d) => ({
@@ -119,7 +123,12 @@ export default function HealthScoreCard() {
                   <Line
                     type="monotone"
                     dataKey="score"
-                    stroke="#0D9488"
+                    stroke={
+                      lvl === 'low' ? '#10b981'
+                      : lvl === 'moderate' ? '#f59e0b'
+                      : lvl === 'high' ? '#f97316'
+                      : '#ef4444'
+                    }
                     strokeWidth={2}
                     dot={false}
                     activeDot={{ r: 4 }}

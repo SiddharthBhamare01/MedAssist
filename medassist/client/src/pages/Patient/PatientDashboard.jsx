@@ -105,9 +105,9 @@ export default function PatientDashboard() {
             </div>
             <div className="bg-white/15 backdrop-blur-sm rounded-xl px-4 py-3 text-center border border-white/10">
               <p className="text-2xl font-bold text-amber-200">
-                {standaloneReports.reduce((sum, r) => sum + (r.abnormal_count || 0), 0)}
+                {standaloneReports.find((r) => r.analyzed)?.abnormal_count || 0}
               </p>
-              <p className="text-xs text-teal-100 mt-0.5">Abnormal Flags</p>
+              <p className="text-xs text-teal-100 mt-0.5">Latest Abnormal</p>
             </div>
           </div>
         )}

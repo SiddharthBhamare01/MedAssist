@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { GoogleOAuthProvider } from '@react-oauth/google';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
 import Navbar from './components/Layout/Navbar';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -66,6 +66,14 @@ function Layout({ children }) {
   );
 }
 
+function SmartRedirect() {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role === 'admin') return <Navigate to="/admin/dashboard" replace />;
+  if (user.role === 'doctor') return <Navigate to="/doctor/dashboard" replace />;
+  return <Navigate to="/patient/dashboard" replace />;
+}
+
 function P({ children }) {
   return <PrivateRoute role="patient"><Layout>{children}</Layout></PrivateRoute>;
 }
@@ -122,7 +130,7 @@ export default function App() {
           <Route path="/admin/audit-log" element={<A><AuditLog /></A>} />
 
           {/* Default */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/" element={<SmartRedirect />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </BrowserRouter>
