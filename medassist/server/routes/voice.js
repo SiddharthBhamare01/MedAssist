@@ -267,27 +267,29 @@ router.post('/narrate-report', verifyToken, async (req, res) => {
   const summary = analysis.summary || {};
   const abnormal = analysis.abnormal_findings || [];
 
-  const abnormalText = abnormal.length > 0
+  const abnormalLines = abnormal.length > 0
     ? abnormal.slice(0, 6).map(f =>
-        `${f.parameter}: ${f.your_value} (normal: ${f.normal_range}) — ${f.status}`
-      ).join('; ')
-    : 'All values within normal range.';
+        `- ${f.parameter}: ${f.your_value} (normal: ${f.normal_range}) — ${f.status}${f.interpretation ? `. ${f.interpretation}` : ''}`
+      ).join('\n')
+    : '- All values are within the normal range.';
 
-  const scriptPrompt = `You are a warm, empathetic doctor speaking directly to a patient after reviewing their blood test results. Write a clear, calm 2-minute spoken narration (about 200-250 words) that:
-- Starts with a brief friendly greeting
-- Summarizes the overall picture in plain English
-- Mentions the 2-3 most important findings and what they mean for daily life
-- Gives one or two simple lifestyle tips based on the results
-- Ends with encouragement and a reminder to consult their doctor for any concerns
+  const scriptPrompt = `You are a warm, empathetic doctor speaking directly to a patient after reviewing their blood test results. Write a clear, calm 2-minute spoken narration (about 200-250 words) in this exact order:
+
+1. GREETING — Start with a brief friendly greeting and tell the patient you have reviewed their blood report.
+2. DIAGNOSIS / OVERALL FINDING — Explain what the report found overall: the likely root cause or condition identified, and how serious it is (complexity level). This is the most important part — speak about the diagnosis first.
+3. ABNORMAL VALUES — Walk through the key abnormal findings one by one in plain English. For each one, say what the parameter does in the body, whether it is too high or too low, and what that means for the patient's health day-to-day.
+4. LIFESTYLE TIPS — Give one or two simple, practical lifestyle suggestions based on the findings.
+5. CLOSING — End with encouragement and a reminder to follow up with their doctor.
 
 Do NOT use medical jargon. Do NOT say "your analysis shows" — speak naturally as if talking to the patient in person.
-Do NOT include any JSON, bullet points, or formatting — just natural spoken sentences.
+Do NOT include any JSON, bullet points, section headers, or formatting — just flowing spoken sentences.
 
 Report data:
-Overall: ${summary.overall_assessment || 'Analysis complete.'}
-Root cause: ${summary.root_cause || 'Not identified.'}
-Complexity: ${summary.complexity || 'Moderate'}
-Key abnormal findings: ${abnormalText}`;
+Overall assessment: ${summary.overall_assessment || 'Analysis complete.'}
+Diagnosis / Root cause: ${summary.root_cause || 'Not clearly identified.'}
+Severity: ${summary.complexity || 'Moderate'} complexity
+Abnormal findings:
+${abnormalLines}`;
 
   const providers = getProviders();
   const available = getAvailableProviders();

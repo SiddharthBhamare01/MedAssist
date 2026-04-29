@@ -589,60 +589,62 @@ export default function Analysis() {
           {/* Row 3: Personalized Diet Plan + Recovery Ingredients */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {analysis?.diet_plan && (
-            <Section title="Personalized Diet Plan" icon="🥗">
-              {analysis.diet_plan.overview && (
-                <p className="text-slate-600 text-sm">{analysis.diet_plan.overview}</p>
-              )}
-              {analysis.diet_plan.meal_schedule?.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-700 mb-2">Daily Meal Schedule</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {analysis.diet_plan.meal_schedule.map((m, i) => (
-                      <div key={i} className="bg-emerald-50/70 border border-emerald-100 rounded-xl p-3">
-                        <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1">{m.meal}</p>
-                        <p className="text-sm text-slate-700">{m.suggestion}</p>
-                      </div>
-                    ))}
+            <Section title="Personalized Diet Plan" icon="🥗" className="max-h-[600px]">
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
+                {analysis.diet_plan.overview && (
+                  <p className="text-slate-600 text-sm">{analysis.diet_plan.overview}</p>
+                )}
+                {analysis.diet_plan.meal_schedule?.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-700 mb-2">Daily Meal Schedule</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {analysis.diet_plan.meal_schedule.map((m, i) => (
+                        <div key={i} className="bg-emerald-50/70 border border-emerald-100 rounded-xl p-3">
+                          <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1">{m.meal}</p>
+                          <p className="text-sm text-slate-700">{m.suggestion}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {analysis.diet_plan.foods_to_eat?.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-emerald-700 mb-2">Foods to Eat</h3>
+                      <ul className="space-y-2">
+                        {analysis.diet_plan.foods_to_eat.map((f, i) => (
+                          <li key={i} className="bg-emerald-50/50 rounded-xl p-2.5 border border-emerald-100">
+                            <p className="font-medium text-slate-800 text-sm">{f.food}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{f.reason}</p>
+                            {f.frequency && (
+                              <p className="text-xs text-emerald-600 mt-0.5 font-medium">{f.frequency}</p>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {analysis.diet_plan.foods_to_avoid?.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-red-600 mb-2">Foods to Avoid</h3>
+                      <ul className="space-y-2">
+                        {analysis.diet_plan.foods_to_avoid.map((f, i) => (
+                          <li key={i} className="bg-red-50/50 rounded-xl p-2.5 border border-red-100">
+                            <p className="font-medium text-slate-800 text-sm">{f.food}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{f.reason}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
-              )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {analysis.diet_plan.foods_to_eat?.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-emerald-700 mb-2">Foods to Eat</h3>
-                    <ul className="space-y-2">
-                      {analysis.diet_plan.foods_to_eat.map((f, i) => (
-                        <li key={i} className="bg-emerald-50/50 rounded-xl p-2.5 border border-emerald-100">
-                          <p className="font-medium text-slate-800 text-sm">{f.food}</p>
-                          <p className="text-xs text-slate-500 mt-0.5">{f.reason}</p>
-                          {f.frequency && (
-                            <p className="text-xs text-emerald-600 mt-0.5 font-medium">{f.frequency}</p>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {analysis.diet_plan.foods_to_avoid?.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-red-600 mb-2">Foods to Avoid</h3>
-                    <ul className="space-y-2">
-                      {analysis.diet_plan.foods_to_avoid.map((f, i) => (
-                        <li key={i} className="bg-red-50/50 rounded-xl p-2.5 border border-red-100">
-                          <p className="font-medium text-slate-800 text-sm">{f.food}</p>
-                          <p className="text-xs text-slate-500 mt-0.5">{f.reason}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
               </div>
             </Section>
           )}
 
           {analysis?.recovery_ingredients?.length > 0 && (
-            <Section title="Recovery Ingredients" icon="🧬">
-              <div className="space-y-3">
+            <Section title="Recovery Ingredients" icon="🧬" className="max-h-[600px]">
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
                 {analysis.recovery_ingredients.map((item, i) => (
                   <div key={i} className="border border-teal-100 bg-teal-50/50 rounded-xl p-4">
                     <div className="flex items-start justify-between gap-2 mb-1">
