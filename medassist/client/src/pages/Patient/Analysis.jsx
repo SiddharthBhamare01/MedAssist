@@ -154,6 +154,13 @@ export default function Analysis() {
     }
   };
 
+  // Auto-fetch risk scores + follow-up as soon as main analysis is ready
+  useEffect(() => {
+    if (!result || riskScores || followUp) return;
+    handleRiskScores();
+    handleFollowUp();
+  }, [result]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleExportPDF = async () => {
     setExporting(true);
     try {
@@ -322,34 +329,28 @@ export default function Analysis() {
           )}
           </div>
 
-          {/* Row 2: Clinical Risk Score + Follow-up — action buttons */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <button
-              onClick={handleRiskScores}
-              disabled={loadingRisk || !!riskScores}
-              className="bg-white rounded-2xl border border-slate-200 shadow p-5 text-left hover:shadow-card-hover hover:border-teal-200 transition-all disabled:opacity-60"
-            >
-              <div className="text-2xl mb-2">📈</div>
-              <h3 className="font-bold text-slate-800 text-sm">Clinical Risk Scores</h3>
-              <p className="text-xs text-slate-400 mt-1">
-                {loadingRisk ? 'Calculating...' : riskScores ? 'Scores calculated' : 'Framingham, FINDRISC, CKD-EPI, Child-Pugh'}
-              </p>
-            </button>
-            <button
-              onClick={handleFollowUp}
-              disabled={loadingFollowUp || !!followUp}
-              className="bg-white rounded-2xl border border-slate-200 shadow p-5 text-left hover:shadow-card-hover hover:border-teal-200 transition-all disabled:opacity-60"
-            >
-              <div className="text-2xl mb-2">📅</div>
-              <h3 className="font-bold text-slate-800 text-sm">Follow-up Schedule</h3>
-              <p className="text-xs text-slate-400 mt-1">
-                {loadingFollowUp ? 'Generating...' : followUp ? 'Schedule ready' : 'Personalized retest recommendations'}
-              </p>
-            </button>
-          </div>
-
-          {/* Clinical Risk Score + Follow-up Schedule — side by side */}
+          {/* Row 2: Clinical Risk Score + Follow-up Schedule — auto-loaded */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Risk Score loading skeleton */}
+          {loadingRisk && !riskScores && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 flex items-center gap-4">
+              <div className="w-8 h-8 border-4 border-teal-400 border-t-transparent rounded-full animate-spin shrink-0" />
+              <div>
+                <p className="font-semibold text-slate-700 text-sm">Calculating Clinical Risk Score…</p>
+                <p className="text-xs text-slate-400 mt-0.5">Framingham, FINDRISC, CKD-EPI, Child-Pugh</p>
+              </div>
+            </div>
+          )}
+          {/* Follow-up loading skeleton */}
+          {loadingFollowUp && !followUp && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 flex items-center gap-4">
+              <div className="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin shrink-0" />
+              <div>
+                <p className="font-semibold text-slate-700 text-sm">Generating Follow-up Schedule…</p>
+                <p className="text-xs text-slate-400 mt-0.5">Personalized retest recommendations</p>
+              </div>
+            </div>
+          )}
           {riskScores && (() => {
             const s = riskScores.composite_score ?? null;
             const level = riskScores.risk_level || 'Unknown';
