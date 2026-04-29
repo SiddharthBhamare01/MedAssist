@@ -16,18 +16,11 @@ import EmailVerify from './pages/Auth/EmailVerify';
 
 // Patient pages
 import PatientDashboard from './pages/Patient/PatientDashboard';
-import Intake from './pages/Patient/Intake';
-import Results from './pages/Patient/Results';
-import Tests from './pages/Patient/Tests';
 import UploadReport from './pages/Patient/UploadReport';
 import Analysis from './pages/Patient/Analysis';
 import Doctors from './pages/Patient/Doctors';
 import PatientProfile from './pages/Patient/Profile';
 import Vitals from './pages/Patient/Vitals';
-import Medications from './pages/Patient/Medications';
-import HealthTimeline from './pages/Patient/HealthTimeline';
-import MedicalID from './pages/Patient/MedicalID';
-import PatientPrescriptions from './pages/Patient/Prescriptions';
 
 // Doctor pages
 import DoctorDashboard from './pages/Doctor/Dashboard';
@@ -38,8 +31,7 @@ import DrugChecker from './pages/Doctor/DrugChecker';
 import DoctorAnalytics from './pages/Doctor/Analytics';
 import DoctorProfile from './pages/Doctor/Profile';
 
-// Appointments (role-specific)
-import PatientAppointments from './pages/Patient/Appointments';
+// Appointments (doctor only)
 import DoctorAppointments from './pages/Doctor/Appointments';
 
 // Admin pages
@@ -48,7 +40,6 @@ import AuditLog from './pages/Admin/AuditLog';
 
 // Public pages (no auth)
 import SharedReport from './pages/Shared/SharedReport';
-import PublicMedicalID from './pages/Shared/PublicMedicalID';
 
 function Layout({ children }) {
   return (
@@ -103,29 +94,14 @@ export default function App() {
 
           {/* Public — Shared views */}
           <Route path="/shared/:token" element={<SharedReport />} />
-          <Route path="/medical-id/:patientId" element={<PublicMedicalID />} />
 
-          {/* Patient — dashboard */}
+          {/* Patient */}
           <Route path="/patient/dashboard" element={<P><PatientDashboard /></P>} />
-          <Route path="/patient/intake" element={<P><Intake /></P>} />
           <Route path="/patient/vitals" element={<P><Vitals /></P>} />
-          <Route path="/patient/medications" element={<P><Medications /></P>} />
-          <Route path="/patient/timeline" element={<P><HealthTimeline /></P>} />
-          <Route path="/patient/medical-id" element={<P><MedicalID /></P>} />
-          <Route path="/patient/prescriptions" element={<P><PatientPrescriptions /></P>} />
           <Route path="/patient/profile" element={<P><PatientProfile /></P>} />
-          <Route path="/patient/appointments" element={<P><PatientAppointments /></P>} />
-
-          {/* Patient — URL-param routes */}
-          <Route path="/patient/results/:sessionId" element={<P><Results /></P>} />
-          <Route path="/patient/tests/:sessionId" element={<P><Tests /></P>} />
+          <Route path="/patient/upload-report" element={<P><UploadReport /></P>} />
           <Route path="/patient/upload-report/:sessionId" element={<P><UploadReport /></P>} />
           <Route path="/patient/analysis/:reportId" element={<P><Analysis /></P>} />
-
-          {/* Patient — flat routes */}
-          <Route path="/patient/results" element={<P><Results /></P>} />
-          <Route path="/patient/tests" element={<P><Tests /></P>} />
-          <Route path="/patient/upload-report" element={<P><UploadReport /></P>} />
           <Route path="/patient/analysis" element={<P><Analysis /></P>} />
           <Route path="/patient/doctors" element={<P><Doctors /></P>} />
 

@@ -71,10 +71,10 @@ export default function Analysis() {
         </div>
         <p className="text-slate-500 mb-4">No report found. Please upload a blood report first.</p>
         <button
-          onClick={() => navigate('/patient/intake')}
+          onClick={() => navigate('/patient/upload-report')}
           className="bg-gradient-to-r from-teal-600 to-teal-500 text-white px-6 py-2.5 rounded-xl font-semibold hover:from-teal-700 hover:to-teal-600 shadow-md"
         >
-          Start Over
+          Upload a Report
         </button>
       </div>
     );
@@ -249,7 +249,7 @@ export default function Analysis() {
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-slate-400">
         <button onClick={() => navigate('/patient/dashboard')} className="hover:text-teal-600 transition-colors">
-          My Sessions
+          My Reports
         </button>
         {sessionId && (
           <>
@@ -268,9 +268,6 @@ export default function Analysis() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-xl font-bold font-display text-slate-800">Blood Report Analysis</h1>
-            {disease && (
-              <p className="text-sm text-teal-600 mt-0.5 font-medium">Context: {disease.disease}</p>
-            )}
           </div>
           {!loading && result && (
             <div className="flex items-center gap-2 flex-wrap">
@@ -665,42 +662,6 @@ export default function Analysis() {
           )}
           </div>
 
-          {/* Doctor Referral */}
-          {doctorReferralNeeded && (
-            <Section title="Doctor Referral Recommended" icon="🏥">
-              <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-                <p className="font-bold text-red-800">Professional Medical Consultation Required</p>
-                {summary?.referral_reason && (
-                  <p className="text-sm text-red-700 mt-1">{summary.referral_reason}</p>
-                )}
-                <p className="text-xs text-red-600 mt-2">
-                  Your results indicate findings that require evaluation by a qualified physician.
-                </p>
-                <button
-                  onClick={() => navigate('/patient/doctors', { state: { sessionId } })}
-                  className="mt-4 bg-red-600 hover:bg-red-700 text-white font-semibold px-5 py-2 rounded-xl text-sm transition-all shadow-sm"
-                >
-                  Find a Doctor Near Me
-                </button>
-              </div>
-            </Section>
-          )}
-
-          {/* Find Doctor CTA */}
-          {!doctorReferralNeeded && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow p-5 flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-slate-700">Looking for a doctor anyway?</p>
-                <p className="text-xs text-slate-400">Find specialists near you</p>
-              </div>
-              <button
-                onClick={() => navigate('/patient/doctors', { state: { sessionId } })}
-                className="bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-700 hover:to-teal-600 text-white font-semibold px-5 py-2 rounded-xl text-sm transition-all shadow-sm whitespace-nowrap"
-              >
-                Find a Doctor
-              </button>
-            </div>
-          )}
         </>
       )}
 

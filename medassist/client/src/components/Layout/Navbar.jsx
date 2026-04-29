@@ -126,16 +126,11 @@ const Icons = {
 
 /* ─── Nav link definitions ───────────────────────────────────────────────── */
 const PATIENT_LINKS = [
-  { to: '/patient/dashboard',    label: 'Sessions',       icon: Icons.clipboard },
-  { to: '/patient/intake',       label: 'New Assessment', icon: Icons.plusCircle },
-  { to: '/patient/profile',      label: 'My Profile',     icon: Icons.idCard },
-  { to: '/patient/vitals',       label: 'Vitals',         icon: Icons.heart },
-  { to: '/patient/medications',  label: 'Medications',    icon: Icons.pill },
-  { to: '/patient/prescriptions', label: 'Prescriptions', icon: Icons.documentText },
-  { to: '/patient/timeline',     label: 'Timeline',       icon: Icons.calendar },
-  { to: '/patient/medical-id',   label: 'Medical ID',     icon: Icons.shieldCheck },
-  { to: '/patient/appointments', label: 'Appointments',   icon: Icons.calendarCheck },
-  { to: '/patient/doctors',      label: 'Find Doctors',   icon: Icons.building },
+  { to: '/patient/dashboard',      label: 'My Reports',        icon: Icons.clipboard },
+  { to: '/patient/upload-report',  label: 'Upload Report',     icon: Icons.plusCircle },
+  { to: '/patient/vitals',         label: 'Vitals',            icon: Icons.heart },
+  { to: '/patient/profile',        label: 'My Profile',        icon: Icons.idCard },
+  { to: '/patient/doctors',        label: 'Find a Lab / Clinic', icon: Icons.building },
 ];
 
 const DOCTOR_LINKS = [
