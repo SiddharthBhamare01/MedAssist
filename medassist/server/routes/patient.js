@@ -50,19 +50,29 @@ router.put('/profile', verifyToken, async (req, res) => {
   }
 });
 
-// In-memory 2h insight cache: `${patientId}-${type}` → { insight, expiresAt }
-const vitalsInsightsCache = new Map();
-
 // GET /api/patient/vitals/insights?type=glucose — LLM-generated blood report correlation
+// Cached 2h per patient+type in patient_profiles.vitals_insights JSONB
 router.get('/vitals/insights', verifyToken, async (req, res) => {
   const patientId = req.user.userId;
   const { type } = req.query;
   if (!type) return res.status(400).json({ error: 'type is required' });
 
-  const cacheKey = `${patientId}-${type}`;
-  const cached = vitalsInsightsCache.get(cacheKey);
-  if (cached && Date.now() < cached.expiresAt) {
-    return res.json({ insight: cached.insight, cached: true });
+  // Check DB cache (2h TTL per type)
+  try {
+    const { rows: profileRows } = await pool.query(
+      'SELECT vitals_insights FROM patient_profiles WHERE patient_id = $1',
+      [patientId]
+    );
+    const cached = profileRows[0]?.vitals_insights?.[type];
+    if (cached?.insight && cached?.generated_at) {
+      const age = Date.now() - new Date(cached.generated_at).getTime();
+      if (age < 2 * 60 * 60 * 1000) {
+        console.log(`[patient] Returning cached vitals insight for ${patientId}/${type}`);
+        return res.json({ insight: cached.insight, cached: true });
+      }
+    }
+  } catch {
+    // If vitals_insights column doesn't exist yet (pre-migration), fall through
   }
 
   try {
@@ -151,7 +161,13 @@ Respond with exactly 1-2 sentences, under 50 words.`;
     }
 
     if (insight) {
-      vitalsInsightsCache.set(cacheKey, { insight, expiresAt: Date.now() + 2 * 60 * 60 * 1000 });
+      // Persist to DB — merge new type entry into the JSONB column
+      await pool.query(
+        `UPDATE patient_profiles
+         SET vitals_insights = COALESCE(vitals_insights, '{}'::jsonb) || $1::jsonb
+         WHERE patient_id = $2`,
+        [JSON.stringify({ [type]: { insight, generated_at: new Date().toISOString() } }), patientId]
+      ).catch((e) => console.warn('[patient] Could not persist vitals insight:', e.message));
     }
     return res.json({ insight: insight || null });
   } catch (err) {

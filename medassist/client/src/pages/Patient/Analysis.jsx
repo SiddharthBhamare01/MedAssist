@@ -168,9 +168,9 @@ export default function Analysis() {
   };
 
   useEffect(() => {
-    if (!result || riskScores || followUp) return;
-    handleRiskScores();
-    handleFollowUp();
+    if (!result) return;
+    if (!riskScores) handleRiskScores();
+    if (!followUp) handleFollowUp();
   }, [result]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

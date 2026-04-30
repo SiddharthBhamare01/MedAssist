@@ -169,6 +169,13 @@ router.post('/risk-scores', verifyToken, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Report not found' });
 
     const report = rows[0];
+
+    // Return cached result — no need to re-run the agent
+    if (report.risk_scores) {
+      console.log(`[bloodReport] Returning cached risk scores for report ${reportId}`);
+      return res.json({ reportId, riskScores: report.risk_scores, cached: true });
+    }
+
     const patientProfile = await getPatientProfile(req.user.userId).catch(() => null);
 
     const { runRiskScoringAgent } = require('../agents/riskScoringAgent');
@@ -202,6 +209,12 @@ router.post('/follow-up', verifyToken, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Report not found' });
 
     const report = rows[0];
+
+    // Return cached result — no need to re-run the agent
+    if (report.follow_up) {
+      console.log(`[bloodReport] Returning cached follow-up for report ${reportId}`);
+      return res.json({ reportId, followUp: report.follow_up, cached: true });
+    }
 
     const { runFollowUpAgent } = require('../agents/followUpAgent');
     const followUp = await runFollowUpAgent({
@@ -399,22 +412,14 @@ router.get('/latest-score', verifyToken, async (req, res) => {
   }
 });
 
-// In-memory 24h tips cache: patientId → { tips, expiresAt }
-const dailyTipsCache = new Map();
-
-// GET /api/blood-report/daily-tips — LLM-generated personalized tips, cached 24h
+// GET /api/blood-report/daily-tips — LLM-generated personalized tips, cached 24h in DB
 router.get('/daily-tips', verifyToken, async (req, res) => {
   const patientId = req.user.userId;
-
   const forceRefresh = req.query.force === 'true';
-  const cached = dailyTipsCache.get(patientId);
-  if (!forceRefresh && cached && Date.now() < cached.expiresAt) {
-    return res.json({ tips: cached.tips, cached: true });
-  }
 
   try {
     const { rows } = await pool.query(
-      `SELECT analysis, extracted_values FROM blood_reports
+      `SELECT id, analysis, extracted_values, daily_tips, daily_tips_generated_at FROM blood_reports
         WHERE patient_id = $1 AND analysis IS NOT NULL AND session_id IS NULL
         ORDER BY created_at DESC LIMIT 1`,
       [patientId]
@@ -425,6 +430,15 @@ router.get('/daily-tips', verifyToken, async (req, res) => {
     }
 
     const report = rows[0];
+
+    // Return DB-cached tips if they are less than 24h old
+    if (!forceRefresh && report.daily_tips && report.daily_tips_generated_at) {
+      const age = Date.now() - new Date(report.daily_tips_generated_at).getTime();
+      if (age < 24 * 60 * 60 * 1000) {
+        console.log(`[bloodReport] Returning cached daily tips for patient ${patientId}`);
+        return res.json({ tips: report.daily_tips, cached: true });
+      }
+    }
     const abnormal = report.analysis?.abnormal_findings || [];
     const summary = report.analysis?.summary?.overall_assessment || '';
 
@@ -482,7 +496,12 @@ Return ONLY a JSON array of 3 strings. Example format:
       ];
     }
 
-    dailyTipsCache.set(patientId, { tips, expiresAt: Date.now() + 24 * 60 * 60 * 1000 });
+    // Persist to DB so tips survive server restarts
+    await pool.query(
+      'UPDATE blood_reports SET daily_tips = $1, daily_tips_generated_at = NOW() WHERE id = $2',
+      [JSON.stringify(tips), report.id]
+    ).catch((e) => console.warn('[bloodReport] Could not persist daily tips:', e.message));
+
     return res.json({ tips });
   } catch (err) {
     console.error('Daily tips error:', err);
