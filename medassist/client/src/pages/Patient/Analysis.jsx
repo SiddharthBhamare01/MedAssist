@@ -368,11 +368,20 @@ export default function Analysis() {
       // 1. Check DB cache first — fast path (~100ms)
       const cached = await api.get(`/blood-report/${reportId}/translations?lang=${lang}`)
         .then((r) => r.data).catch(() => null);
+
       if (cached && Object.keys(cached).length > 0) {
-        setTranslatedData(cached);
-        return;
+        // Poisoned-cache guard: if the cached overall_assessment is identical to the
+        // English source, a previous rate-limited attempt stored English text as "translations".
+        // Skip the cache and re-translate so the user actually gets Spanish.
+        const sourceOverall = result?.analysis?.summary?.overall_assessment;
+        const isPoisoned = sourceOverall && cached.overall_assessment === sourceOverall;
+        if (!isPoisoned) {
+          setTranslatedData(cached);
+          return;
+        }
       }
-      // 2. Cache miss — build batch and call Groq
+
+      // 2. Cache miss (or poisoned cache) — build batch and call MyMemory
       const texts = buildTranslationBatch();
       const entries = Object.entries(texts);
       if (!entries.length) return;
@@ -393,8 +402,13 @@ export default function Analysis() {
       results.forEach((r) => { if (r.status === 'fulfilled') Object.assign(merged, r.value); });
       if (Object.keys(merged).length) {
         setTranslatedData(merged);
-        // 3. Persist to DB (fire-and-forget)
-        api.put(`/blood-report/${reportId}/translations`, { lang, data: merged }).catch(() => {});
+        // 3. Only persist to DB if at least some values actually changed.
+        // If MyMemory was rate-limited it returns the original English text unchanged —
+        // storing that would poison the cache and block all future translation attempts.
+        const anyChanged = Object.entries(merged).some(([k, v]) => v !== texts[k]);
+        if (anyChanged) {
+          api.put(`/blood-report/${reportId}/translations`, { lang, data: merged }).catch(() => {});
+        }
       }
     } catch {
       // Falls back to English silently
