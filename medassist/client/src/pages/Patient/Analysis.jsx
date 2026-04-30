@@ -64,7 +64,8 @@ export default function Analysis() {
   const [explainModal, setExplainModal] = useState({ open: false, loading: false, text: '', parameter: '' });
   const [translatedData, setTranslatedData] = useState(null);
   const [translating, setTranslating] = useState(false);
-  const translatedForRef = useRef('');
+  const translatedLangRef = useRef('');
+  const translateDebounceRef = useRef(null);
 
   const VISIT_LABEL = {
     not_needed:           t('analysis.routineCheckup'),
@@ -358,8 +359,17 @@ export default function Analysis() {
   };
 
   const translateAll = async () => {
+    if (!reportId || lang === 'en') return;
     setTranslating(true);
     try {
+      // 1. Check DB cache first — fast path (~100ms)
+      const cached = await api.get(`/blood-report/${reportId}/translations?lang=${lang}`)
+        .then((r) => r.data).catch(() => null);
+      if (cached && Object.keys(cached).length > 0) {
+        setTranslatedData(cached);
+        return;
+      }
+      // 2. Cache miss — build batch and call Groq
       const texts = buildTranslationBatch();
       const entries = Object.entries(texts);
       if (!entries.length) return;
@@ -378,7 +388,11 @@ export default function Analysis() {
 
       const merged = {};
       results.forEach((r) => { if (r.status === 'fulfilled') Object.assign(merged, r.value); });
-      if (Object.keys(merged).length) setTranslatedData(merged);
+      if (Object.keys(merged).length) {
+        setTranslatedData(merged);
+        // 3. Persist to DB (fire-and-forget)
+        api.put(`/blood-report/${reportId}/translations`, { lang, data: merged }).catch(() => {});
+      }
     } catch {
       // Falls back to English silently
     } finally {
@@ -389,14 +403,17 @@ export default function Analysis() {
   useEffect(() => {
     if (lang !== 'es' || !result) {
       setTranslatedData(null);
-      translatedForRef.current = '';
+      translatedLangRef.current = '';
+      clearTimeout(translateDebounceRef.current);
       return;
     }
-    const key = `${lang}:${!!result}:${!!riskScores}:${!!followUp}`;
-    if (translatedForRef.current === key) return;
-    translatedForRef.current = key;
-    translateAll();
-  }, [lang, result, riskScores, followUp]); // eslint-disable-line react-hooks/exhaustive-deps
+    const key = `${lang}:${reportId}`;
+    if (translatedLangRef.current === key) return;
+    translatedLangRef.current = key;
+    // Debounce: absorbs sequential riskScores/followUp loading before building the full batch
+    clearTimeout(translateDebounceRef.current);
+    translateDebounceRef.current = setTimeout(() => { translateAll(); }, 600);
+  }, [lang, result, reportId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { analysis, doctorReferralNeeded } = result || {};
   const summary = analysis?.summary;

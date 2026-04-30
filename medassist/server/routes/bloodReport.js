@@ -134,6 +134,12 @@ router.post('/analyze', verifyToken, async (req, res) => {
       }
     }
 
+    // Clear stale translations so the next language switch re-translates fresh content
+    if (forceReanalyze) {
+      await pool.query('UPDATE blood_reports SET translations = NULL WHERE id = $1', [reportId])
+        .catch((e) => console.warn('[bloodReport] Could not clear translations cache:', e.message));
+    }
+
     // Fetch any previously calculated risk_scores / follow_up
     const { rows: updatedRows } = await pool.query(
       'SELECT risk_scores, follow_up FROM blood_reports WHERE id = $1',
@@ -573,6 +579,41 @@ router.get('/:id/export-pdf', verifyToken, async (req, res) => {
   } catch (err) {
     console.error('Blood report PDF export error:', err);
     return res.status(500).json({ error: 'Failed to generate PDF' });
+  }
+});
+
+// GET /api/blood-report/:id/translations?lang=es
+router.get('/:id/translations', verifyToken, async (req, res) => {
+  const { lang } = req.query;
+  if (!lang || lang === 'en') return res.json({});
+  try {
+    const { rows } = await pool.query(
+      'SELECT translations FROM blood_reports WHERE id = $1 AND patient_id = $2',
+      [req.params.id, req.user.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    return res.json(rows[0].translations?.[lang] || {});
+  } catch (err) {
+    console.error('Fetch translations error:', err);
+    return res.status(500).json({ error: 'Failed to fetch translations' });
+  }
+});
+
+// PUT /api/blood-report/:id/translations
+router.put('/:id/translations', verifyToken, async (req, res) => {
+  const { lang, data } = req.body;
+  if (!lang || !data) return res.status(400).json({ error: 'lang and data required' });
+  try {
+    await pool.query(
+      `UPDATE blood_reports
+         SET translations = COALESCE(translations, '{}'::jsonb) || jsonb_build_object($1::text, $2::jsonb)
+       WHERE id = $3 AND patient_id = $4`,
+      [lang, JSON.stringify(data), req.params.id, req.user.userId]
+    );
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Save translations error:', err);
+    return res.status(500).json({ error: 'Failed to save translations' });
   }
 });
 

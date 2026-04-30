@@ -7,3 +7,6 @@ ALTER TABLE blood_reports
 
 ALTER TABLE patient_profiles
   ADD COLUMN IF NOT EXISTS vitals_insights JSONB;
+
+ALTER TABLE blood_reports
+  ADD COLUMN IF NOT EXISTS translations JSONB;
