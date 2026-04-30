@@ -59,9 +59,6 @@ function Layout({ children }) {
         {/* Mobile top bar spacer */}
         <div className="h-14 md:hidden" />
         <main id="main-content" className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
-          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 text-center" role="note">
-            {t('common.appDisclaimer')}
-          </div>
           <ErrorBoundary>{children}</ErrorBoundary>
         </main>
       </div>

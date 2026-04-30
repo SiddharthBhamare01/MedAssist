@@ -296,9 +296,6 @@ export default function UploadReport() {
         </p>
         {loadingDb && <p className="text-xs text-slate-400 mt-1 animate-pulse">Loading session context…</p>}
         {disease && <p className="text-xs text-blue-600 mt-1 font-medium">For: {disease.disease}</p>}
-        <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
-          ⚠️ Educational use only. AI extraction may not be 100% accurate. Always verify with your lab report.
-        </div>
       </div>
 
       {/* Mode toggle */}
