@@ -341,9 +341,23 @@ ${ingredientsList ? `Helpful recovery ingredients: ${ingredientsList}` : ''}`;
 });
 
 // ─── POST /api/voice/translate ─────────────────────────────────────────────
-// Batch-translates a flat key→text object from English to the requested lang.
+// Batch-translates a flat key→text object using MyMemory free translation API.
 // Body: { lang: 'es', texts: { [key]: string } }
 // Returns: { [key]: string }  (same keys, translated values)
+
+// Translates a single string via MyMemory public API (~150-200ms per call).
+// Falls back to original text on any error.
+async function myMemoryTranslate(text, targetLang) {
+  const email = process.env.MYMEMORY_EMAIL || '';
+  const q = text.slice(0, 500); // MyMemory free limit per request
+  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=en|${targetLang}${email ? `&de=${encodeURIComponent(email)}` : ''}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(`MyMemory HTTP ${res.status}`);
+  const data = await res.json();
+  if (data.responseStatus !== 200) throw new Error(`MyMemory: ${data.responseDetails}`);
+  return data.responseData.translatedText || text;
+}
+
 router.post('/translate', verifyToken, async (req, res) => {
   const { lang, texts } = req.body;
   if (!lang || !texts || typeof texts !== 'object') {
@@ -354,56 +368,23 @@ router.post('/translate', verifyToken, async (req, res) => {
   const entries = Object.entries(texts).filter(([, v]) => v && typeof v === 'string' && v.trim());
   if (!entries.length) return res.json({});
 
-  const inputJson = JSON.stringify(Object.fromEntries(entries));
-
-  const prompt = `Translate the following medical text values from English to Spanish. Return ONLY a valid JSON object with the exact same keys but Spanish values.
-
-Rules:
-- Keep medical parameter names (HDL, LDL, Glucose, HbA1c, etc.) in their standard form
-- Keep numbers and units (mg/dL, g/L, mmol/L, weeks, months) unchanged
-- Use simple, clear Spanish that a patient can understand
-- Do NOT add or remove keys from the JSON
-- Do NOT wrap in markdown code blocks
-
-Input JSON:
-${inputJson}
-
-Output ONLY the JSON object.`;
-
-  const providers = getProviders();
-  const available = getAvailableProviders();
-
-  let translated = null;
-  for (const name of available) {
-    const provider = providers[name];
-    try {
-      const response = await provider.client.chat.completions.create({
-        model: provider.model,
-        messages: [
-          { role: 'system', content: 'You are a medical translator. Translate English medical text to clear, simple Spanish. Output only valid JSON with the same keys.' },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.1,
-        max_tokens: 4096,
-      });
-      const raw = response.choices[0]?.message?.content?.trim();
-      if (raw) {
-        const jsonMatch = raw.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          try {
-            translated = JSON.parse(jsonMatch[0]);
-            break;
-          } catch { continue; }
+  // Fire all translations in parallel, capped at 10 concurrent requests to avoid rate limits.
+  // Total time ≈ ceil(entries.length / 10) × ~200ms instead of one slow LLM call.
+  const CONCURRENCY = 10;
+  const translated = {};
+  for (let i = 0; i < entries.length; i += CONCURRENCY) {
+    const batch = entries.slice(i, i + CONCURRENCY);
+    await Promise.allSettled(
+      batch.map(async ([key, text]) => {
+        try {
+          translated[key] = await myMemoryTranslate(text, lang);
+        } catch {
+          translated[key] = text; // fallback to English on error
         }
-      }
-    } catch (err) {
-      const status = err?.status || err?.response?.status;
-      if (status === 429 || status === 503) continue;
-      throw err;
-    }
+      })
+    );
   }
 
-  if (!translated) return res.status(503).json({ error: 'Translation failed' });
   return res.json(translated);
 });
 
