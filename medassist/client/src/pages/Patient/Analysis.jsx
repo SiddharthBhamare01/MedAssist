@@ -514,7 +514,7 @@ export default function Analysis() {
                         <td className="py-1.5 px-1.5 text-slate-500 font-mono whitespace-nowrap">{f.normal_range}</td>
                         <td className="py-1.5 px-1.5 whitespace-nowrap">
                           <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${STATUS_STYLE[f.status] || 'bg-slate-100 text-slate-600'}`}>
-                            {STATUS_LABEL[f.status] || f.status}
+                            {f.status ? t(`analysis.statusLabels.${f.status}`, { defaultValue: f.status }) : f.status}
                           </span>
                         </td>
                         <td className="py-1.5 px-1.5 text-slate-600 max-w-[180px] truncate" title={f.interpretation}>{f.interpretation}</td>
