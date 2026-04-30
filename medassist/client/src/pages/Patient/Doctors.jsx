@@ -314,6 +314,22 @@ export default function Doctors() {
   const abortRef      = useRef(null);
   const hasFetchedRef = useRef(false);
 
+  // ── IP-based fallback location ───────────────────────────────────────────────
+
+  async function getIpLocation() {
+    try {
+      const res = await fetch('https://ipapi.co/json/');
+      const data = await res.json();
+      if (data.latitude && data.longitude) return [data.latitude, data.longitude];
+    } catch {}
+    try {
+      const res = await fetch('https://ip-api.com/json');
+      const data = await res.json();
+      if (data.lat && data.lon) return [data.lat, data.lon];
+    } catch {}
+    return [41.8781, -87.6298]; // default: Chicago
+  }
+
   // ── Derived counts ───────────────────────────────────────────────────────────
 
   const facilityCounts = {};
@@ -383,7 +399,16 @@ export default function Doctors() {
   }, []);
 
   function requestLocation({ highAccuracy = false } = {}) {
-    if (!navigator.geolocation) { toast.error('Geolocation not supported.'); setLocationStatus('denied'); return; }
+    if (!navigator.geolocation) {
+      // No geolocation API at all — use IP fallback immediately
+      getIpLocation().then(coords => {
+        setUserLocation(coords);
+        setLocationStatus('ip_fallback');
+        if (!hasFetchedRef.current) { hasFetchedRef.current = true; fetchDoctors(coords[0], coords[1], radius); }
+      });
+      return;
+    }
+
     setLocationStatus('locating');
     navigator.geolocation.getCurrentPosition(
       pos => {
@@ -392,27 +417,19 @@ export default function Doctors() {
         setLocationStatus('granted');
         if (!hasFetchedRef.current) { hasFetchedRef.current = true; fetchDoctors(latitude, longitude, radius); }
       },
-      err => {
-        // code 1 = PERMISSION_DENIED, code 3 = TIMEOUT
+      async err => {
         if (err.code === 3 && highAccuracy) {
-          // GPS timed out — retry instantly with low-accuracy (IP/WiFi) which is near-instant
-          console.warn('Geolocation: GPS timed out, retrying with network location…');
+          // GPS timed out — retry with low-accuracy (Wi-Fi/IP), near-instant
           requestLocation({ highAccuracy: false });
           return;
         }
-        if (err.code === 3) {
-          // Low-accuracy also timed out — show denied state
-          setLocationStatus('denied');
-          toast('Location timed out — check your browser permissions.', { icon: '⏱️' });
-          return;
-        }
-        // Actual permission denial
-        console.warn('Geolocation denied:', err.message);
-        setLocationStatus('denied');
-        toast('Location denied — grant permission to see real doctors near you.', { icon: '📍' });
+        // Permission denied or low-accuracy timeout → fall back to IP location silently
+        console.warn('Geolocation unavailable, falling back to IP location:', err.message);
+        const coords = await getIpLocation();
+        setUserLocation(coords);
+        setLocationStatus('ip_fallback');
+        if (!hasFetchedRef.current) { hasFetchedRef.current = true; fetchDoctors(coords[0], coords[1], radius); }
       },
-      // Start with low-accuracy (fast, uses Wi-Fi/IP). enableHighAccuracy=true asks for
-      // GPS which can time out on desktops or when the browser is busy.
       { timeout: 8000, maximumAge: 60000, enableHighAccuracy: highAccuracy }
     );
   }
@@ -467,56 +484,6 @@ export default function Doctors() {
   const mapCenter = userLocation || [20, 0];
   const mapZoom   = userLocation ? 13 : 2;
 
-  // ── Pre-location screen ──────────────────────────────────────────────────────
-
-  if (locationStatus === 'idle' || locationStatus === 'locating' || locationStatus === 'denied') {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-slate-50 min-h-screen">
-        <div className="text-center space-y-4 p-8 max-w-sm w-full">
-          <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto text-4xl ${locationStatus === 'denied' ? 'bg-amber-100' : 'bg-teal-100'}`}>
-            {locationStatus === 'denied' ? '🔒' : '📍'}
-          </div>
-          <h2 className="text-xl font-bold text-slate-800">
-            {locationStatus === 'denied' ? 'Location access blocked' : 'Allow location access'}
-          </h2>
-          <p className="text-slate-500 text-sm leading-relaxed">
-            {locationStatus === 'denied'
-              ? 'Your browser blocked location access. You can enable it in browser settings, or search by city below.'
-              : 'MedAssist needs your location to show real doctors, clinics, and pharmacies near you using live OpenStreetMap data.'}
-          </p>
-          {locationStatus === 'locating' && (
-            <div className="flex items-center justify-center gap-2 text-teal-600 text-sm">
-              <div className="animate-spin w-4 h-4 border-2 border-teal-600 border-t-transparent rounded-full" />
-              Waiting for browser permission…
-            </div>
-          )}
-          {locationStatus === 'denied' && (
-            <div className="space-y-3">
-              <button onClick={() => requestLocation({ highAccuracy: false })}
-                className="w-full flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors">
-                📍 Try allowing location again
-              </button>
-              <div className="flex items-center gap-2 text-xs text-slate-400">
-                <div className="flex-1 h-px bg-slate-200" /> or search by city <div className="flex-1 h-px bg-slate-200" />
-              </div>
-              <form onSubmit={searchByCity} className="flex gap-2">
-                <input
-                  type="text" value={cityQuery} onChange={e => setCityQuery(e.target.value)}
-                  placeholder="e.g. Chicago, New York..."
-                  className="flex-1 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                />
-                <button type="submit" disabled={geocoding || !cityQuery.trim()}
-                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors">
-                  {geocoding ? '…' : 'Go'}
-                </button>
-              </form>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   // ── Main layout ──────────────────────────────────────────────────────────────
 
   return (
@@ -527,20 +494,17 @@ export default function Doctors() {
         <div>
           <h1 className="text-base font-bold text-slate-800 leading-tight">Find Nearby Healthcare</h1>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            {locationStatus === 'granted' && userLocation
-              ? `${allDoctors.length} providers found within ${metresToMilesLabel(radius)}`
-              : '⚠️ Location denied — grant permission for live data'}
+            {locationStatus === 'locating'
+              ? '⏳ Detecting your location…'
+              : locationStatus === 'ip_fallback'
+                ? `📡 ${allDoctors.length} providers found (approximate location)`
+                : userLocation
+                  ? `${allDoctors.length} providers found within ${metresToMilesLabel(radius)}`
+                  : '⏳ Detecting your location…'}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          {locationStatus === 'denied' && (
-            <button onClick={() => requestLocation({ highAccuracy: false })}
-              className="flex items-center gap-1.5 bg-teal-600 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-teal-700">
-              📍 Allow Location
-            </button>
-          )}
-
           {/* Name search */}
           <div className="relative">
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔍</span>
@@ -775,6 +739,16 @@ export default function Doctors() {
 
         {/* ── RIGHT: Leaflet map ── */}
         <div className="flex-1 relative">
+          {/* Detecting location overlay */}
+          {(locationStatus === 'idle' || locationStatus === 'locating') && (
+            <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-white/70 backdrop-blur-sm">
+              <div className="flex flex-col items-center gap-3 bg-white rounded-2xl shadow-lg px-8 py-6">
+                <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm font-semibold text-slate-700">Detecting your location…</p>
+                <p className="text-xs text-slate-400">Finding nearby healthcare providers</p>
+              </div>
+            </div>
+          )}
           <MapContainer
             center={mapCenter} zoom={mapZoom}
             style={{ position: 'absolute', inset: 0, height: '100%', width: '100%' }}
