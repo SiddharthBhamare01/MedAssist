@@ -229,7 +229,7 @@ export default function ParameterProgress({ extractedValues }) {
   const critical = abnormal.filter(p => p.status === 'critical_high' || p.status === 'critical_low');
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 space-y-4 animate-slide-up">
+    <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4 animate-slide-up">
       {/* Header — matches Section component exactly */}
       <div className="flex items-center justify-between border-b border-slate-200 pb-3">
         <h2 className="text-base font-bold font-display text-slate-800 flex items-center gap-2">

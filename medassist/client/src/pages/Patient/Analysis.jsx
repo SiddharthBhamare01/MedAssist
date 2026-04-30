@@ -629,25 +629,53 @@ export default function Analysis() {
         <>
           {/* Row 1: Overall Summary + Abnormal Findings */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Summary */}
-          <Section title={t('analysis.overallSummary')} icon="📊">
-            <div className="flex items-start gap-4 flex-wrap">
-              <div className="flex-1 min-w-0">
-                <p className="text-slate-700 leading-relaxed">{translatedData?.overall_assessment ?? summary?.overall_assessment}</p>
-                {summary?.root_cause && (
-                  <p className="text-sm text-slate-500 mt-2">
-                    <span className="font-semibold text-slate-700">{t('analysis.rootCause')}: </span>
-                    {translatedData?.root_cause ?? summary.root_cause}
-                  </p>
-                )}
+          {/* Summary — personalized */}
+          {(() => {
+            const cmplx = summary?.complexity;
+            const S = {
+              High:   { outer: 'border-red-200',    hdr: 'bg-red-50',    bar: 'bg-red-400',    rootBg: 'bg-red-50/80 border-red-200',    rootTxt: 'text-red-700' },
+              Medium: { outer: 'border-amber-200',  hdr: 'bg-amber-50',  bar: 'bg-amber-400',  rootBg: 'bg-amber-50/80 border-amber-200', rootTxt: 'text-amber-700' },
+              Low:    { outer: 'border-teal-200',   hdr: 'bg-teal-50',   bar: 'bg-teal-400',   rootBg: 'bg-teal-50/80 border-teal-200',   rootTxt: 'text-teal-700' },
+            }[cmplx] || { outer: 'border-slate-200', hdr: 'bg-slate-50', bar: 'bg-slate-300', rootBg: 'bg-slate-50 border-slate-200', rootTxt: 'text-slate-600' };
+            return (
+              <div className={`rounded-2xl border ${S.outer} shadow animate-slide-up overflow-hidden`}>
+                {/* Colored header */}
+                <div className={`${S.hdr} px-5 py-3.5 flex items-center justify-between gap-3`}>
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xl">🩺</span>
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">{t('analysis.overallSummary')}</p>
+                      <p className="text-[11px] text-slate-400">Your personalized health snapshot</p>
+                    </div>
+                  </div>
+                  {cmplx && (
+                    <span className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 border ${COMPLEXITY_STYLE[cmplx] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                      {cmplx} {t('analysis.complexity')}
+                    </span>
+                  )}
+                </div>
+                {/* Body with left accent stripe */}
+                <div className="flex bg-white">
+                  <div className={`w-[3px] shrink-0 ${S.bar}`} />
+                  <div className="flex-1 px-5 py-4 space-y-3">
+                    <p className="text-slate-700 leading-relaxed text-sm">
+                      {translatedData?.overall_assessment ?? summary?.overall_assessment}
+                    </p>
+                    {summary?.root_cause && (
+                      <div className={`rounded-lg px-3.5 py-2.5 border ${S.rootBg}`}>
+                        <p className={`text-[10px] font-bold uppercase tracking-widest ${S.rootTxt} mb-1`}>
+                          {t('analysis.rootCause')}
+                        </p>
+                        <p className="text-sm text-slate-700">
+                          {translatedData?.root_cause ?? summary.root_cause}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-              {summary?.complexity && (
-                <span className={`px-3 py-1.5 rounded-xl text-sm font-bold shrink-0 border ${COMPLEXITY_STYLE[summary.complexity] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                  {summary.complexity} {t('analysis.complexity')}
-                </span>
-              )}
-            </div>
-          </Section>
+            );
+          })()}
 
           {/* Abnormal Findings */}
           {analysis?.abnormal_findings?.length > 0 && (
