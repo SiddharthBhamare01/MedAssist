@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 
 export default function DailyTipsCard() {
+  const { t } = useTranslation();
   const [tips, setTips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -46,11 +48,9 @@ export default function DailyTipsCard() {
     return (
       <div className="bg-white rounded-2xl border border-slate-200 shadow p-5">
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-          Today's Health Tips
+          {t('tips.title')}
         </p>
-        <p className="text-sm text-slate-400">
-          Upload and analyze a blood report to get personalized daily tips.
-        </p>
+        <p className="text-sm text-slate-400">{t('tips.noTips')}</p>
       </div>
     );
   }
@@ -59,7 +59,7 @@ export default function DailyTipsCard() {
     <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-100 shadow p-5">
       <div className="flex items-center justify-between mb-4">
         <p className="text-xs font-semibold text-teal-700 uppercase tracking-wider">
-          Today's Health Tips
+          {t('tips.title')}
         </p>
         <button
           onClick={() => fetchTips(true)}
@@ -74,7 +74,7 @@ export default function DailyTipsCard() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
             </svg>
           )}
-          Refresh
+          {t('tips.refresh')}
         </button>
       </div>
       <div className="space-y-3">

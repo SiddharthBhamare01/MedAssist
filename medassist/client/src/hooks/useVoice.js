@@ -170,6 +170,36 @@ export function useVoice() {
     setIsListening(false);
   }, []);
 
+  // ── Browser TTS (language-aware, no backend) ──────────────────────────────
+  const speakBrowser = useCallback((text, lang = 'en-US') => {
+    return new Promise((resolve) => {
+      if (!window.speechSynthesis || !text) { resolve(); return; }
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = lang;
+      utterance.rate = 0.95;
+      utterance.pitch = 1;
+
+      const voices = window.speechSynthesis.getVoices();
+      const match = voices.find(
+        (v) => v.lang.startsWith(lang.split('-')[0]) && !v.name.includes('Google') === false
+      ) || voices.find((v) => v.lang.startsWith(lang.split('-')[0]));
+      if (match) utterance.voice = match;
+
+      utterance.onend = resolve;
+      utterance.onerror = resolve;
+      setIsSpeaking(true);
+      utterance.onend = () => { setIsSpeaking(false); resolve(); };
+      utterance.onerror = () => { setIsSpeaking(false); resolve(); };
+      window.speechSynthesis.speak(utterance);
+    });
+  }, []);
+
+  const stopBrowserSpeaking = useCallback(() => {
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    setIsSpeaking(false);
+  }, []);
+
   // ── Parse spoken text with Groq via backend ───────────────────────────────
   const parseSpoken = useCallback(async (step, text, symptomName) => {
     if (!text) return null;
@@ -182,6 +212,8 @@ export function useVoice() {
   return {
     speak,
     stopSpeaking,
+    speakBrowser,
+    stopBrowserSpeaking,
     listen,
     stopListening,
     parseSpoken,

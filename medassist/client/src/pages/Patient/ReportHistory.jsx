@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import api from '../../services/api';
 import CompareModal from '../../components/CompareModal';
@@ -47,6 +48,7 @@ function buildTrendData(reports, paramKey) {
 
 export default function ReportHistory() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedParam, setSelectedParam] = useState('hemoglobin');
@@ -94,9 +96,9 @@ export default function ReportHistory() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">My Reports</h1>
+          <h1 className="text-2xl font-bold text-slate-800">{t('history.title')}</h1>
           <p className="text-sm text-slate-500 mt-1">
-            {reports.length} report{reports.length !== 1 ? 's' : ''} — see how your values change over time
+            {reports.length} {reports.length !== 1 ? t('healthScore.reportsPlural') : t('healthScore.reports')} — {t('history.subtitle')}
           </p>
         </div>
         {compareIds.length === 2 && (
@@ -107,7 +109,7 @@ export default function ReportHistory() {
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
             </svg>
-            Compare Selected Reports
+            {t('history.compare')}
           </button>
         )}
       </div>
@@ -249,10 +251,10 @@ export default function ReportHistory() {
                             >
                               {r.analyzed ? 'Analyzed' : 'Uploaded'}
                             </span>
-                            <span className="text-xs text-slate-400">{r.total_parameters} parameters</span>
+                            <span className="text-xs text-slate-400">{r.total_parameters} {t('history.parameters')}</span>
                             {r.abnormal_count > 0 && (
                               <span className="text-xs text-red-500">
-                                {r.abnormal_count} abnormal
+                                {r.abnormal_count} {t('history.abnormal')}
                               </span>
                             )}
                             {r.composite_score !== null && (
@@ -267,7 +269,7 @@ export default function ReportHistory() {
                         onClick={() => navigate(`/patient/analysis/${r.id}`)}
                         className="text-sm font-semibold text-teal-600 hover:text-teal-700 transition-colors whitespace-nowrap"
                       >
-                        View Analysis →
+                        {t('history.viewAnalysis')} →
                       </button>
                     </div>
                   </div>

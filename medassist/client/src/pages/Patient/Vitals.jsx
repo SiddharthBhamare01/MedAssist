@@ -1,18 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import api from '../../services/api';
 
 const fadeIn = { hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
 
-const VITAL_TYPES = [
-  { value: 'blood_pressure', label: 'Blood Pressure', unit: 'mmHg', dual: true },
-  { value: 'glucose', label: 'Blood Glucose', unit: 'mg/dL' },
-  { value: 'weight', label: 'Weight', unit: 'kg' },
-  { value: 'heart_rate', label: 'Heart Rate', unit: 'bpm' },
-  { value: 'spo2', label: 'SpO2', unit: '%' },
-  { value: 'temperature', label: 'Temperature', unit: '\u00B0F' },
+const VITAL_TYPE_KEYS = [
+  { value: 'blood_pressure', labelKey: 'vitals.bloodPressure', unit: 'mmHg', dual: true },
+  { value: 'glucose',        labelKey: 'vitals.bloodGlucose',  unit: 'mg/dL' },
+  { value: 'weight',         labelKey: 'vitals.weight',        unit: 'kg' },
+  { value: 'heart_rate',     labelKey: 'vitals.heartRate',     unit: 'bpm' },
+  { value: 'spo2',           labelKey: 'vitals.spo2',          unit: '%' },
+  { value: 'temperature',    labelKey: 'vitals.temperature',   unit: '\u00B0F' },
 ];
 
 const NORMAL_RANGES = {
@@ -25,6 +26,8 @@ const NORMAL_RANGES = {
 };
 
 export default function Vitals() {
+  const { t } = useTranslation();
+  const VITAL_TYPES = VITAL_TYPE_KEYS.map((v) => ({ ...v, label: t(v.labelKey) }));
   const [selectedType, setSelectedType] = useState('blood_pressure');
   const [values, setValues] = useState({ value: '', systolic: '', diastolic: '' });
   const [chartData, setChartData] = useState([]);
@@ -92,23 +95,23 @@ export default function Vitals() {
     <motion.div variants={fadeIn} initial="hidden" animate="visible" className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">Health Vitals Tracker</h1>
-        <p className="text-sm text-slate-500 mt-1">Monitor your vitals over time</p>
+        <h1 className="text-2xl font-bold text-slate-800">{t('vitals.title')}</h1>
+        <p className="text-sm text-slate-500 mt-1">{t('vitals.subtitle')}</p>
       </div>
 
       {/* Type Selector */}
       <div className="flex flex-wrap gap-2">
-        {VITAL_TYPES.map((t) => (
+        {VITAL_TYPES.map((vtype) => (
           <button
-            key={t.value}
-            onClick={() => { setSelectedType(t.value); setValues({ value: '', systolic: '', diastolic: '' }); }}
+            key={vtype.value}
+            onClick={() => { setSelectedType(vtype.value); setValues({ value: '', systolic: '', diastolic: '' }); }}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-              selectedType === t.value
+              selectedType === vtype.value
                 ? 'bg-teal-600 text-white shadow-md'
                 : 'bg-white text-slate-600 border border-slate-200 hover:border-teal-300 hover:text-teal-700'
             }`}
           >
-            {t.label}
+            {vtype.label}
           </button>
         ))}
       </div>
@@ -120,14 +123,14 @@ export default function Vitals() {
           animate={{ opacity: 1, x: 0 }}
           className="bg-white rounded-2xl border border-slate-200 shadow p-6"
         >
-          <h2 className="text-lg font-semibold text-slate-800 mb-1">Record {typeConfig.label}</h2>
-          <p className="text-xs text-slate-400 mb-4">Normal: {NORMAL_RANGES[selectedType]}</p>
+          <h2 className="text-lg font-semibold text-slate-800 mb-1">{t('vitals.logReading')} — {typeConfig.label}</h2>
+          <p className="text-xs text-slate-400 mb-4">{t('vitals.normalRange')}: {NORMAL_RANGES[selectedType]}</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {typeConfig.dual ? (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Systolic</label>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">{t('vitals.systolic')}</label>
                   <input
                     type="number"
                     value={values.systolic}
@@ -138,7 +141,7 @@ export default function Vitals() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Diastolic</label>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">{t('vitals.diastolic')}</label>
                   <input
                     type="number"
                     value={values.diastolic}
@@ -171,7 +174,7 @@ export default function Vitals() {
               disabled={submitting}
               className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl transition-colors"
             >
-              {submitting ? 'Saving...' : 'Record Vital'}
+              {submitting ? t('vitals.saving') : t('vitals.save')}
             </button>
           </form>
         </motion.div>
@@ -226,7 +229,7 @@ export default function Vitals() {
             <span className="text-xl shrink-0">🔗</span>
             <div className="flex-1 min-w-0">
               <h3 className="text-sm font-semibold text-teal-800 mb-1">
-                Correlation with Your Latest Blood Report
+                {t('vitals.correlation')}
               </h3>
               {loadingInsight ? (
                 <div className="flex items-center gap-2">

@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { GoogleLogin } from '@react-oauth/google';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { useLang } from '../../context/LanguageContext';
 import api from '../../services/api';
 import PasswordInput from '../../components/PasswordInput';
 import healthcareIcon from '../../assets/healthcare_icon.png';
@@ -10,6 +12,8 @@ import healthcareIcon from '../../assets/healthcare_icon.png';
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  const { lang, toggleLang } = useLang();
   const [searchParams] = useSearchParams();
   const returnUrl = searchParams.get('returnUrl');
   const [form, setForm] = useState({ email: '', password: '' });
@@ -122,6 +126,16 @@ export default function Login() {
       <div className="absolute bottom-0 left-0 w-80 h-80 bg-teal-300/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
 
       <div className="relative bg-white/80 backdrop-blur-sm p-8 sm:p-10 rounded-3xl shadow-card-hover w-full max-w-md border border-white/60">
+        {/* Language toggle */}
+        <div className="absolute top-4 right-4">
+          <button
+            onClick={toggleLang}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-600 transition-colors"
+          >
+            <span>{lang === 'en' ? '🇺🇸' : '🇪🇸'}</span>
+            <span>{lang === 'en' ? 'EN' : 'ES'}</span>
+          </button>
+        </div>
         {/* Header */}
         <div className="text-center mb-8">
           <img src={healthcareIcon} alt="MedAssist" className="w-16 h-16 object-contain mx-auto mb-4 rounded-2xl drop-shadow-md" />
@@ -129,7 +143,7 @@ export default function Login() {
           <p className="text-slate-400 mt-1 text-sm">CS 595 — Medical Informatics & AI</p>
         </div>
 
-        <h2 className="text-lg font-semibold text-slate-800 mb-5">Sign in to your account</h2>
+        <h2 className="text-lg font-semibold text-slate-800 mb-5">{t('auth.welcomeBack')}</h2>
 
         {/* Social login */}
         <div className="mb-5 flex justify-center">
@@ -146,7 +160,7 @@ export default function Login() {
 
         <div className="relative flex items-center gap-3 mb-5">
           <div className="flex-1 h-px bg-slate-200" />
-          <span className="text-xs text-slate-400 font-medium">or continue with email</span>
+          <span className="text-xs text-slate-400 font-medium">{t('auth.orContinueWith')}</span>
           <div className="flex-1 h-px bg-slate-200" />
         </div>
 
@@ -169,7 +183,7 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="space-y-4" aria-label="Sign in form">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-slate-600 mb-1.5">Email</label>
+            <label htmlFor="email" className="block text-sm font-medium text-slate-600 mb-1.5">{t('auth.email')}</label>
             <input
               id="email"
               type="email"
@@ -184,7 +198,7 @@ export default function Login() {
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-slate-600 mb-1.5">Password</label>
+            <label htmlFor="password" className="block text-sm font-medium text-slate-600 mb-1.5">{t('auth.password')}</label>
             <PasswordInput
               id="password"
               name="password"
@@ -197,7 +211,7 @@ export default function Login() {
 
           <div className="flex justify-end">
             <Link to="/forgot-password" className="text-sm text-teal-600 hover:text-teal-700 font-medium">
-              Forgot password?
+              {t('auth.forgotPassword')}
             </Link>
           </div>
 
@@ -210,15 +224,15 @@ export default function Login() {
             {loading ? (
               <span className="flex items-center justify-center gap-2">
                 <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                Signing in...
+                {t('common.loading')}
               </span>
-            ) : 'Sign In'}
+            ) : t('auth.signIn')}
           </button>
         </form>
 
         <p className="text-center text-sm text-slate-500 mt-6">
-          Don't have an account?{' '}
-          <Link to="/register" className="text-teal-600 hover:text-teal-700 font-semibold">Register</Link>
+          {t('auth.noAccount')}{' '}
+          <Link to="/register" className="text-teal-600 hover:text-teal-700 font-semibold">{t('auth.register')}</Link>
         </p>
 
         <div className="mt-6 p-3 bg-amber-50/80 border border-amber-200/60 rounded-xl text-xs text-amber-700 text-center">

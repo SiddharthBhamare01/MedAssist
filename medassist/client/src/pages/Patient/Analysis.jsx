@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
+import { useLang } from '../../context/LanguageContext';
 import api from '../../services/api';
 import AgentStatusPanel from '../../components/AgentStatus/AgentStatusPanel';
 import ShareModal from '../../components/ShareModal';
@@ -15,10 +17,7 @@ const STATUS_STYLE = {
   critical_low:  'bg-red-50 text-red-700 font-semibold',
   critical_high: 'bg-red-100 text-red-800 font-bold',
 };
-const STATUS_LABEL = {
-  normal: 'Normal', low: 'Low', high: 'High',
-  critical_low: 'Critical Low', critical_high: 'Critical High',
-};
+// STATUS_LABEL is now built from i18n inside the component via t('analysis.statusLabels.*')
 const COMPLEXITY_STYLE = {
   Low:    'bg-emerald-50 text-emerald-700 border-emerald-200',
   Medium: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -41,6 +40,8 @@ export default function Analysis() {
   const { state } = useLocation();
   const { reportId: paramReportId } = useParams();
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  const { lang } = useLang();
 
   const { extractedValues, sessionId, disease } = state || {};
   const reportId = paramReportId || state?.reportId;
@@ -215,7 +216,24 @@ export default function Analysis() {
   const handleNarrate = async () => {
     if (isNarrating) {
       stopGlobalAudio();
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
       setIsNarrating(false);
+      return;
+    }
+
+    // For Spanish: use browser TTS directly with the summary text
+    if (lang === 'es') {
+      if (!result?.summary) { toast.error('No hay resumen disponible.'); return; }
+      setIsNarrating(true);
+      const utterance = new SpeechSynthesisUtterance(result.summary);
+      utterance.lang = 'es-ES';
+      utterance.rate = 0.95;
+      const voices = window.speechSynthesis.getVoices();
+      const esVoice = voices.find((v) => v.lang.startsWith('es'));
+      if (esVoice) utterance.voice = esVoice;
+      utterance.onend = () => setIsNarrating(false);
+      utterance.onerror = () => setIsNarrating(false);
+      window.speechSynthesis.speak(utterance);
       return;
     }
 
@@ -331,21 +349,21 @@ export default function Analysis() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
                     </svg>
-                    Preparing...
+                    {t('analysis.analyzing')}
                   </>
                 ) : isNarrating ? (
                   <>
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                       <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
                     </svg>
-                    Stop
+                    {t('analysis.stopReading')}
                   </>
                 ) : (
                   <>
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M8 5v14l11-7z"/>
                     </svg>
-                    Listen to Report
+                    {t('analysis.readResults')}
                   </>
                 )}
               </button>
@@ -357,7 +375,7 @@ export default function Analysis() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                {exporting ? 'Exporting...' : 'Export PDF'}
+                {exporting ? t('common.loading') : t('analysis.exportPdf')}
               </button>
               <button
                 onClick={handleSummaryCard}
@@ -561,7 +579,7 @@ export default function Analysis() {
             const ls = LEVEL_STYLE[level] || LEVEL_STYLE.Moderate;
 
             return (
-              <Section title="Clinical Risk Score" icon="📈">
+              <Section title={t('analysis.riskScore')} icon="📈">
                 <div className="flex flex-col sm:flex-row items-center gap-6">
                   {/* Score circle */}
                   <div className="relative w-32 h-32 shrink-0">
@@ -616,7 +634,7 @@ export default function Analysis() {
 
           {/* Follow-up Schedule */}
           {followUp && (
-            <Section title="Follow-up Schedule" icon="📅">
+            <Section title={t('analysis.followUp')} icon="📅">
               <div className="space-y-3">
                 {(Array.isArray(followUp) ? followUp : [followUp]).map((item, i) => (
                   <div key={i} className="flex items-start gap-3 bg-amber-50/50 border border-amber-100 rounded-xl p-4">
@@ -651,7 +669,7 @@ export default function Analysis() {
           {/* Row 3: Personalized Diet Plan + Recovery Ingredients */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {analysis?.diet_plan && (
-            <Section title="Personalized Diet Plan" icon="🥗" className="max-h-[600px]">
+            <Section title={t('analysis.dietPlan')} icon="🥗" className="max-h-[600px]">
               <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
                 {analysis.diet_plan.overview && (
                   <p className="text-slate-600 text-sm">{analysis.diet_plan.overview}</p>
@@ -705,7 +723,7 @@ export default function Analysis() {
           )}
 
           {analysis?.recovery_ingredients?.length > 0 && (
-            <Section title="Recovery Ingredients" icon="🧬" className="max-h-[600px]">
+            <Section title={t('analysis.recoveryIngredients')} icon="🧬" className="max-h-[600px]">
               <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
                 {analysis.recovery_ingredients.map((item, i) => {
                   const taken = supplementLogs.has(item.ingredient);
@@ -737,11 +755,11 @@ export default function Analysis() {
                               : 'bg-white border border-teal-200 text-teal-700 hover:bg-teal-50'
                           }`}
                         >
-                          {taken ? '✓ Taken today' : 'Mark as taken'}
+                          {taken ? t('analysis.takenToday') : t('analysis.markTaken')}
                         </button>
                         {streak > 1 && (
                           <span className="text-xs text-amber-600 font-semibold">
-                            🔥 {streak}-day streak
+                            🔥 {streak} {t('analysis.dayStreak')}
                           </span>
                         )}
                       </div>

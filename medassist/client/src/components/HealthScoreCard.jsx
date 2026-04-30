@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 
 function ScoreGauge({ score, riskLevel }) {
@@ -40,6 +41,7 @@ function ScoreGauge({ score, riskLevel }) {
 }
 
 export default function HealthScoreCard() {
+  const { t } = useTranslation();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -69,14 +71,12 @@ export default function HealthScoreCard() {
   if (!data?.score) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200 shadow p-5">
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Health Score</p>
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">{t('healthScore.title')}</p>
         <div className="flex items-center gap-3 text-slate-400">
           <svg className="w-10 h-10 shrink-0 text-slate-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z" />
           </svg>
-          <p className="text-sm">
-            Run an analysis on your blood report, then open it to compute your health score.
-          </p>
+          <p className="text-sm">{t('healthScore.noScore')}</p>
         </div>
       </div>
     );
@@ -96,13 +96,13 @@ export default function HealthScoreCard() {
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow p-5">
-      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Health Score</p>
+      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">{t('healthScore.title')}</p>
       <div className="flex items-center gap-5 flex-wrap">
         <ScoreGauge score={data.score} riskLevel={data.risk_level} />
         <div className="flex-1 min-w-0 space-y-2">
           <div>
             <p className={`text-sm font-bold capitalize ${riskColor}`}>
-              {data.risk_level ? `${data.risk_level} Risk` : ''}
+              {data.risk_level ? t(`analysis.riskLevels.${(data.risk_level || '').toLowerCase()}`, { defaultValue: `${data.risk_level} ${t('healthScore.risk')}` }) : ''}
             </p>
             {data.summary && (
               <p className="text-xs text-slate-500 mt-1 line-clamp-3 leading-relaxed">{data.summary}</p>
@@ -111,7 +111,7 @@ export default function HealthScoreCard() {
           {sparkData.length > 1 && (
             <div>
               <p className="text-[10px] text-slate-400 mb-1">
-                Score trend — {sparkData.length} report{sparkData.length !== 1 ? 's' : ''}
+                {t('healthScore.scoreTrend')} — {sparkData.length} {sparkData.length !== 1 ? t('healthScore.reportsPlural') : t('healthScore.reports')}
               </p>
               <ResponsiveContainer width="100%" height={50}>
                 <LineChart data={sparkData}>

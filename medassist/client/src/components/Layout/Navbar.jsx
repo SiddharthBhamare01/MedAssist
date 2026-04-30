@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import { useLang } from '../../context/LanguageContext';
 import { useTheme } from '../../hooks/useTheme';
 import healthcareIcon from '../../assets/healthcare_icon.png';
 
@@ -124,30 +126,30 @@ const Icons = {
   ),
 };
 
-/* ─── Nav link definitions ───────────────────────────────────────────────── */
+/* ─── Nav link key definitions (labels resolved via t() in component) ──── */
 const PATIENT_LINKS = [
-  { to: '/patient/dashboard',      label: 'Dashboard',           icon: Icons.clipboard },
-  { to: '/patient/upload-report',  label: 'Upload Report',       icon: Icons.plusCircle },
-  { to: '/patient/history',        label: 'My Reports',          icon: Icons.chartBar },
-  { to: '/patient/vitals',         label: 'Vitals',              icon: Icons.heart },
-  { to: '/patient/profile',        label: 'My Profile',          icon: Icons.idCard },
-  { to: '/patient/doctors',        label: 'Find a Lab / Clinic', icon: Icons.building },
+  { to: '/patient/dashboard',      key: 'nav.dashboard',    icon: Icons.clipboard },
+  { to: '/patient/upload-report',  key: 'nav.uploadReport', icon: Icons.plusCircle },
+  { to: '/patient/history',        key: 'nav.myReports',    icon: Icons.chartBar },
+  { to: '/patient/vitals',         key: 'nav.vitals',       icon: Icons.heart },
+  { to: '/patient/profile',        key: 'nav.myProfile',    icon: Icons.idCard },
+  { to: '/patient/doctors',        key: 'nav.findLab',      icon: Icons.building },
 ];
 
 const DOCTOR_LINKS = [
-  { to: '/doctor/dashboard',      label: 'Dashboard',      icon: Icons.chartBar },
-  { to: '/doctor/assist',         label: 'New Assist',     icon: Icons.beaker },
-  { to: '/doctor/profile',        label: 'My Profile',     icon: Icons.idCard },
-  { to: '/doctor/shared-reports', label: 'Shared Reports', icon: Icons.document },
-  { to: '/doctor/prescriptions',  label: 'Prescriptions',  icon: Icons.documentText },
-  { to: '/doctor/drug-checker',   label: 'Drug Checker',   icon: Icons.shieldCheck },
-  { to: '/doctor/analytics',      label: 'Analytics',      icon: Icons.chartPie },
-  { to: '/doctor/appointments',   label: 'Appointments',   icon: Icons.calendarCheck },
+  { to: '/doctor/dashboard',      key: 'nav.dashboard',      icon: Icons.chartBar },
+  { to: '/doctor/assist',         key: 'nav.newAssist',      icon: Icons.beaker },
+  { to: '/doctor/profile',        key: 'nav.myProfile',      icon: Icons.idCard },
+  { to: '/doctor/shared-reports', key: 'nav.sharedReports',  icon: Icons.document },
+  { to: '/doctor/prescriptions',  key: 'nav.prescriptions',  icon: Icons.documentText },
+  { to: '/doctor/drug-checker',   key: 'nav.drugChecker',    icon: Icons.shieldCheck },
+  { to: '/doctor/analytics',      key: 'nav.analytics',      icon: Icons.chartPie },
+  { to: '/doctor/appointments',   key: 'nav.appointments',   icon: Icons.calendarCheck },
 ];
 
 const ADMIN_LINKS = [
-  { to: '/admin/dashboard', label: 'Dashboard', icon: Icons.shield },
-  { to: '/admin/audit-log', label: 'Audit Log', icon: Icons.scroll },
+  { to: '/admin/dashboard', key: 'nav.dashboard', icon: Icons.shield },
+  { to: '/admin/audit-log', key: 'nav.auditLog',  icon: Icons.scroll },
 ];
 
 const STORAGE_KEY = 'medassist_sidebar';
@@ -156,6 +158,8 @@ export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { dark, toggle: toggleTheme } = useTheme();
+  const { t } = useTranslation();
+  const { lang, toggleLang } = useLang();
 
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem(STORAGE_KEY) === 'collapsed'; } catch { return false; }
@@ -200,7 +204,7 @@ export default function Navbar() {
               key={link.to}
               to={link.to}
               onClick={() => isMobile && setMobileOpen(false)}
-              title={!isExpanded ? link.label : undefined}
+              title={!isExpanded ? t(link.key) : undefined}
               className={({ isActive }) =>
                 `flex items-center gap-3 rounded-lg text-[13px] font-medium transition-all duration-150 group
                 ${isExpanded ? 'px-3 py-2.5' : 'justify-center p-2.5'}
@@ -211,13 +215,44 @@ export default function Navbar() {
               }
             >
               <span className="shrink-0">{link.icon}</span>
-              {isExpanded && <span className="leading-none">{link.label}</span>}
+              {isExpanded && <span className="leading-none">{t(link.key)}</span>}
             </NavLink>
           ))}
         </nav>
 
         {/* ── Bottom Section ── */}
         <div className="shrink-0 px-2.5 pb-4 pt-2 space-y-0.5 border-t border-white/10 mt-1">
+
+          {/* Language toggle */}
+          {isExpanded ? (
+            <button
+              onClick={toggleLang}
+              className="flex items-center justify-between w-full px-3 py-2 rounded-lg hover:bg-white/10 transition-all duration-150 group"
+              title={lang === 'en' ? 'Cambiar a Español' : 'Switch to English'}
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="shrink-0 text-white/55 group-hover:text-white/80 text-base leading-none">
+                  {lang === 'en' ? '🇺🇸' : '🇪🇸'}
+                </span>
+                <span className="text-[13px] text-white/55 group-hover:text-white/80 transition-colors">
+                  {lang === 'en' ? 'English' : 'Español'}
+                </span>
+              </div>
+              <div className="flex items-center gap-0.5 bg-white/10 rounded-lg px-2 py-1">
+                <span className={`text-[11px] font-bold transition-colors ${lang === 'en' ? 'text-white' : 'text-white/40'}`}>EN</span>
+                <span className="text-white/30 mx-0.5">|</span>
+                <span className={`text-[11px] font-bold transition-colors ${lang === 'es' ? 'text-white' : 'text-white/40'}`}>ES</span>
+              </div>
+            </button>
+          ) : (
+            <button
+              onClick={toggleLang}
+              title={lang === 'en' ? 'Cambiar a Español' : 'Switch to English'}
+              className="flex justify-center w-full p-2.5 rounded-lg text-white/55 hover:bg-white/10 hover:text-white/90 transition-all duration-150 text-sm font-bold"
+            >
+              {lang === 'en' ? 'ES' : 'EN'}
+            </button>
+          )}
 
           {/* Dark / Light mode toggle */}
           {isExpanded ? (
@@ -231,10 +266,9 @@ export default function Navbar() {
                   {dark ? Icons.sun : Icons.moon}
                 </span>
                 <span className="text-[13px] text-white/55 group-hover:text-white/80 transition-colors">
-                  {dark ? 'Light Mode' : 'Dark Mode'}
+                  {dark ? t('nav.lightMode') : t('nav.darkMode')}
                 </span>
               </div>
-              {/* Pill toggle switch */}
               <div className={`relative w-9 h-5 rounded-full transition-colors duration-200 shrink-0 ${dark ? 'bg-teal-400' : 'bg-white/20'}`}>
                 <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${dark ? 'translate-x-4' : 'translate-x-0.5'}`} />
               </div>
@@ -257,7 +291,7 @@ export default function Navbar() {
               ${isExpanded ? 'px-3 py-2.5' : 'justify-center p-2.5'}`}
           >
             <span className="shrink-0">{Icons.logout}</span>
-            {isExpanded && <span>Log out</span>}
+            {isExpanded && <span>{t('nav.logout')}</span>}
           </button>
 
           {/* User card */}

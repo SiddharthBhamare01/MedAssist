@@ -1,7 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { GoogleOAuthProvider } from '@react-oauth/google';
+import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { LanguageProvider } from './context/LanguageContext';
 import PrivateRoute from './components/PrivateRoute';
 import Navbar from './components/Layout/Navbar';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -43,6 +45,7 @@ import AuditLog from './pages/Admin/AuditLog';
 import SharedReport from './pages/Shared/SharedReport';
 
 function Layout({ children }) {
+  const { t } = useTranslation();
   return (
     <div className="min-h-screen bg-slate-50 flex">
       <a
@@ -57,7 +60,7 @@ function Layout({ children }) {
         <div className="h-14 md:hidden" />
         <main id="main-content" className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
           <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 text-center" role="note">
-            This application is an educational CS 595 project and is NOT a substitute for professional medical advice.
+            {t('common.appDisclaimer')}
           </div>
           <ErrorBoundary>{children}</ErrorBoundary>
         </main>
@@ -88,6 +91,7 @@ export default function App() {
   return (
     <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID || ''}>
     <AuthProvider>
+    <LanguageProvider>
       <BrowserRouter>
         <Toaster position="top-right" toastOptions={{
           style: { borderRadius: '12px', fontSize: '14px' },
@@ -134,6 +138,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </BrowserRouter>
+    </LanguageProvider>
     </AuthProvider>
     </GoogleOAuthProvider>
   );
