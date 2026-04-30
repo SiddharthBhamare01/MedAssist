@@ -517,8 +517,8 @@ medassist/
 ### 1. Clone
 
 ```bash
-git clone https://github.com/your-username/medassist-ai.git
-cd medassist-ai/medassist
+git clone https://github.com/SiddharthBhamare01/MedAssist.git
+cd MedAssist/medassist
 ```
 
 ### 2. Apply Database Schema

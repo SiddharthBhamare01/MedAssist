@@ -27,6 +27,10 @@ medassist/client/.env
 # Build outputs
 medassist/client/dist/
 
+# Uploaded files (user data — never commit)
+medassist/server/uploads/
+uploads/
+
 # Logs
 *.log
 npm-debug.log*
