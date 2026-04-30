@@ -365,27 +365,56 @@ export default function Analysis() {
     if (!reportId || lang === 'en') return;
     setTranslating(true);
     try {
-      // 1. Check DB cache first — fast path (~100ms)
-      const cached = await api.get(`/blood-report/${reportId}/translations?lang=${lang}`)
-        .then((r) => r.data).catch(() => null);
-
-      if (cached && Object.keys(cached).length > 0) {
-        // Poisoned-cache guard: if the cached overall_assessment is identical to the
-        // English source, a previous rate-limited attempt stored English text as "translations".
-        // Skip the cache and re-translate so the user actually gets Spanish.
-        const sourceOverall = result?.analysis?.summary?.overall_assessment;
-        const isPoisoned = sourceOverall && cached.overall_assessment === sourceOverall;
-        if (!isPoisoned) {
-          setTranslatedData(cached);
-          return;
-        }
-      }
-
-      // 2. Cache miss (or poisoned cache) — build batch and call MyMemory
       const texts = buildTranslationBatch();
       const entries = Object.entries(texts);
       if (!entries.length) return;
 
+      // 1. Check DB cache first — fast path (~100ms)
+      const cached = await api.get(`/blood-report/${reportId}/translations?lang=${lang}`)
+        .then((r) => r.data).catch(() => null);
+
+      // Poisoned-cache guard: if the cached overall_assessment is identical to the
+      // English source, a previous rate-limited attempt stored English text as "translations".
+      const sourceOverall = result?.analysis?.summary?.overall_assessment;
+      const isPoisoned = cached && sourceOverall && cached.overall_assessment === sourceOverall;
+
+      if (cached && Object.keys(cached).length > 0 && !isPoisoned) {
+        // Incremental path: only translate keys that are not yet in the cache
+        // (e.g. risk_summary, followup_* that load after the initial translation)
+        const missingKeys = Object.keys(texts).filter((k) => !(k in cached));
+        if (missingKeys.length === 0) {
+          setTranslatedData(cached);
+          return;
+        }
+
+        const toTranslate = Object.fromEntries(missingKeys.map((k) => [k, texts[k]]));
+        const CHUNK = 20;
+        const missingEntries = Object.entries(toTranslate);
+        const newChunks = [];
+        for (let i = 0; i < missingEntries.length; i += CHUNK) {
+          newChunks.push(Object.fromEntries(missingEntries.slice(i, i + CHUNK)));
+        }
+
+        const newResults = await Promise.allSettled(
+          newChunks.map((chunk) =>
+            api.post('/voice/translate', { lang, texts: chunk }).then((r) => r.data)
+          )
+        );
+
+        const newTranslated = {};
+        newResults.forEach((r) => { if (r.status === 'fulfilled') Object.assign(newTranslated, r.value); });
+
+        const merged = { ...cached, ...newTranslated };
+        setTranslatedData(merged);
+
+        const anyNew = Object.keys(newTranslated).some((k) => newTranslated[k] !== toTranslate[k]);
+        if (anyNew) {
+          api.put(`/blood-report/${reportId}/translations`, { lang, data: merged }).catch(() => {});
+        }
+        return;
+      }
+
+      // 2. Cache miss (or poisoned cache) — full batch translation
       const CHUNK = 20;
       const chunks = [];
       for (let i = 0; i < entries.length; i += CHUNK) {
@@ -402,9 +431,7 @@ export default function Analysis() {
       results.forEach((r) => { if (r.status === 'fulfilled') Object.assign(merged, r.value); });
       if (Object.keys(merged).length) {
         setTranslatedData(merged);
-        // 3. Only persist to DB if at least some values actually changed.
-        // If MyMemory was rate-limited it returns the original English text unchanged —
-        // storing that would poison the cache and block all future translation attempts.
+        // Only persist to DB if at least some values actually changed (guard against rate-limited no-ops)
         const anyChanged = Object.entries(merged).some(([k, v]) => v !== texts[k]);
         if (anyChanged) {
           api.put(`/blood-report/${reportId}/translations`, { lang, data: merged }).catch(() => {});
@@ -424,13 +451,13 @@ export default function Analysis() {
       clearTimeout(translateDebounceRef.current);
       return;
     }
-    const key = `${lang}:${reportId}`;
+    // Include riskScores/followUp in the key so the effect re-runs when they load
+    const key = `${lang}:${reportId}:${!!riskScores}:${!!followUp}`;
     if (translatedLangRef.current === key) return;
     translatedLangRef.current = key;
-    // Debounce: absorbs sequential riskScores/followUp loading before building the full batch
     clearTimeout(translateDebounceRef.current);
-    translateDebounceRef.current = setTimeout(() => { translateAll(); }, 600);
-  }, [lang, result, reportId]); // eslint-disable-line react-hooks/exhaustive-deps
+    translateDebounceRef.current = setTimeout(() => { translateAll(); }, 400);
+  }, [lang, result, reportId, riskScores, followUp]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { analysis, doctorReferralNeeded } = result || {};
   const summary = analysis?.summary;

@@ -57,6 +57,7 @@ app.use('/api/auth', authLimiter, require('./routes/auth'));
 app.use('/api/auth/resend-verification', emailLimiter);
 app.use('/api/auth/forgot-password', emailLimiter);
 app.use('/api/patient', require('./routes/patient'));
+app.use('/api/disease', agentLimiter, require('./routes/disease'));
 app.use('/api/blood-report', agentLimiter, require('./routes/bloodReport'));
 app.use('/api/doctors', require('./routes/doctors'));
 app.use('/api/doctor-assist', require('./routes/doctorAssist'));

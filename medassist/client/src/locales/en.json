@@ -33,7 +33,9 @@
     "abnormalFindings": "abnormal finding",
     "abnormalFindingsPlural": "abnormal findings",
     "viewAnalysis": "View Analysis",
-    "runAnalysis": "Run Analysis"
+    "runAnalysis": "Run Analysis",
+    "statusAnalyzed": "Analyzed",
+    "statusUploaded": "Uploaded"
   },
   "healthScore": {
     "title": "Health Score",

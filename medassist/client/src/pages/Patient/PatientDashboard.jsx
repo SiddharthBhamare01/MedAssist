@@ -25,7 +25,7 @@ function StandaloneReportCard({ report, index, onOpen, t }) {
             <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold ${
               report.analyzed ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
             }`}>
-              {report.analyzed ? 'Analyzed' : 'Uploaded'}
+              {report.analyzed ? t('dashboard.statusAnalyzed') : t('dashboard.statusUploaded')}
             </span>
             <span className="text-xs text-slate-400">{date}</span>
           </div>

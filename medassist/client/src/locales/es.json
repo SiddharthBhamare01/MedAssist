@@ -33,7 +33,9 @@
     "abnormalFindings": "hallazgo anormal",
     "abnormalFindingsPlural": "hallazgos anormales",
     "viewAnalysis": "Ver Análisis",
-    "runAnalysis": "Ejecutar Análisis"
+    "runAnalysis": "Ejecutar Análisis",
+    "statusAnalyzed": "Analizado",
+    "statusUploaded": "Subido"
   },
   "healthScore": {
     "title": "Puntuación de Salud",

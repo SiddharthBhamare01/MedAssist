@@ -5,6 +5,7 @@ const pool = require('../db/pool');
 const {
   getPatientProfile,
   upsertPatientProfile,
+  getPatientSessions,
 } = require('../models/patientQueries');
 
 // GET /api/patient/profile
@@ -385,6 +386,17 @@ router.get('/badges', verifyToken, async (req, res) => {
   } catch (err) {
     console.error('Badges error:', err);
     return res.status(500).json({ error: 'Failed to compute badges' });
+  }
+});
+
+// GET /api/patient/sessions — list recent symptom sessions for the logged-in patient
+router.get('/sessions', verifyToken, async (req, res) => {
+  try {
+    const sessions = await getPatientSessions(req.user.userId, 20);
+    return res.json({ sessions });
+  } catch (err) {
+    console.error('Get patient sessions error:', err);
+    return res.status(500).json({ error: 'Failed to fetch sessions' });
   }
 });
 
