@@ -384,14 +384,16 @@ Output ONLY the JSON object.`;
           { role: 'user', content: prompt },
         ],
         temperature: 0.1,
-        max_tokens: 2000,
+        max_tokens: 4096,
       });
       const raw = response.choices[0]?.message?.content?.trim();
       if (raw) {
         const jsonMatch = raw.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
-          translated = JSON.parse(jsonMatch[0]);
-          break;
+          try {
+            translated = JSON.parse(jsonMatch[0]);
+            break;
+          } catch { continue; }
         }
       }
     } catch (err) {

@@ -219,9 +219,10 @@ export default function Analysis() {
     }
 
     if (lang === 'es') {
-      if (!result?.summary) { toast.error('No hay resumen disponible.'); return; }
+      const summaryText = translatedData?.overall_assessment ?? summary?.overall_assessment;
+      if (!summaryText) { toast.error('No hay resumen disponible.'); return; }
       setIsNarrating(true);
-      const utterance = new SpeechSynthesisUtterance(result.summary);
+      const utterance = new SpeechSynthesisUtterance(summaryText);
       utterance.lang = 'es-ES';
       utterance.rate = 0.95;
       const voices = window.speechSynthesis.getVoices();
@@ -360,9 +361,24 @@ export default function Analysis() {
     setTranslating(true);
     try {
       const texts = buildTranslationBatch();
-      if (!Object.keys(texts).length) return;
-      const { data } = await api.post('/voice/translate', { lang, texts });
-      setTranslatedData(data);
+      const entries = Object.entries(texts);
+      if (!entries.length) return;
+
+      const CHUNK = 20;
+      const chunks = [];
+      for (let i = 0; i < entries.length; i += CHUNK) {
+        chunks.push(Object.fromEntries(entries.slice(i, i + CHUNK)));
+      }
+
+      const results = await Promise.allSettled(
+        chunks.map((chunk) =>
+          api.post('/voice/translate', { lang, texts: chunk }).then((r) => r.data)
+        )
+      );
+
+      const merged = {};
+      results.forEach((r) => { if (r.status === 'fulfilled') Object.assign(merged, r.value); });
+      if (Object.keys(merged).length) setTranslatedData(merged);
     } catch {
       // Falls back to English silently
     } finally {
