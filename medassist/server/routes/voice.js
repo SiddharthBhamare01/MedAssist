@@ -340,4 +340,69 @@ ${ingredientsList ? `Helpful recovery ingredients: ${ingredientsList}` : ''}`;
   return res.json({ reply });
 });
 
+// ─── POST /api/voice/translate ─────────────────────────────────────────────
+// Batch-translates a flat key→text object from English to the requested lang.
+// Body: { lang: 'es', texts: { [key]: string } }
+// Returns: { [key]: string }  (same keys, translated values)
+router.post('/translate', verifyToken, async (req, res) => {
+  const { lang, texts } = req.body;
+  if (!lang || !texts || typeof texts !== 'object') {
+    return res.status(400).json({ error: 'lang and texts are required' });
+  }
+  if (lang === 'en') return res.json(texts);
+
+  const entries = Object.entries(texts).filter(([, v]) => v && typeof v === 'string' && v.trim());
+  if (!entries.length) return res.json({});
+
+  const inputJson = JSON.stringify(Object.fromEntries(entries));
+
+  const prompt = `Translate the following medical text values from English to Spanish. Return ONLY a valid JSON object with the exact same keys but Spanish values.
+
+Rules:
+- Keep medical parameter names (HDL, LDL, Glucose, HbA1c, etc.) in their standard form
+- Keep numbers and units (mg/dL, g/L, mmol/L, weeks, months) unchanged
+- Use simple, clear Spanish that a patient can understand
+- Do NOT add or remove keys from the JSON
+- Do NOT wrap in markdown code blocks
+
+Input JSON:
+${inputJson}
+
+Output ONLY the JSON object.`;
+
+  const providers = getProviders();
+  const available = getAvailableProviders();
+
+  let translated = null;
+  for (const name of available) {
+    const provider = providers[name];
+    try {
+      const response = await provider.client.chat.completions.create({
+        model: provider.model,
+        messages: [
+          { role: 'system', content: 'You are a medical translator. Translate English medical text to clear, simple Spanish. Output only valid JSON with the same keys.' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.1,
+        max_tokens: 2000,
+      });
+      const raw = response.choices[0]?.message?.content?.trim();
+      if (raw) {
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          translated = JSON.parse(jsonMatch[0]);
+          break;
+        }
+      }
+    } catch (err) {
+      const status = err?.status || err?.response?.status;
+      if (status === 429 || status === 503) continue;
+      throw err;
+    }
+  }
+
+  if (!translated) return res.status(503).json({ error: 'Translation failed' });
+  return res.json(translated);
+});
+
 module.exports = router;

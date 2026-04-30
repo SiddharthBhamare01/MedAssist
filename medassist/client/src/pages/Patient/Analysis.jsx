@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
@@ -62,6 +62,9 @@ export default function Analysis() {
   const [isLoadingNarration, setIsLoadingNarration] = useState(false);
 
   const [explainModal, setExplainModal] = useState({ open: false, loading: false, text: '', parameter: '' });
+  const [translatedData, setTranslatedData] = useState(null);
+  const [translating, setTranslating] = useState(false);
+  const translatedForRef = useRef('');
 
   const VISIT_LABEL = {
     not_needed:           t('analysis.routineCheckup'),
@@ -302,6 +305,83 @@ export default function Analysis() {
     }
   };
 
+  const buildTranslationBatch = () => {
+    const texts = {};
+    if (!result) return texts;
+    const { analysis: a } = result;
+    const sum = a?.summary;
+    if (sum?.overall_assessment) texts.overall_assessment = sum.overall_assessment;
+    if (sum?.root_cause) texts.root_cause = sum.root_cause;
+    (a?.abnormal_findings || []).forEach((f, i) => {
+      if (f.interpretation) texts[`finding_${i}_interp`] = f.interpretation;
+    });
+    if (riskScores) {
+      if (riskScores.summary) texts.risk_summary = riskScores.summary;
+      (riskScores.breakdown || []).forEach((b, bi) => {
+        if (b.area) texts[`risk_area_${bi}`] = b.area;
+        if (b.note) texts[`risk_note_${bi}`] = b.note;
+      });
+    }
+    const fuArr = followUp ? (Array.isArray(followUp) ? followUp : [followUp]) : [];
+    fuArr.forEach((item, i) => {
+      const test = item.test || item.name;
+      if (test) texts[`followup_${i}_test`] = test;
+      const recheck = item.recheck_in || item.timeframe;
+      if (recheck) texts[`followup_${i}_recheck`] = recheck;
+      if (item.reason) texts[`followup_${i}_reason`] = item.reason;
+    });
+    if (a?.diet_plan) {
+      if (a.diet_plan.overview) texts.diet_overview = a.diet_plan.overview;
+      (a.diet_plan.meal_schedule || []).forEach((m, i) => {
+        if (m.meal) texts[`meal_${i}_name`] = m.meal;
+        if (m.suggestion) texts[`meal_${i}_sugg`] = m.suggestion;
+      });
+      (a.diet_plan.foods_to_eat || []).forEach((f, i) => {
+        if (f.food) texts[`eat_${i}_food`] = f.food;
+        if (f.reason) texts[`eat_${i}_reason`] = f.reason;
+        if (f.frequency) texts[`eat_${i}_freq`] = f.frequency;
+      });
+      (a.diet_plan.foods_to_avoid || []).forEach((f, i) => {
+        if (f.food) texts[`avoid_${i}_food`] = f.food;
+        if (f.reason) texts[`avoid_${i}_reason`] = f.reason;
+      });
+    }
+    (a?.recovery_ingredients || []).forEach((item, i) => {
+      if (item.benefit) texts[`ingr_${i}_benefit`] = item.benefit;
+      if (item.how_to_use) texts[`ingr_${i}_how`] = item.how_to_use;
+      (item.targets || []).forEach((tg, j) => {
+        if (tg) texts[`ingr_${i}_target_${j}`] = tg;
+      });
+    });
+    return texts;
+  };
+
+  const translateAll = async () => {
+    setTranslating(true);
+    try {
+      const texts = buildTranslationBatch();
+      if (!Object.keys(texts).length) return;
+      const { data } = await api.post('/voice/translate', { lang, texts });
+      setTranslatedData(data);
+    } catch {
+      // Falls back to English silently
+    } finally {
+      setTranslating(false);
+    }
+  };
+
+  useEffect(() => {
+    if (lang !== 'es' || !result) {
+      setTranslatedData(null);
+      translatedForRef.current = '';
+      return;
+    }
+    const key = `${lang}:${!!result}:${!!riskScores}:${!!followUp}`;
+    if (translatedForRef.current === key) return;
+    translatedForRef.current = key;
+    translateAll();
+  }, [lang, result, riskScores, followUp]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const { analysis, doctorReferralNeeded } = result || {};
   const summary = analysis?.summary;
 
@@ -328,7 +408,18 @@ export default function Analysis() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-xl font-bold font-display text-slate-800">{t('analysis.bloodReportAnalysis')}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold font-display text-slate-800">{t('analysis.bloodReportAnalysis')}</h1>
+              {translating && (
+                <span className="flex items-center gap-1 text-xs text-teal-500">
+                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  {lang === 'es' ? 'Traduciendo…' : 'Translating…'}
+                </span>
+              )}
+            </div>
           </div>
           {!loading && result && (
             <div className="flex items-center gap-2 flex-wrap">
@@ -465,11 +556,11 @@ export default function Analysis() {
           <Section title={t('analysis.overallSummary')} icon="📊">
             <div className="flex items-start gap-4 flex-wrap">
               <div className="flex-1 min-w-0">
-                <p className="text-slate-700 leading-relaxed">{summary?.overall_assessment}</p>
+                <p className="text-slate-700 leading-relaxed">{translatedData?.overall_assessment ?? summary?.overall_assessment}</p>
                 {summary?.root_cause && (
                   <p className="text-sm text-slate-500 mt-2">
                     <span className="font-semibold text-slate-700">{t('analysis.rootCause')}: </span>
-                    {summary.root_cause}
+                    {translatedData?.root_cause ?? summary.root_cause}
                   </p>
                 )}
               </div>
@@ -507,7 +598,7 @@ export default function Analysis() {
                             {f.status ? t(`analysis.statusLabels.${f.status}`, { defaultValue: f.status }) : f.status}
                           </span>
                         </td>
-                        <td className="py-1.5 px-1.5 text-slate-600 max-w-[180px] truncate" title={f.interpretation}>{f.interpretation}</td>
+                        <td className="py-1.5 px-1.5 text-slate-600 max-w-[180px] truncate" title={translatedData?.[`finding_${i}_interp`] ?? f.interpretation}>{translatedData?.[`finding_${i}_interp`] ?? f.interpretation}</td>
                         <td className="py-1.5 px-1.5">
                           <button
                             onClick={() => handleExplainFinding(f)}
@@ -578,9 +669,9 @@ export default function Analysis() {
 
                   <div className="flex-1 min-w-0 text-center sm:text-left">
                     <span className={`inline-block px-3 py-1 rounded-xl text-xs font-bold border ${ls.bg} ${ls.text} ${ls.border}`}>
-                      {level} {t('analysis.riskLevels.low').replace('Low ', '')}
+                      {t(`analysis.riskLevels.${level.toLowerCase()}`, { defaultValue: `${level} Risk` })}
                     </span>
-                    <p className="text-slate-700 text-sm mt-2 leading-relaxed">{riskScores.summary}</p>
+                    <p className="text-slate-700 text-sm mt-2 leading-relaxed">{translatedData?.risk_summary ?? riskScores.summary}</p>
                     <p className={`text-xs font-semibold mt-2 ${ls.text}`}>
                       {VISIT_LABEL[visit] || visit}
                     </p>
@@ -589,19 +680,19 @@ export default function Analysis() {
 
                 {breakdown.length > 0 && (
                   <div className="grid grid-cols-2 gap-3 mt-2">
-                    {breakdown.map((b) => {
+                    {breakdown.map((b, bi) => {
                       const bScore = b.score ?? 0;
                       const bColor = bScore >= 76 ? 'bg-red-500' : bScore >= 51 ? 'bg-orange-400' : bScore >= 26 ? 'bg-amber-400' : 'bg-emerald-500';
                       return (
                         <div key={b.area} className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                          <p className="text-xs font-semibold text-slate-700">{b.area}</p>
+                          <p className="text-xs font-semibold text-slate-700">{translatedData?.[`risk_area_${bi}`] ?? b.area}</p>
                           <div className="flex items-center gap-2 mt-1.5">
                             <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
                               <div className={`h-2 rounded-full ${bColor}`} style={{ width: `${bScore}%` }} />
                             </div>
                             <span className="text-xs font-bold text-slate-600 w-7 text-right">{b.score ?? '—'}</span>
                           </div>
-                          {b.note && <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">{b.note}</p>}
+                          {b.note && <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">{translatedData?.[`risk_note_${bi}`] ?? b.note}</p>}
                         </div>
                       );
                     })}
@@ -621,11 +712,11 @@ export default function Analysis() {
                       <span className="text-sm font-bold text-amber-700">{i + 1}</span>
                     </div>
                     <div>
-                      <h4 className="font-bold text-slate-800 text-sm">{item.test || item.name || t('analysis.followUp')}</h4>
+                      <h4 className="font-bold text-slate-800 text-sm">{translatedData?.[`followup_${i}_test`] ?? (item.test || item.name) || t('analysis.followUp')}</h4>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        {t('analysis.recheckIn')}: <span className="font-semibold text-amber-700">{item.recheck_in || item.timeframe || 'TBD'}</span>
+                        {t('analysis.recheckIn')}: <span className="font-semibold text-amber-700">{translatedData?.[`followup_${i}_recheck`] ?? (item.recheck_in || item.timeframe || 'TBD')}</span>
                       </p>
-                      {item.reason && <p className="text-xs text-slate-400 mt-1">{item.reason}</p>}
+                      {item.reason && <p className="text-xs text-slate-400 mt-1">{translatedData?.[`followup_${i}_reason`] ?? item.reason}</p>}
                     </div>
                   </div>
                 ))}
@@ -651,7 +742,7 @@ export default function Analysis() {
             <Section title={t('analysis.dietPlan')} icon="🥗" className="max-h-[600px]">
               <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
                 {analysis.diet_plan.overview && (
-                  <p className="text-slate-600 text-sm">{analysis.diet_plan.overview}</p>
+                  <p className="text-slate-600 text-sm">{translatedData?.diet_overview ?? analysis.diet_plan.overview}</p>
                 )}
                 {analysis.diet_plan.meal_schedule?.length > 0 && (
                   <div>
@@ -659,8 +750,8 @@ export default function Analysis() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {analysis.diet_plan.meal_schedule.map((m, i) => (
                         <div key={i} className="bg-emerald-50/70 border border-emerald-100 rounded-xl p-3">
-                          <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1">{m.meal}</p>
-                          <p className="text-sm text-slate-700">{m.suggestion}</p>
+                          <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1">{translatedData?.[`meal_${i}_name`] ?? m.meal}</p>
+                          <p className="text-sm text-slate-700">{translatedData?.[`meal_${i}_sugg`] ?? m.suggestion}</p>
                         </div>
                       ))}
                     </div>
@@ -673,10 +764,10 @@ export default function Analysis() {
                       <ul className="space-y-2">
                         {analysis.diet_plan.foods_to_eat.map((f, i) => (
                           <li key={i} className="bg-emerald-50/50 rounded-xl p-2.5 border border-emerald-100">
-                            <p className="font-medium text-slate-800 text-sm">{f.food}</p>
-                            <p className="text-xs text-slate-500 mt-0.5">{f.reason}</p>
+                            <p className="font-medium text-slate-800 text-sm">{translatedData?.[`eat_${i}_food`] ?? f.food}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{translatedData?.[`eat_${i}_reason`] ?? f.reason}</p>
                             {f.frequency && (
-                              <p className="text-xs text-emerald-600 mt-0.5 font-medium">{f.frequency}</p>
+                              <p className="text-xs text-emerald-600 mt-0.5 font-medium">{translatedData?.[`eat_${i}_freq`] ?? f.frequency}</p>
                             )}
                           </li>
                         ))}
@@ -689,8 +780,8 @@ export default function Analysis() {
                       <ul className="space-y-2">
                         {analysis.diet_plan.foods_to_avoid.map((f, i) => (
                           <li key={i} className="bg-red-50/50 rounded-xl p-2.5 border border-red-100">
-                            <p className="font-medium text-slate-800 text-sm">{f.food}</p>
-                            <p className="text-xs text-slate-500 mt-0.5">{f.reason}</p>
+                            <p className="font-medium text-slate-800 text-sm">{translatedData?.[`avoid_${i}_food`] ?? f.food}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{translatedData?.[`avoid_${i}_reason`] ?? f.reason}</p>
                           </li>
                         ))}
                       </ul>
@@ -715,15 +806,15 @@ export default function Analysis() {
                           <div className="flex flex-wrap gap-1 justify-end">
                             {item.targets.map((tg, j) => (
                               <span key={j} className="text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-lg font-medium">
-                                {tg}
+                                {translatedData?.[`ingr_${i}_target_${j}`] ?? tg}
                               </span>
                             ))}
                           </div>
                         )}
                       </div>
-                      <p className="text-sm text-slate-600">{item.benefit}</p>
+                      <p className="text-sm text-slate-600">{translatedData?.[`ingr_${i}_benefit`] ?? item.benefit}</p>
                       {item.how_to_use && (
-                        <p className="text-xs text-teal-700 mt-1.5 font-medium">{t('analysis.howToUse')}: {item.how_to_use}</p>
+                        <p className="text-xs text-teal-700 mt-1.5 font-medium">{t('analysis.howToUse')}: {translatedData?.[`ingr_${i}_how`] ?? item.how_to_use}</p>
                       )}
                       <div className="flex items-center gap-3 mt-3">
                         <button
