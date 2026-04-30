@@ -59,3 +59,8 @@ services:
         sync: false
       - key: OPENFDA_API_KEY
         sync: false
+      # MyMemory translation — 10,000 words/day each, combined 20,000/day
+      - key: MYMEMORY_EMAIL
+        sync: false
+      - key: MYMEMORY_EMAIL_2
+        sync: false

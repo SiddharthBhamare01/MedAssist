@@ -345,16 +345,33 @@ ${ingredientsList ? `Helpful recovery ingredients: ${ingredientsList}` : ''}`;
 // Body: { lang: 'es', texts: { [key]: string } }
 // Returns: { [key]: string }  (same keys, translated values)
 
+// Round-robin across up to 2 MyMemory accounts to double the daily word quota.
+// MYMEMORY_EMAIL  → account 1 (10,000 words/day)
+// MYMEMORY_EMAIL_2 → account 2 (10,000 words/day)  → combined: 20,000 words/day
+const MYMEMORY_EMAILS = [
+  process.env.MYMEMORY_EMAIL,
+  process.env.MYMEMORY_EMAIL_2,
+].filter(Boolean);
+
+let _emailIndex = 0;
+function nextEmail() {
+  if (!MYMEMORY_EMAILS.length) return '';
+  const email = MYMEMORY_EMAILS[_emailIndex % MYMEMORY_EMAILS.length];
+  _emailIndex++;
+  return email;
+}
+
 // Translates a single string via MyMemory public API (~150-200ms per call).
 // Falls back to original text on any error.
 async function myMemoryTranslate(text, targetLang) {
-  const email = process.env.MYMEMORY_EMAIL || '';
+  const email = nextEmail();
   const q = text.slice(0, 500); // MyMemory free limit per request
   const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=en|${targetLang}${email ? `&de=${encodeURIComponent(email)}` : ''}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`MyMemory HTTP ${res.status}`);
   const data = await res.json();
-  if (data.responseStatus !== 200) throw new Error(`MyMemory: ${data.responseDetails}`);
+  // eslint-disable-next-line eqeqeq
+  if (data.responseStatus != 200) throw new Error(`MyMemory: ${data.responseDetails}`);
   return data.responseData.translatedText || text;
 }
 
@@ -369,7 +386,7 @@ router.post('/translate', verifyToken, async (req, res) => {
   if (!entries.length) return res.json({});
 
   // Fire all translations in parallel, capped at 10 concurrent requests to avoid rate limits.
-  // Total time ≈ ceil(entries.length / 10) × ~200ms instead of one slow LLM call.
+  // Requests alternate between MYMEMORY_EMAIL and MYMEMORY_EMAIL_2 (round-robin).
   const CONCURRENCY = 10;
   const translated = {};
   for (let i = 0; i < entries.length; i += CONCURRENCY) {

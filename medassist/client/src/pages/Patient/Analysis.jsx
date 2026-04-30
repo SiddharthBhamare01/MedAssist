@@ -314,7 +314,9 @@ export default function Analysis() {
     const sum = a?.summary;
     if (sum?.overall_assessment) texts.overall_assessment = sum.overall_assessment;
     if (sum?.root_cause) texts.root_cause = sum.root_cause;
+    if (sum?.referral_reason) texts.referral_reason = sum.referral_reason;
     (a?.abnormal_findings || []).forEach((f, i) => {
+      if (f.parameter) texts[`finding_${i}_param`] = f.parameter;
       if (f.interpretation) texts[`finding_${i}_interp`] = f.interpretation;
     });
     if (riskScores) {
@@ -349,6 +351,7 @@ export default function Analysis() {
       });
     }
     (a?.recovery_ingredients || []).forEach((item, i) => {
+      if (item.ingredient) texts[`ingr_${i}_name`] = item.ingredient;
       if (item.benefit) texts[`ingr_${i}_benefit`] = item.benefit;
       if (item.how_to_use) texts[`ingr_${i}_how`] = item.how_to_use;
       (item.targets || []).forEach((tg, j) => {
@@ -623,7 +626,7 @@ export default function Analysis() {
                   <tbody className="divide-y divide-slate-50">
                     {analysis.abnormal_findings.map((f, i) => (
                       <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-1.5 px-1.5 font-medium text-slate-800 whitespace-nowrap">{f.parameter}</td>
+                        <td className="py-1.5 px-1.5 font-medium text-slate-800 whitespace-nowrap">{translatedData?.[`finding_${i}_param`] ?? f.parameter}</td>
                         <td className="py-1.5 px-1.5 font-mono font-semibold whitespace-nowrap">{f.your_value}</td>
                         <td className="py-1.5 px-1.5 text-slate-500 font-mono whitespace-nowrap">{f.normal_range}</td>
                         <td className="py-1.5 px-1.5 whitespace-nowrap">
@@ -834,7 +837,7 @@ export default function Analysis() {
                   return (
                     <div key={i} className="border border-teal-100 bg-teal-50/50 rounded-xl p-4">
                       <div className="flex items-start justify-between gap-2 mb-1">
-                        <h3 className="font-bold text-slate-800">{item.ingredient}</h3>
+                        <h3 className="font-bold text-slate-800">{translatedData?.[`ingr_${i}_name`] ?? item.ingredient}</h3>
                         {item.targets?.length > 0 && (
                           <div className="flex flex-wrap gap-1 justify-end">
                             {item.targets.map((tg, j) => (
