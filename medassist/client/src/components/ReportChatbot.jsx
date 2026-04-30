@@ -26,7 +26,7 @@ export default function ReportChatbot({ reportId }) {
   }]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
-  const [autoSpeak, setAutoSpeak] = useState(false);
+  const [autoSpeak, setAutoSpeak] = useState(true);
   const [listening, setListening] = useState(false);
   const [playingId, setPlayingId] = useState(null);
 
@@ -81,7 +81,7 @@ export default function ReportChatbot({ reportId }) {
       return;
     }
 
-    // English: use ElevenLabs via backend
+    // English: try ElevenLabs, fall back to browser SpeechSynthesis
     try {
       const res = await api.post('/voice/speak', { text }, { responseType: 'arraybuffer' });
       const url = URL.createObjectURL(new Blob([res.data], { type: 'audio/mpeg' }));
@@ -91,7 +91,17 @@ export default function ReportChatbot({ reportId }) {
         onStop: () => setPlayingId(null),
       });
     } catch {
-      toast.error(t('chatbot.audioFailed'));
+      // ElevenLabs unavailable — fall back to browser TTS
+      if (!window.speechSynthesis) { toast.error(t('chatbot.audioFailed')); return; }
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.95;
+      utterance.onstart = () => setPlayingId(id);
+      utterance.onend = () => { setPlayingId(null); utteranceRef.current = null; };
+      utterance.onerror = () => { setPlayingId(null); utteranceRef.current = null; };
+      utteranceRef.current = utterance;
+      setPlayingId(id);
+      window.speechSynthesis.speak(utterance);
     }
   };
 

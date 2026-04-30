@@ -9,7 +9,7 @@ router.get('/shared/:token', async (req, res) => {
       `SELECT rs.*, s.symptoms, s.predicted_diseases, s.selected_disease,
               s.selected_disease_data, s.recommended_tests, s.status
        FROM report_shares rs
-       JOIN symptom_sessions s ON s.id = rs.session_id
+       LEFT JOIN symptom_sessions s ON s.id = rs.session_id
        WHERE rs.token = $1 AND rs.expires_at > NOW()`,
       [req.params.token]
     );
@@ -33,11 +33,16 @@ router.get('/shared/:token', async (req, res) => {
     let followUp = null;
 
     const { rows: reportRows } = await pool.query(
-      `SELECT analysis, tablet_recommendations, risk_scores, follow_up
-       FROM blood_reports
-       WHERE session_id = $1
-       ORDER BY created_at DESC LIMIT 1`,
-      [share.session_id]
+      share.session_id
+        ? `SELECT analysis, tablet_recommendations, risk_scores, follow_up
+           FROM blood_reports
+           WHERE session_id = $1
+           ORDER BY created_at DESC LIMIT 1`
+        : `SELECT analysis, tablet_recommendations, risk_scores, follow_up
+           FROM blood_reports
+           WHERE patient_id = $1 AND analysis IS NOT NULL
+           ORDER BY created_at DESC LIMIT 1`,
+      [share.session_id || share.patient_id]
     );
 
     if (reportRows.length) {

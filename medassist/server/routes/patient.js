@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const crypto = require('crypto');
 const verifyToken = require('../middleware/auth');
 const pool = require('../db/pool');
 const {
@@ -368,6 +369,51 @@ router.get('/badges', verifyToken, async (req, res) => {
   } catch (err) {
     console.error('Badges error:', err);
     return res.status(500).json({ error: 'Failed to compute badges' });
+  }
+});
+
+// POST /api/patient/sessions/:id/share
+// :id may be a symptom_session id OR a blood_report id
+router.post('/sessions/:id/share', verifyToken, async (req, res) => {
+  const patientId = req.user.userId;
+  const { id } = req.params;
+
+  try {
+    let sessionId = null;
+
+    // First: check if it's a symptom session
+    const { rows: sessions } = await pool.query(
+      'SELECT id FROM symptom_sessions WHERE id = $1 AND patient_id = $2',
+      [id, patientId]
+    );
+
+    if (sessions.length) {
+      sessionId = id;
+    } else {
+      // Try as a blood_report id — use its session_id if available
+      const { rows: reports } = await pool.query(
+        'SELECT id, session_id FROM blood_reports WHERE id = $1 AND patient_id = $2',
+        [id, patientId]
+      );
+      if (!reports.length) {
+        return res.status(404).json({ error: 'Report not found' });
+      }
+      sessionId = reports[0].session_id || null;
+    }
+
+    const token = crypto.randomBytes(24).toString('hex');
+    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+
+    await pool.query(
+      `INSERT INTO report_shares (token, session_id, patient_id, expires_at)
+       VALUES ($1, $2, $3, $4)`,
+      [token, sessionId, patientId, expiresAt]
+    );
+
+    return res.json({ token, expiresAt });
+  } catch (err) {
+    console.error('[share] Error:', err);
+    return res.status(500).json({ error: 'Failed to create share link' });
   }
 });
 
