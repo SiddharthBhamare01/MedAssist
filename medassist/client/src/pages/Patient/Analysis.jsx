@@ -712,7 +712,7 @@ export default function Analysis() {
                       <span className="text-sm font-bold text-amber-700">{i + 1}</span>
                     </div>
                     <div>
-                      <h4 className="font-bold text-slate-800 text-sm">{translatedData?.[`followup_${i}_test`] ?? (item.test || item.name) || t('analysis.followUp')}</h4>
+                      <h4 className="font-bold text-slate-800 text-sm">{(translatedData?.[`followup_${i}_test`] ?? (item.test || item.name)) || t('analysis.followUp')}</h4>
                       <p className="text-xs text-slate-500 mt-0.5">
                         {t('analysis.recheckIn')}: <span className="font-semibold text-amber-700">{translatedData?.[`followup_${i}_recheck`] ?? (item.recheck_in || item.timeframe || 'TBD')}</span>
                       </p>
