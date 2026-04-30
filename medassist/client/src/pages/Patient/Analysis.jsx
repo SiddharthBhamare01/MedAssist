@@ -17,7 +17,6 @@ const STATUS_STYLE = {
   critical_low:  'bg-red-50 text-red-700 font-semibold',
   critical_high: 'bg-red-100 text-red-800 font-bold',
 };
-// STATUS_LABEL is now built from i18n inside the component via t('analysis.statusLabels.*')
 const COMPLEXITY_STYLE = {
   Low:    'bg-emerald-50 text-emerald-700 border-emerald-200',
   Medium: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -59,12 +58,17 @@ export default function Analysis() {
   const [supplementLogs, setSupplementLogs] = useState(new Set());
   const [supplementStreaks, setSupplementStreaks] = useState(new Map());
 
-  // Voice narration state
   const [isNarrating, setIsNarrating] = useState(false);
   const [isLoadingNarration, setIsLoadingNarration] = useState(false);
 
-  // Explain This modal state
   const [explainModal, setExplainModal] = useState({ open: false, loading: false, text: '', parameter: '' });
+
+  const VISIT_LABEL = {
+    not_needed:           t('analysis.routineCheckup'),
+    recommended_soon:     t('analysis.scheduleVisit'),
+    visit_within_2_weeks: t('analysis.visitSoon'),
+    immediate:            t('analysis.visitImmediate'),
+  };
 
   if (!reportId) {
     return (
@@ -74,18 +78,17 @@ export default function Analysis() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
           </svg>
         </div>
-        <p className="text-slate-500 mb-4">No report found. Please upload a blood report first.</p>
+        <p className="text-slate-500 mb-4">{t('analysis.noReport')}</p>
         <button
           onClick={() => navigate('/patient/upload-report')}
           className="bg-gradient-to-r from-teal-600 to-teal-500 text-white px-6 py-2.5 rounded-xl font-semibold hover:from-teal-700 hover:to-teal-600 shadow-md"
         >
-          Upload a Report
+          {t('analysis.uploadReport')}
         </button>
       </div>
     );
   }
 
-  // Poll GET /blood-report/:id until analysis is ready (fallback when POST times out)
   useEffect(() => {
     if (fetched) return;
     setFetched(true);
@@ -112,13 +115,11 @@ export default function Analysis() {
             applyResult({
               reportId: data.id,
               analysis: a,
-
               doctorReferralNeeded: data.complexity_flag || false,
               riskScores: data.risk_scores || null,
               followUp: data.follow_up || null,
             });
           } else {
-            // Not ready yet — keep polling
             pollTimer = setTimeout(pollForResult, 5000);
           }
         })
@@ -127,12 +128,9 @@ export default function Analysis() {
         });
     };
 
-    // Fire the analyze POST — if it returns in time, great. Otherwise fall back to polling.
     api.post('/blood-report/analyze', { reportId })
       .then((res) => applyResult(res.data))
       .catch(() => {
-        // POST timed out or failed — agent may still be running server-side.
-        // Start polling the DB for results.
         if (!cancelled) pollForResult();
       });
 
@@ -147,7 +145,6 @@ export default function Analysis() {
     try {
       const { data } = await api.post('/blood-report/risk-scores', { reportId });
       setRiskScores(data.riskScores);
-      toast.success('Risk scores calculated');
     } catch (err) {
       toast.error('Risk scoring failed');
     } finally {
@@ -160,7 +157,6 @@ export default function Analysis() {
     try {
       const { data } = await api.post('/blood-report/follow-up', { reportId });
       setFollowUp(data.followUp);
-      toast.success('Follow-up schedule generated');
     } catch (err) {
       toast.error('Follow-up generation failed');
     } finally {
@@ -168,14 +164,12 @@ export default function Analysis() {
     }
   };
 
-  // Auto-fetch risk scores + follow-up as soon as main analysis is ready
   useEffect(() => {
     if (!result || riskScores || followUp) return;
     handleRiskScores();
     handleFollowUp();
   }, [result]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch today's supplement logs when analysis is ready
   useEffect(() => {
     if (!result) return;
     api.get('/patient/supplement-log')
@@ -190,8 +184,8 @@ export default function Analysis() {
     setExporting(true);
     try {
       const endpoint = sessionId
-        ? `/patient/sessions/${sessionId}/export-pdf`
-        : `/blood-report/${reportId}/export-pdf`;
+        ? `/patient/sessions/${sessionId}/export-pdf?lang=${lang}`
+        : `/blood-report/${reportId}/export-pdf?lang=${lang}`;
       const filename = sessionId
         ? `MedAssist_Report_${sessionId.slice(0, 8)}.pdf`
         : `MedAssist_BloodReport_${reportId}.pdf`;
@@ -221,7 +215,6 @@ export default function Analysis() {
       return;
     }
 
-    // For Spanish: use browser TTS directly with the summary text
     if (lang === 'es') {
       if (!result?.summary) { toast.error('No hay resumen disponible.'); return; }
       setIsNarrating(true);
@@ -261,7 +254,7 @@ export default function Analysis() {
   const handleSummaryCard = async () => {
     setSummaryExporting(true);
     try {
-      const response = await api.get(`/blood-report/${reportId}/summary-card`, { responseType: 'blob' });
+      const response = await api.get(`/blood-report/${reportId}/summary-card?lang=${lang}`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
       const link = document.createElement('a');
       link.href = url;
@@ -301,10 +294,11 @@ export default function Analysis() {
         normal_range: finding.normal_range,
         status: finding.status,
         interpretation: finding.interpretation,
+        lang,
       });
       setExplainModal((m) => ({ ...m, loading: false, text: data.explanation }));
     } catch {
-      setExplainModal((m) => ({ ...m, loading: false, text: 'Could not load explanation. Please try again.' }));
+      setExplainModal((m) => ({ ...m, loading: false, text: t('analysis.aiDisclaimer') }));
     }
   };
 
@@ -316,25 +310,25 @@ export default function Analysis() {
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-slate-400">
         <button onClick={() => navigate('/patient/dashboard')} className="hover:text-teal-600 transition-colors">
-          My Reports
+          {t('analysis.breadcrumbReports')}
         </button>
         {sessionId && (
           <>
             <span className="text-slate-300">/</span>
             <button onClick={() => navigate(`/patient/upload-report/${sessionId}`)} className="hover:text-teal-600 transition-colors">
-              Upload Report
+              {t('analysis.breadcrumbUpload')}
             </button>
           </>
         )}
         <span className="text-slate-300">/</span>
-        <span className="text-slate-600 font-medium">Analysis</span>
+        <span className="text-slate-600 font-medium">{t('analysis.breadcrumbAnalysis')}</span>
       </nav>
 
       {/* Header */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-xl font-bold font-display text-slate-800">Blood Report Analysis</h1>
+            <h1 className="text-xl font-bold font-display text-slate-800">{t('analysis.bloodReportAnalysis')}</h1>
           </div>
           {!loading && result && (
             <div className="flex items-center gap-2 flex-wrap">
@@ -385,7 +379,7 @@ export default function Analysis() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                {summaryExporting ? 'Generating...' : 'Print Summary Card'}
+                {summaryExporting ? t('analysis.generating') : t('analysis.printSummaryCard')}
               </button>
               <button
                 onClick={() => setShowShareModal(true)}
@@ -394,13 +388,13 @@ export default function Analysis() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                 </svg>
-                Share
+                {t('analysis.share')}
               </button>
             </div>
           )}
         </div>
         <div className="mt-3 p-3 bg-amber-50/80 border border-amber-200/60 rounded-xl text-xs text-amber-700">
-          Educational use only. AI-generated analysis — always consult a qualified physician.
+          {t('analysis.educationalDisclaimer')}
         </div>
       </div>
 
@@ -422,7 +416,7 @@ export default function Analysis() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="font-bold text-slate-800">{explainModal.parameter}</h3>
-                <p className="text-xs text-teal-600 mt-0.5">Plain English Explanation</p>
+                <p className="text-xs text-teal-600 mt-0.5">{t('analysis.plainEnglish')}</p>
               </div>
               <button
                 onClick={() => setExplainModal({ open: false, loading: false, text: '', parameter: '' })}
@@ -435,16 +429,14 @@ export default function Analysis() {
             {explainModal.loading ? (
               <div className="flex items-center gap-3 py-4">
                 <div className="w-5 h-5 border-2 border-teal-400 border-t-transparent rounded-full animate-spin shrink-0" />
-                <p className="text-sm text-slate-500">Getting explanation...</p>
+                <p className="text-sm text-slate-500">{t('analysis.gettingExplanation')}</p>
               </div>
             ) : (
               <p className="text-slate-700 leading-relaxed">{explainModal.text}</p>
             )}
 
             <div className="pt-2 border-t border-slate-100">
-              <p className="text-xs text-slate-400">
-                AI-generated — always consult your doctor for medical advice.
-              </p>
+              <p className="text-xs text-slate-400">{t('analysis.aiDisclaimer')}</p>
             </div>
           </div>
         </div>
@@ -457,10 +449,8 @@ export default function Analysis() {
           <div className="bg-white rounded-2xl border border-slate-200 shadow p-8 flex flex-col items-center gap-4">
             <div className="w-10 h-10 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
             <div className="text-center">
-              <p className="font-medium text-slate-700">Blood Report Agent is running...</p>
-              <p className="text-sm text-slate-400 mt-1">
-                Checking reference ranges, searching FDA drug database, verifying interactions
-              </p>
+              <p className="font-medium text-slate-700">{t('analysis.agentRunning')}</p>
+              <p className="text-sm text-slate-400 mt-1">{t('analysis.agentChecking')}</p>
             </div>
           </div>
         </div>
@@ -472,20 +462,20 @@ export default function Analysis() {
           {/* Row 1: Overall Summary + Abnormal Findings */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Summary */}
-          <Section title="Overall Summary" icon="📊">
+          <Section title={t('analysis.overallSummary')} icon="📊">
             <div className="flex items-start gap-4 flex-wrap">
               <div className="flex-1 min-w-0">
                 <p className="text-slate-700 leading-relaxed">{summary?.overall_assessment}</p>
                 {summary?.root_cause && (
                   <p className="text-sm text-slate-500 mt-2">
-                    <span className="font-semibold text-slate-700">Root cause: </span>
+                    <span className="font-semibold text-slate-700">{t('analysis.rootCause')}: </span>
                     {summary.root_cause}
                   </p>
                 )}
               </div>
               {summary?.complexity && (
                 <span className={`px-3 py-1.5 rounded-xl text-sm font-bold shrink-0 border ${COMPLEXITY_STYLE[summary.complexity] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                  {summary.complexity} Complexity
+                  {summary.complexity} {t('analysis.complexity')}
                 </span>
               )}
             </div>
@@ -493,16 +483,16 @@ export default function Analysis() {
 
           {/* Abnormal Findings */}
           {analysis?.abnormal_findings?.length > 0 && (
-            <Section title={`Abnormal Findings (${analysis.abnormal_findings.length})`} icon="🔬" className="max-h-[665px]">
+            <Section title={`${t('analysis.abnormalFindings')} (${analysis.abnormal_findings.length})`} icon="🔬" className="max-h-[665px]">
               <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto -mx-2 rounded-lg">
                 <table className="w-full text-xs">
                   <thead className="sticky top-0 bg-white z-10">
                     <tr className="text-left text-[11px] text-slate-400 border-b border-slate-200">
-                      <th className="py-1.5 px-1.5 font-medium">Parameter</th>
-                      <th className="py-1.5 px-1.5 font-medium">Value</th>
-                      <th className="py-1.5 px-1.5 font-medium">Normal</th>
-                      <th className="py-1.5 px-1.5 font-medium">Status</th>
-                      <th className="py-1.5 px-1.5 font-medium">Interpretation</th>
+                      <th className="py-1.5 px-1.5 font-medium">{t('analysis.parameterCol')}</th>
+                      <th className="py-1.5 px-1.5 font-medium">{t('analysis.valueCol')}</th>
+                      <th className="py-1.5 px-1.5 font-medium">{t('analysis.normalCol')}</th>
+                      <th className="py-1.5 px-1.5 font-medium">{t('analysis.statusCol')}</th>
+                      <th className="py-1.5 px-1.5 font-medium">{t('analysis.interpretationCol')}</th>
                       <th className="py-1.5 px-1.5 font-medium w-8"></th>
                     </tr>
                   </thead>
@@ -522,7 +512,7 @@ export default function Analysis() {
                           <button
                             onClick={() => handleExplainFinding(f)}
                             className="w-6 h-6 rounded-full bg-teal-50 hover:bg-teal-100 text-teal-600 text-xs font-bold flex items-center justify-center transition-colors"
-                            title="Explain in plain English"
+                            title={t('analysis.plainEnglish')}
                           >
                             ?
                           </button>
@@ -536,25 +526,23 @@ export default function Analysis() {
           )}
           </div>
 
-          {/* Row 2: Clinical Risk Score + Follow-up Schedule — auto-loaded */}
+          {/* Row 2: Clinical Risk Score + Follow-up Schedule */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Risk Score loading skeleton */}
           {loadingRisk && !riskScores && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 flex items-center gap-4">
               <div className="w-8 h-8 border-4 border-teal-400 border-t-transparent rounded-full animate-spin shrink-0" />
               <div>
-                <p className="font-semibold text-slate-700 text-sm">Calculating Clinical Risk Score…</p>
-                <p className="text-xs text-slate-400 mt-0.5">Framingham, FINDRISC, CKD-EPI, Child-Pugh</p>
+                <p className="font-semibold text-slate-700 text-sm">{t('analysis.calculatingRisk')}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{t('analysis.riskModels')}</p>
               </div>
             </div>
           )}
-          {/* Follow-up loading skeleton */}
           {loadingFollowUp && !followUp && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 flex items-center gap-4">
               <div className="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin shrink-0" />
               <div>
-                <p className="font-semibold text-slate-700 text-sm">Generating Follow-up Schedule…</p>
-                <p className="text-xs text-slate-400 mt-0.5">Personalized retest recommendations</p>
+                <p className="font-semibold text-slate-700 text-sm">{t('analysis.generatingFollowUp')}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{t('analysis.personalizedRecs')}</p>
               </div>
             </div>
           )}
@@ -570,18 +558,11 @@ export default function Analysis() {
               High:     { ring: 'text-orange-500',  bg: 'bg-orange-50',  text: 'text-orange-700',  border: 'border-orange-200' },
               Critical: { ring: 'text-red-500',     bg: 'bg-red-50',     text: 'text-red-700',     border: 'border-red-200' },
             };
-            const VISIT_LABEL = {
-              not_needed: 'Routine checkup sufficient',
-              recommended_soon: 'Schedule a doctor visit within 1–2 months',
-              visit_within_2_weeks: 'See a doctor within 1–2 weeks',
-              immediate: 'Visit hospital immediately',
-            };
             const ls = LEVEL_STYLE[level] || LEVEL_STYLE.Moderate;
 
             return (
               <Section title={t('analysis.riskScore')} icon="📈">
                 <div className="flex flex-col sm:flex-row items-center gap-6">
-                  {/* Score circle */}
                   <div className="relative w-32 h-32 shrink-0">
                     <svg className="w-32 h-32 -rotate-90" viewBox="0 0 120 120">
                       <circle cx="60" cy="60" r="52" fill="none" stroke="#e2e8f0" strokeWidth="10" />
@@ -595,10 +576,9 @@ export default function Analysis() {
                     </div>
                   </div>
 
-                  {/* Summary */}
                   <div className="flex-1 min-w-0 text-center sm:text-left">
                     <span className={`inline-block px-3 py-1 rounded-xl text-xs font-bold border ${ls.bg} ${ls.text} ${ls.border}`}>
-                      {level} Risk
+                      {level} {t('analysis.riskLevels.low').replace('Low ', '')}
                     </span>
                     <p className="text-slate-700 text-sm mt-2 leading-relaxed">{riskScores.summary}</p>
                     <p className={`text-xs font-semibold mt-2 ${ls.text}`}>
@@ -607,7 +587,6 @@ export default function Analysis() {
                   </div>
                 </div>
 
-                {/* Breakdown bars */}
                 {breakdown.length > 0 && (
                   <div className="grid grid-cols-2 gap-3 mt-2">
                     {breakdown.map((b) => {
@@ -642,9 +621,9 @@ export default function Analysis() {
                       <span className="text-sm font-bold text-amber-700">{i + 1}</span>
                     </div>
                     <div>
-                      <h4 className="font-bold text-slate-800 text-sm">{item.test || item.name || 'Follow-up'}</h4>
+                      <h4 className="font-bold text-slate-800 text-sm">{item.test || item.name || t('analysis.followUp')}</h4>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Recheck in: <span className="font-semibold text-amber-700">{item.recheck_in || item.timeframe || 'TBD'}</span>
+                        {t('analysis.recheckIn')}: <span className="font-semibold text-amber-700">{item.recheck_in || item.timeframe || 'TBD'}</span>
                       </p>
                       {item.reason && <p className="text-xs text-slate-400 mt-1">{item.reason}</p>}
                     </div>
@@ -676,7 +655,7 @@ export default function Analysis() {
                 )}
                 {analysis.diet_plan.meal_schedule?.length > 0 && (
                   <div>
-                    <h3 className="text-sm font-semibold text-slate-700 mb-2">Daily Meal Schedule</h3>
+                    <h3 className="text-sm font-semibold text-slate-700 mb-2">{t('analysis.mealSchedule')}</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {analysis.diet_plan.meal_schedule.map((m, i) => (
                         <div key={i} className="bg-emerald-50/70 border border-emerald-100 rounded-xl p-3">
@@ -690,7 +669,7 @@ export default function Analysis() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {analysis.diet_plan.foods_to_eat?.length > 0 && (
                     <div>
-                      <h3 className="text-sm font-semibold text-emerald-700 mb-2">Foods to Eat</h3>
+                      <h3 className="text-sm font-semibold text-emerald-700 mb-2">{t('analysis.foodsToEat')}</h3>
                       <ul className="space-y-2">
                         {analysis.diet_plan.foods_to_eat.map((f, i) => (
                           <li key={i} className="bg-emerald-50/50 rounded-xl p-2.5 border border-emerald-100">
@@ -706,7 +685,7 @@ export default function Analysis() {
                   )}
                   {analysis.diet_plan.foods_to_avoid?.length > 0 && (
                     <div>
-                      <h3 className="text-sm font-semibold text-red-600 mb-2">Foods to Avoid</h3>
+                      <h3 className="text-sm font-semibold text-red-600 mb-2">{t('analysis.foodsToAvoid')}</h3>
                       <ul className="space-y-2">
                         {analysis.diet_plan.foods_to_avoid.map((f, i) => (
                           <li key={i} className="bg-red-50/50 rounded-xl p-2.5 border border-red-100">
@@ -734,9 +713,9 @@ export default function Analysis() {
                         <h3 className="font-bold text-slate-800">{item.ingredient}</h3>
                         {item.targets?.length > 0 && (
                           <div className="flex flex-wrap gap-1 justify-end">
-                            {item.targets.map((t, j) => (
+                            {item.targets.map((tg, j) => (
                               <span key={j} className="text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-lg font-medium">
-                                {t}
+                                {tg}
                               </span>
                             ))}
                           </div>
@@ -744,7 +723,7 @@ export default function Analysis() {
                       </div>
                       <p className="text-sm text-slate-600">{item.benefit}</p>
                       {item.how_to_use && (
-                        <p className="text-xs text-teal-700 mt-1.5 font-medium">How to use: {item.how_to_use}</p>
+                        <p className="text-xs text-teal-700 mt-1.5 font-medium">{t('analysis.howToUse')}: {item.how_to_use}</p>
                       )}
                       <div className="flex items-center gap-3 mt-3">
                         <button
@@ -774,7 +753,7 @@ export default function Analysis() {
         </>
       )}
 
-      {/* Floating report chatbot — always visible once reportId is known */}
+      {/* Floating report chatbot */}
       <ReportChatbot reportId={reportId} />
     </div>
   );

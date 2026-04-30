@@ -500,6 +500,7 @@ router.get('/:id/summary-card', verifyToken, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Report not found' });
 
     const report = rows[0];
+    const lang = req.query.lang || 'en';
     const { rows: userRows } = await pool.query('SELECT full_name FROM users WHERE id = $1', [req.user.userId]);
     const { generateSummaryCardPDF } = require('../services/pdfService');
 
@@ -510,6 +511,7 @@ router.get('/:id/summary-card', verifyToken, async (req, res) => {
       findings: (report.analysis?.abnormal_findings || []).slice(0, 3),
       dietPlan: report.analysis?.diet_plan || null,
       followUp: report.follow_up || null,
+      lang,
     });
 
     res.setHeader('Content-Type', 'application/pdf');
@@ -531,17 +533,19 @@ router.get('/:id/export-pdf', verifyToken, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Report not found' });
 
     const report = rows[0];
+    const lang = req.query.lang || 'en';
     const { rows: userRows } = await pool.query('SELECT full_name FROM users WHERE id = $1', [req.user.userId]);
     const { generateSessionPDF } = require('../services/pdfService');
 
     const pdfBuffer = await generateSessionPDF({
       patientName: userRows[0]?.full_name || 'Patient',
-      disease: 'Standalone Blood Report Analysis',
+      disease: lang === 'es' ? 'Análisis de Reporte de Sangre' : 'Standalone Blood Report Analysis',
       symptoms: [],
       analysis: report.analysis || {},
       tabletRecommendations: report.tablet_recommendations || [],
       riskScores: report.risk_scores || null,
       followUp: report.follow_up || null,
+      lang,
     });
 
     res.setHeader('Content-Type', 'application/pdf');

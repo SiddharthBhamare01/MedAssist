@@ -183,8 +183,12 @@ ${abnormalLines}`;
 // Returns a plain-English explanation of a single abnormal blood finding.
 // Returns: { explanation: string }
 router.post('/explain-finding', verifyToken, async (req, res) => {
-  const { parameter, your_value, normal_range, status } = req.body;
+  const { parameter, your_value, normal_range, status, lang = 'en' } = req.body;
   if (!parameter) return res.status(400).json({ error: 'parameter is required' });
+
+  const langNote = lang === 'es'
+    ? '\n\nIMPORTANT: Write the entire explanation in Spanish (Español) only. Use simple, clear medical Spanish that a patient can understand.'
+    : '';
 
   const prompt = `A patient's blood test shows: ${parameter} = ${your_value} (normal range: ${normal_range || 'not specified'}, status: ${status || 'abnormal'}).
 
@@ -193,7 +197,7 @@ Write a 2-3 sentence plain-English explanation for the patient (no medical jargo
 2. What it means that it is ${status || 'abnormal'}
 3. One practical implication for daily life
 
-Be warm, clear, and reassuring. Do not recommend specific treatments or drugs.`;
+Be warm, clear, and reassuring. Do not recommend specific treatments or drugs.${langNote}`;
 
   const providers = getProviders();
   const available = getAvailableProviders();
@@ -205,7 +209,9 @@ Be warm, clear, and reassuring. Do not recommend specific treatments or drugs.`;
       const response = await provider.client.chat.completions.create({
         model: provider.model,
         messages: [
-          { role: 'system', content: 'You explain blood test results in plain English to patients. Be concise (2-3 sentences), warm, and avoid jargon.' },
+          { role: 'system', content: lang === 'es'
+            ? 'Explicas resultados de análisis de sangre en español sencillo a pacientes. Sé conciso (2-3 oraciones), cálido y evita tecnicismos médicos.'
+            : 'You explain blood test results in plain English to patients. Be concise (2-3 sentences), warm, and avoid jargon.' },
           { role: 'user', content: prompt },
         ],
         temperature: 0.5,
@@ -230,10 +236,10 @@ Be warm, clear, and reassuring. Do not recommend specific treatments or drugs.`;
 
 // ─── POST /api/voice/report-chat ───────────────────────────────────────────
 // Conversational Q&A about an analyzed blood report.
-// Body: { reportId, message, history: [{role, content}] }
+// Body: { reportId, message, history: [{role, content}], lang }
 // Returns: { reply: string }
 router.post('/report-chat', verifyToken, async (req, res) => {
-  const { reportId, message, history = [] } = req.body;
+  const { reportId, message, history = [], lang = 'en' } = req.body;
   if (!reportId || !message) {
     return res.status(400).json({ error: 'reportId and message are required' });
   }
@@ -269,6 +275,10 @@ router.post('/report-chat', verifyToken, async (req, res) => {
   const avoidList = (analysis.diet_plan?.foods_to_avoid || []).slice(0, 5).map(f => f.food).join(', ');
   const ingredientsList = (analysis.recovery_ingredients || []).slice(0, 5).map(i => i.ingredient).join(', ');
 
+  const langInstruction = lang === 'es'
+    ? '\n\nIMPORTANT: Respond ONLY in Spanish (Español). Speak naturally as a Spanish-speaking doctor would to their patient. Use clear, simple medical Spanish.'
+    : '';
+
   const systemPrompt = `You are Dr. MedAssist, a warm and experienced family doctor speaking directly with a patient about their blood test results. The patient just asked you a question — answer it the way a real doctor would in a face-to-face consultation.
 
 HOW TO SPEAK:
@@ -279,7 +289,7 @@ HOW TO SPEAK:
 - End with one short personal note, like "I'd suggest mentioning this at your next doctor's visit"
 - Never say "based on your report" or "your analysis shows" — just speak naturally as a doctor would
 
-ANSWER ONLY from the data below. If asked about something not in the report, say so naturally.
+ANSWER ONLY from the data below. If asked about something not in the report, say so naturally.${langInstruction}
 
 ── THIS PATIENT'S REPORT ──
 Overall finding: ${summary.overall_assessment || 'Analysis complete'}

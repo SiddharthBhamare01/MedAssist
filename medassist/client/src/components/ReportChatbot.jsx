@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLang } from '../context/LanguageContext';
 import api from '../services/api';
 import toast from 'react-hot-toast';
 import { playAudio, stopAudio as stopGlobalAudio } from '../utils/audioManager';
@@ -6,18 +8,21 @@ import { playAudio, stopAudio as stopGlobalAudio } from '../utils/audioManager';
 let _uid = 0;
 const uid = () => ++_uid;
 
-const SUGGESTIONS = [
-  'What is my main health issue?',
-  'Which values are most concerning?',
-  'What foods should I eat?',
-  'Do I need to see a doctor soon?',
-];
-
 export default function ReportChatbot({ reportId }) {
+  const { t } = useTranslation();
+  const { lang } = useLang();
+
+  const SUGGESTIONS = [
+    t('chatbot.suggestion1'),
+    t('chatbot.suggestion2'),
+    t('chatbot.suggestion3'),
+    t('chatbot.suggestion4'),
+  ];
+
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState([{
     id: uid(), role: 'assistant',
-    text: "Hi! I'm your report assistant. Ask me anything about your blood report — what a value means, what to eat, when to see a doctor, or anything else.",
+    text: t('chatbot.greeting'),
   }]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -28,6 +33,18 @@ export default function ReportChatbot({ reportId }) {
   const bottomRef = useRef(null);
   const srRef = useRef(null);
   const textareaRef = useRef(null);
+  const utteranceRef = useRef(null);
+
+  // Update greeting when language changes
+  useEffect(() => {
+    setMsgs(prev => {
+      const updated = [...prev];
+      if (updated[0]?.role === 'assistant') {
+        updated[0] = { ...updated[0], text: t('chatbot.greeting') };
+      }
+      return updated;
+    });
+  }, [lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (open) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -35,13 +52,36 @@ export default function ReportChatbot({ reportId }) {
 
   const stopLocalAudio = () => {
     stopGlobalAudio();
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    utteranceRef.current = null;
     setPlayingId(null);
   };
 
   const playText = async (text, id) => {
-    // Stop whatever is playing globally (narration or previous chat reply)
-    stopGlobalAudio();
-    setPlayingId(null);
+    stopLocalAudio();
+
+    // Spanish: use browser Web Speech API
+    if (lang === 'es') {
+      if (!window.speechSynthesis) {
+        toast.error(t('chatbot.audioFailed'));
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'es-ES';
+      utterance.rate = 0.92;
+      const voices = window.speechSynthesis.getVoices();
+      const esVoice = voices.find(v => v.lang.startsWith('es'));
+      if (esVoice) utterance.voice = esVoice;
+      utterance.onstart = () => setPlayingId(id);
+      utterance.onend = () => { setPlayingId(null); utteranceRef.current = null; };
+      utterance.onerror = () => { setPlayingId(null); utteranceRef.current = null; };
+      utteranceRef.current = utterance;
+      setPlayingId(id);
+      window.speechSynthesis.speak(utterance);
+      return;
+    }
+
+    // English: use ElevenLabs via backend
     try {
       const res = await api.post('/voice/speak', { text }, { responseType: 'arraybuffer' });
       const url = URL.createObjectURL(new Blob([res.data], { type: 'audio/mpeg' }));
@@ -51,7 +91,7 @@ export default function ReportChatbot({ reportId }) {
         onStop: () => setPlayingId(null),
       });
     } catch {
-      toast.error('Audio playback failed.');
+      toast.error(t('chatbot.audioFailed'));
     }
   };
 
@@ -61,7 +101,6 @@ export default function ReportChatbot({ reportId }) {
     setInput('');
     stopLocalAudio();
 
-    // Snapshot history BEFORE adding current user message
     const history = msgs.slice(1).map(({ role, text: content }) => ({ role, content }));
     const userMsg = { id: uid(), role: 'user', text };
     setMsgs(prev => [...prev, userMsg]);
@@ -72,14 +111,15 @@ export default function ReportChatbot({ reportId }) {
         reportId,
         message: text,
         history: history.slice(-10),
+        lang,
       });
       const botMsg = { id: uid(), role: 'assistant', text: data.reply };
       setMsgs(prev => [...prev, botMsg]);
       if (autoSpeak) playText(data.reply, botMsg.id);
     } catch {
-      const errMsg = { id: uid(), role: 'assistant', text: "Sorry, I couldn't process that. Please try again." };
+      const errMsg = { id: uid(), role: 'assistant', text: t('chatbot.error') };
       setMsgs(prev => [...prev, errMsg]);
-      toast.error('No response. Try again.');
+      toast.error(t('chatbot.error'));
     } finally {
       setBusy(false);
     }
@@ -87,14 +127,14 @@ export default function ReportChatbot({ reportId }) {
 
   const startListening = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { toast.error('Speech recognition is not supported in this browser.'); return; }
+    if (!SR) { toast.error(t('chatbot.speechNotSupported')); return; }
     const r = new SR();
     srRef.current = r;
-    r.lang = 'en-US';
+    r.lang = lang === 'es' ? 'es-ES' : 'en-US';
     r.interimResults = false;
     r.onstart = () => setListening(true);
     r.onresult = e => { setListening(false); send(e.results[0][0].transcript); };
-    r.onerror = () => { setListening(false); toast.error("Couldn't understand. Try again."); };
+    r.onerror = () => { setListening(false); toast.error(t('chatbot.couldntUnderstand')); };
     r.onend = () => setListening(false);
     r.start();
   };
@@ -111,7 +151,7 @@ export default function ReportChatbot({ reportId }) {
       <button
         onClick={() => { setOpen(o => !o); if (open) stopLocalAudio(); }}
         className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-teal-600 hover:bg-teal-700 text-white shadow-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95"
-        title="Report Assistant"
+        title={t('chatbot.title')}
       >
         {open ? (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -139,15 +179,15 @@ export default function ReportChatbot({ reportId }) {
                 </svg>
               </div>
               <div>
-                <p className="text-white text-sm font-bold leading-tight">Report Assistant</p>
-                <p className="text-teal-100 text-[10px] leading-tight">Ask anything about your results</p>
+                <p className="text-white text-sm font-bold leading-tight">{t('chatbot.title')}</p>
+                <p className="text-teal-100 text-[10px] leading-tight">{t('chatbot.subtitle')}</p>
               </div>
             </div>
             <div className="flex items-center gap-1.5">
               {/* Auto-speak toggle */}
               <button
                 onClick={() => setAutoSpeak(v => !v)}
-                title={autoSpeak ? 'Auto-speak on — click to disable' : 'Auto-speak off — click to enable'}
+                title={autoSpeak ? t('chatbot.autoSpeakOn') : t('chatbot.autoSpeakOff')}
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
                   autoSpeak ? 'bg-white text-teal-600' : 'bg-white/10 text-white/70 hover:bg-white/20 text-white'
                 }`}
@@ -192,6 +232,7 @@ export default function ReportChatbot({ reportId }) {
                     }`}>
                       {m.text}
                     </div>
+                    {/* Voice button for every assistant message */}
                     {m.role === 'assistant' && (
                       <button
                         onClick={() => playingId === m.id ? stopLocalAudio() : playText(m.text, m.id)}
@@ -202,14 +243,14 @@ export default function ReportChatbot({ reportId }) {
                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
                               <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
                             </svg>
-                            Stop
+                            {t('chatbot.stop')}
                           </>
                         ) : (
                           <>
                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
                               <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
                             </svg>
-                            Listen
+                            {t('chatbot.listen')}
                           </>
                         )}
                       </button>
@@ -258,7 +299,7 @@ export default function ReportChatbot({ reportId }) {
             {listening && (
               <div className="flex items-center gap-2 px-1">
                 <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shrink-0" />
-                <span className="text-xs font-medium text-red-600">Listening… speak your question</span>
+                <span className="text-xs font-medium text-red-600">{t('chatbot.listening')}</span>
               </div>
             )}
             <div className="flex items-end gap-2">
@@ -267,7 +308,7 @@ export default function ReportChatbot({ reportId }) {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-                placeholder="Ask about your report…"
+                placeholder={t('chatbot.placeholder')}
                 rows={1}
                 disabled={busy}
                 className="flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent disabled:opacity-50"
@@ -277,7 +318,7 @@ export default function ReportChatbot({ reportId }) {
               <button
                 onClick={listening ? stopListening : startListening}
                 disabled={busy}
-                title={listening ? 'Stop listening' : 'Speak your question'}
+                title={listening ? t('chatbot.stop') : t('chatbot.listening')}
                 className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all shrink-0 disabled:opacity-50 ${
                   listening
                     ? 'bg-red-500 text-white'
@@ -300,7 +341,7 @@ export default function ReportChatbot({ reportId }) {
                 </svg>
               </button>
             </div>
-            <p className="text-[10px] text-center text-slate-400">AI-generated · always consult your doctor</p>
+            <p className="text-[10px] text-center text-slate-400">{t('chatbot.disclaimer')}</p>
           </div>
         </div>
       )}
