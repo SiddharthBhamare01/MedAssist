@@ -6,6 +6,10 @@ import api from '../../services/api';
 const ACCEPTED = '.jpg,.jpeg,.png,.pdf';
 const MAX_MB = 10;
 
+// Guide frame proportions — must match the overlay dimensions below
+const FRAME_W = 0.78; // fraction of viewfinder width
+const FRAME_H = 0.82; // fraction of viewfinder height (portrait, taller than wide)
+
 function StatusBadge({ status }) {
   const map = {
     normal:        'bg-green-100 text-green-700',
@@ -138,19 +142,36 @@ export default function UploadReport() {
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
 
-    // Use the video's actual pixel dimensions for best OCR quality
-    canvas.width  = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0);
+    const vW = video.videoWidth;
+    const vH = video.videoHeight;
+    // Display size of the video element (equals container due to w-full h-full)
+    const dispW = video.offsetWidth;
+    const dispH = video.offsetHeight;
+
+    // Undo object-cover: find the visible crop of the raw video stream
+    const scale = Math.max(dispW / vW, dispH / vH);
+    const visW  = dispW / scale;
+    const visH  = dispH / scale;
+    const srcX  = (vW - visW) / 2;
+    const srcY  = (vH - visH) / 2;
+
+    // Map the guide-frame overlay percentages into raw video pixels
+    const cropX = srcX + ((1 - FRAME_W) / 2) * visW;
+    const cropY = srcY + ((1 - FRAME_H) / 2) * visH;
+    const cropW = FRAME_W * visW;
+    const cropH = FRAME_H * visH;
+
+    // Render at 2× for OCR quality
+    canvas.width  = Math.round(cropW * 2);
+    canvas.height = Math.round(cropH * 2);
+    canvas.getContext('2d').drawImage(video, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
 
     canvas.toBlob(
       (blob) => {
         if (!blob) { toast.error('Failed to capture photo'); return; }
         const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
         setCapturedImage(dataUrl);
-        // Pause the live feed while reviewing the capture
         if (video) video.pause();
-
         const f = new File([blob], `blood-report-photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
         handleFile(f, dataUrl);
       },
@@ -385,21 +406,34 @@ export default function UploadReport() {
           {/* Live viewfinder */}
           {!cameraError && !capturedImage && (
             <>
-              <div className="relative bg-black">
+              {/* Portrait container — aspect-[3/4] keeps it taller than wide on any screen */}
+              <div className="relative bg-black w-full aspect-[3/4] overflow-hidden">
                 <video
                   ref={videoRef}
                   autoPlay
                   playsInline
                   muted
-                  className="w-full max-h-[420px] object-cover"
+                  className="w-full h-full object-cover"
                 />
 
                 {/* Alignment guide overlay */}
                 {cameraReady && (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="border-2 border-white/60 rounded-lg"
-                      style={{ width: '80%', height: '70%', boxShadow: '0 0 0 9999px rgba(0,0,0,0.35)' }}>
-                      <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-black/50 text-white text-xs px-3 py-1 rounded-full whitespace-nowrap">
+                    {/* Guide frame — FRAME_W × FRAME_H, portrait proportions matching the crop */}
+                    <div
+                      className="relative border-2 border-white rounded-lg"
+                      style={{
+                        width:     `${FRAME_W * 100}%`,
+                        height:    `${FRAME_H * 100}%`,
+                        boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)',
+                      }}
+                    >
+                      {/* Corner accents */}
+                      <span className="absolute top-0 left-0 w-5 h-5 border-t-4 border-l-4 border-white rounded-tl-md" />
+                      <span className="absolute top-0 right-0 w-5 h-5 border-t-4 border-r-4 border-white rounded-tr-md" />
+                      <span className="absolute bottom-0 left-0 w-5 h-5 border-b-4 border-l-4 border-white rounded-bl-md" />
+                      <span className="absolute bottom-0 right-0 w-5 h-5 border-b-4 border-r-4 border-white rounded-br-md" />
+                      <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-3 py-1 rounded-full whitespace-nowrap">
                         Align report inside the frame
                       </div>
                     </div>

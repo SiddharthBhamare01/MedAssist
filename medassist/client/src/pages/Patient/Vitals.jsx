@@ -43,6 +43,7 @@ export default function Vitals() {
     try {
       const { data } = await api.get(`/patient/vitals?type=${selectedType}&days=30`);
       const formatted = (data.vitals || []).map((v) => ({
+        ts: new Date(v.recorded_at).getTime(), // unique key — avoids same-date tooltip collision
         date: new Date(v.recorded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         value: v.value,
         systolic: v.value,     // DB stores systolic in 'value'
@@ -198,9 +199,14 @@ export default function Vitals() {
             <ResponsiveContainer width="100%" height={280}>
               <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                <XAxis
+                  dataKey="ts"
+                  tick={{ fontSize: 12, fill: '#94a3b8' }}
+                  tickFormatter={(ts) => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                />
                 <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} />
                 <Tooltip
+                  labelFormatter={(ts) => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   contentStyle={{
                     borderRadius: '12px',
                     border: '1px solid #e2e8f0',
