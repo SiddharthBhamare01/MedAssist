@@ -5,279 +5,197 @@
 
 ---
 
-## Session: 2026-04-14 — ElevenLabs Voice Integration
+## Session: 2026-05-01 — Fix Incomplete + Slow Translation
 
-### Goal
-Add a Voice Mode to the Patient Intake wizard (Intake.jsx) so patients can go through the
-3-step form completely by speaking, instead of clicking/typing.
-
-### Current State (before this session)
-- Days 1–12 complete (see MEMORY.md for full list)
-- `client/src/pages/Patient/Intake.jsx` — 3-step wizard:
-  - Step 1: Basic Info (age, gender, weight, height, blood group)
-  - Step 2: Medical History (conditions, allergies, medications, smoking, alcohol)
-  - Step 3: Symptoms (36 symptoms across 7 systems, each with duration/severity/onset)
-- AI stack: Groq (llama-3.3-70b-versatile) via `GROQ_API_KEY` in `.env`
-- NO ElevenLabs key in .env yet — will add placeholder `ELEVENLABS_API_KEY`
-
-### Architecture Decision
-3-layer approach:
-1. **ElevenLabs TTS** (server-proxied) → speaks questions to patient (clear AI voice)
-2. **Browser Web Speech API** (SpeechRecognition) → captures patient's spoken answer (free, no API)
-3. **Groq LLM** (existing key) → parses raw spoken text into structured form JSON
-
-Rationale: Keep ElevenLabs key server-side (security). Groq parsing avoids building brittle
-regex parsers. Web Speech API is free and built into Chrome/Edge.
-
-### Files to Create/Modify
-
-**Backend (new):**
-- `server/routes/voice.js`
-  - POST `/api/voice/speak` — proxies ElevenLabs TTS, streams audio back
-  - POST `/api/voice/parse` — Groq call to parse spoken text → structured JSON
-
-**Backend (modify):**
-- `server/index.js` — register `/api/voice` route
-
-**Frontend (new):**
-- `client/src/hooks/useVoice.js` — encapsulates TTS playback + SpeechRecognition logic
-- `client/src/components/VoiceIntake.jsx` — the floating voice assistant UI component
-
-**Frontend (modify):**
-- `client/src/pages/Patient/Intake.jsx` — add "Voice Mode" toggle, wire VoiceIntake
-
-**Config:**
-- `server/.env` — add `ELEVENLABS_API_KEY=` (user must fill)
-
-### Conversation Script (per step)
-
-**Step 1 — Basic Info:**
-Q1: "Please tell me your age."
-Q2: "What is your gender? Say male, female, or other."
-Q3: "What is your weight in kilograms? You can skip this."
-Q4: "What is your height in centimeters? You can skip this."
-Q5: "What is your blood group? For example: A positive, B negative, O positive."
-
-**Step 2 — Medical History:**
-Q1: "Do you have any existing medical conditions? For example: diabetes, hypertension, asthma, heart disease. Say none if not applicable."
-Q2: "Do you have any allergies? For example: penicillin, pollen. Say none if not."
-Q3: "Are you currently taking any medications? Say none if not."
-Q4: "What is your smoking status? Say never, former, or current."
-Q5: "What is your alcohol use? Say none, occasional, or regular."
-
-**Step 3 — Symptoms:**
-Q1: "Please describe all the symptoms you are experiencing right now. You can list multiple symptoms."
-Q2 (per symptom): "For [SYMPTOM], how many days have you had it, how severe is it on a scale of 1 to 10, and did it come on suddenly or gradually?"
-
-### Groq Parsing Prompts
-
-**Step 1 parser system prompt:**
-Extract: { age(number), gender(male/female/other/prefer-not-to-say), weightKg(number|null), heightCm(number|null), bloodGroup(A+/A-/B+/B-/AB+/AB-/O+/O-|null) }
-
-**Step 2 parser system prompt:**
-Extract: { existingConditions(array), allergies(array), currentMedications(array), smokingStatus(never/former/current|null), alcoholUse(none/occasional/regular|null) }
-
-**Step 3 parser system prompt:**
-Extract: { symptoms: [{ name(string matching known list), duration(string), severity(1-10), onset(sudden/gradual) }] }
-
-### ElevenLabs API Details
-- Endpoint: POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}
-- Voice: Rachel — voice_id = `21m00Tcm4TlvDq8ikWAM` (calm, professional, medical-appropriate)
-- Request body: { text, model_id: "eleven_turbo_v2", voice_settings: { stability: 0.5, similarity_boost: 0.75 } }
-- Response: audio/mpeg binary stream
-- Auth header: `xi-api-key: <ELEVENLABS_API_KEY>`
-- Server proxies this → client plays via AudioContext / <audio> element
-
-### Implementation Order — COMPLETED ✅
-1. [x] Write WORK_LOG.md (this file)
-2. [x] Add ELEVENLABS_API_KEY placeholder to server/.env
-3. [x] Create server/routes/voice.js (TTS proxy + Groq parse, 5 step parsers)
-4. [x] Register /api/voice route in server/index.js
-5. [x] Create client/src/hooks/useVoice.js (speak/listen/stopSpeaking/stopListening)
-6. [x] Create client/src/components/VoiceIntake.jsx (full 3-step voice runner)
-7. [x] Modify client/src/pages/Patient/Intake.jsx (voiceMode toggle + VoiceIntake mount)
-
-### IMPORTANT — What user must do to activate ElevenLabs TTS
-1. Get API key: elevenlabs.io → Profile → API Keys → Create
-2. Open `medassist/server/.env`
-3. Replace `your_elevenlabs_api_key_here` with actual key
-4. Restart server
-
-### Fallback behavior (no ElevenLabs key)
-- TTS silently fails — UI shows question text in card so user can still read
-- STT (browser) + Groq parsing both still work — voice capture + auto-fill works
-- Voice mode remains fully functional for capturing answers, just no audio questions
-
-### Files Changed
-- CREATED: `server/routes/voice.js`
-- MODIFIED: `server/index.js`
-- MODIFIED: `server/.env`
-- CREATED: `client/src/hooks/useVoice.js`
-- CREATED: `client/src/components/VoiceIntake.jsx`
-- MODIFIED: `client/src/pages/Patient/Intake.jsx`
-
-### Key Implementation Notes
-- SpeechRecognition: `window.SpeechRecognition || window.webkitSpeechRecognition` (Chrome/Edge)
-- TTS audio: server proxies ElevenLabs → client receives ArrayBuffer → AudioContext plays
-- 5 Groq parse modes: step1, step2, step3symptoms, step3detail
-- Auto-advance: after last Q of each step, calls onStep1Done/onStep2Done/onStep3Done
-- Floating mic button bottom-right: click to start/stop voice session
-- Voice mode toggle button shown below wizard card when not active
-
-### Progress Log
-- 14:00 — Started session, read all relevant files
-- 14:05 — Wrote WORK_LOG.md architecture plan
-- 14:20 — Implemented backend: voice.js, index.js, .env
-- 14:30 — Implemented useVoice.js hook
-- 14:40 — Implemented VoiceIntake.jsx
-- 14:50 — Integrated into Intake.jsx
-- 14:55 — Fixed: removed unused imports, dead dynamic import bug in runStep1
+### Problem Statement
+User reports: "Only translating headings and titles — not full content in multiple cards. Also takes too much time. Want to cache so revisiting doesn't retranslate."
 
 ---
-
-## Session: 2026-04-14 (continued) — Voice Fixes & Enhancements
-
-### Changes Made This Session
-
-#### 1. Custom ElevenLabs Voice ID
-- User generated custom medical assistant voice via ElevenLabs Voice Lab
-- Voice ID: `W1TKxm4MpGXSlpN7iVQy`
-- Updated `server/routes/voice.js` line 13: `ELEVENLABS_VOICE_ID = 'W1TKxm4MpGXSlpN7iVQy'`
-- User also added `ELEVENLABS_API_KEY=sk_12b6d...` to `server/.env`
-
-#### 2. Fixed AudioContext Autoplay Block (no audio issue)
-- **Root cause**: Browser blocks AudioContext created inside async chain (not a direct click handler)
-- **Fix**: Added `initAudio()` to `useVoice.js` — must be called synchronously on click
-- In `VoiceIntake.jsx` mic button onClick: `initAudio()` called BEFORE `startVoice()`
-- File: `client/src/hooks/useVoice.js` — added `initAudio` function + exported it
-- File: `client/src/components/VoiceIntake.jsx` — destructure `initAudio`, call on button click
-
-#### 3. Fixed 429 Rate Limiting on Parse (callWithFallback)
-- **Root cause**: `voice.js` used `getPrimaryProvider()` which picks ONE provider. When Cerebras 429s, it crashes.
-- **Fix**: Replaced with `callWithFallback()` that cycles Cerebras → SambaNova → OpenRouter → GitHub
-- File: `server/routes/voice.js` — added `callWithFallback()`, removed `getAI()` singleton
-- Import changed: `getPrimaryProvider` → `getProviders, getAvailableProviders`
-- Added error toast in `useVoice.js` for TTS failures (was silently swallowed before)
-
-#### 4. Fixed Multiple-Entry Parsing (allergies, conditions, medications)
-- **Root cause**: One big `step2` prompt for all 5 fields confused the LLM → only 1 item extracted
-- **Fix**: 5 dedicated parse prompts, one per question
-  - `conditions` — extracts array matching known conditions list
-  - `allergies` — extracts every allergen into array
-  - `medications` — extracts every medication into array
-  - `smoking` — returns single word: never/former/current
-  - `alcohol` — returns single word: none/occasional/regular
-- File: `server/routes/voice.js` — replaced `step2` with 5 field-specific prompts
-- File: `client/src/components/VoiceIntake.jsx` — STEP2_QUESTIONS now has `parseStep` per question
-- `runStep2` sends `step: parseStep` instead of `step: 'step2'`
-
-#### 5. Fixed Auto-Continue Between Steps (no re-press needed)
-- **Root cause**: `startVoice` ran only `if (step === 1)` then stopped. User had to re-press mic for step 2 and 3.
-- **Fix**: `startVoice` now runs all remaining steps in sequence from current step
-  ```js
-  if (step <= 1) { await runStep1(); if (cancelRef.current) return; }
-  if (step <= 2) { await runStep2(); if (cancelRef.current) return; }
-  await runStep3();
-  ```
-- File: `client/src/components/VoiceIntake.jsx` — updated `startVoice` logic
-
-#### 6. Real-Time Visual Field Fill (VoiceBadge)
-- **What**: As each answer is captured, the form field fills in AND a green `✓ value` badge appears on the label
-- **How**:
-  - Added `VoiceBadge` component in `Intake.jsx` (green pill with checkmark + value)
-  - Added `voiceLiveData: { step1: {}, step2: {} }` state in `Intake.jsx`
-  - Added `handleVoiceLive(stepKey, field, value)` callback
-  - `VoiceIntake` accepts `onLiveUpdate` prop → called after each field parsed
-  - `Step1` accepts `voiceLive` prop → `useEffect` calls `setValue()` for each filled field
-  - `Step2` accepts `voiceLive` prop → `useEffect` fills TagInputs + react-hook-form fields
-  - TagInput `label` prop updated to accept JSX (for embedding VoiceBadge)
-- Files: `Intake.jsx` (Step1, Step2, Step3, main component), `VoiceIntake.jsx`
-
-#### 7. Fixed Weight & Height Auto-Fill
-- **Root cause**: step1 parser got only "75" with no context about which question was asked. LLM guessed wrong field (put weight in age).
-- **Fix**: Every parse request now sends `context: q` (the question text)
-  - Backend builds: `Question asked: "What is your weight?" \n Patient answered: "75 kilos"`
-  - LLM now knows exactly which field to fill
-- File: `server/routes/voice.js` — `/parse` endpoint now accepts `context` param
-- File: `client/src/components/VoiceIntake.jsx` — `runStep1`, `runStep2` pass `context: q`
-
-#### 8. Retry Logic (3 attempts → close with hint)
-- Every question goes through `askWithRetry()` instead of `askAndListen()` directly
-- Attempt 1: original question
-- Attempt 2: "Sorry, I didn't catch that. [question]"
-- Attempt 3: "One last try — please speak clearly. [question]"
-- After 3 failures: `closeWithHint()` speaks closing message → closes voice window automatically
-- Closing message tells patient what to do: "Please try voice mode again, or fill in the form manually."
-- UI shows orange "Attempt X of 3" badge during retries
-- Files: `client/src/components/VoiceIntake.jsx` — added `askWithRetry`, `closeWithHint`, `retryAttempt` state
-
-### Current State of Voice Feature (fully working)
-- ElevenLabs TTS: custom voice W1TKxm4MpGXSlpN7iVQy speaks all questions
-- Browser SpeechRecognition: captures patient answers
-- Groq (via callWithFallback): parses spoken text → structured JSON
-- Form auto-fills in real time as each question is answered
-- Green ✓ badge on each label shows captured value instantly
-- 3-attempt retry per question, then graceful close with instructions
-- Runs all 3 steps in one press (no re-press between steps)
-
-### Files Changed (cumulative this session)
-| File | Type | What changed |
-|---|---|---|
-| `server/routes/voice.js` | Modified | callWithFallback, 6 parse prompts, context param |
-| `server/index.js` | Modified | /api/voice route |
-| `server/.env` | Modified | ELEVENLABS_API_KEY + voice ID |
-| `client/src/hooks/useVoice.js` | Modified | initAudio(), error toast, initAudio export |
-| `client/src/components/VoiceIntake.jsx` | Modified | askWithRetry, closeWithHint, onLiveUpdate, auto-continue, retryAttempt UI |
-| `client/src/pages/Patient/Intake.jsx` | Modified | VoiceBadge, voiceLiveData, handleVoiceLive, Step1/Step2 voiceLive props |
-
-### Free AI Providers Added to Project (recommendations given)
-Recommended adding to `aiClients.js` + `.env`:
-- **Groq**: `GROQ_API_KEY` → `https://api.groq.com/openai/v1` → `llama-3.3-70b-versatile` (fastest free, no monthly cap)
-- **Together AI**: `TOGETHER_API_KEY` → `https://api.together.xyz/v1` → `meta-llama/Llama-3.3-70B-Instruct-Turbo` ($25 free)
-- **Mistral AI**: `MISTRAL_API_KEY` → `https://api.mistral.ai/v1` → `mistral-small-latest` (free tier)
-- Add to `PRIORITY_ORDER`: `['groq', 'cerebras', 'cerebras_fast', 'together', 'sambanova', 'mistral', 'openrouter', 'github']`
-
-### Next Steps (remaining)
-- [ ] Day 13: E2E integration testing (including voice flow)
-- [ ] Day 14: Documentation
-- [ ] Day 15: Demo prep + submission
-- Voice feature is demo-ready as-is
-
----
-
-## Session: 2026-04-15 — Entrance Animations + VoiceIntake UI Redesign
-
-### Goal
-Two issues to fix:
-1. `Profile.jsx` and `Doctors.jsx` pages were missing the `framer-motion` entrance animation present in Vitals, Prescriptions, and Sessions pages
-2. VoiceIntake UI was too "widget-like" — not patient-friendly. Needed a redesign that communicates the purpose of assisting the patient clearly
 
 ### Root Cause Analysis
 
-**Animation gap**: Vitals and Prescriptions wrap their root `<div>` with `<motion.div variants={fadeIn} initial="hidden" animate="visible">`. Profile and Doctors did not — they used plain `<div>`. The pattern is consistent across all other patient pages and just needed to be applied.
+#### Two translation systems exist side-by-side:
 
-**VoiceIntake UI problem**: The old design was a floating card with a gradient blue header and a raw mic button. It felt like a browser extension widget, not a medical AI assistant. No visual distinction between the AI speaking vs patient speaking, dots and status badges were scattered.
+**System 1 — i18next (static UI labels)** → works fine
+- Button labels, section headers, status tags — loaded from `client/src/locales/es.json`
+- Instant, no API call — this is why headings/titles appear translated
 
-### Approach
+**System 2 — Dynamic AI content** → broken
+- `buildTranslationBatch()` in `Analysis.jsx` collects ~40–60 keys from analysis results:
+  - `overall_assessment`, `root_cause`, `finding_*`, `risk_*`, `followup_*`, `diet_*`, `eat_*`, `avoid_*`, `ingr_*`
+- Sends these to `POST /api/voice/translate` → backend calls **MyMemory API once per key**
+- MyMemory results are cached to DB via `PUT /api/blood-report/:id/translations`
+- Render uses `translatedData?.key ?? englishFallback`
 
-**Animations**:
-- Added `import { motion } from 'framer-motion'` + `const fadeIn = { hidden: { opacity: 0, y: 16 }, visible: {...} }` to both `Profile.jsx` and `Doctors.jsx`
-- Wrapped outer root element with `<motion.div variants={fadeIn} initial="hidden" animate="visible">` in both files
+#### Root Cause 1 — MyMemory makes 40+ individual HTTP calls (SLOW + UNRELIABLE)
+```
+40 keys ÷ 10 concurrent = 4 batches × ~200ms = ~800ms minimum
++ server round trips, MyMemory server latency, 8s timeout
+= 3–15 seconds per translation, often timing out mid-batch
+```
+Keys that timeout → fall back to English silently → user sees partial translation.
 
-**VoiceIntake redesign**:
-- Replaced floating gradient widget with a structured 340px medical assistant card
-- **Chat-bubble layout**: AI questions appear as left-aligned "MedAssist" bubbles; patient's heard text appears as right-aligned "You said" bubbles — mirrors natural conversation
-- **Step progress tabs**: 3 tabs at the top (Basic Info / Medical History / Symptoms) with active/done/pending states
-- **Status area**: animated waveform bars when listening; bouncing ThinkingDots when processing; pulse ring on avatar when speaking
-- **Idle state**: just shows a clean teal mic button (no card) to avoid clutter — card appears only when active
-- **Footer hint**: context-aware text ("Speak now — I'm listening" vs "Please wait…") inside the panel
-- **Stop button**: red circular button at bottom right during active session (instead of inline cancel link)
-- Removed emoji from header — replaced with SVG icons (sparkle = AI, circle = patient)
-- Collected data chips still present but in a cleaner "Captured so far" section
+#### Root Cause 2 — MyMemory rate limits kill entire translation silently
+MyMemory free tier: 10,000 words/day per account (20,000 combined with 2 accounts).
+A blood report with 40 keys × ~30 words avg = ~1,200 words per report.
+When quota exceeded → MyMemory returns the original English → "poisoned cache guard" in `translateAll()` detects and invalidates cache → next attempt also fails → **no dynamic content ever gets translated**, only i18n static labels remain.
 
-### Files Changed
+#### Root Cause 3 — Cache never gets populated when MyMemory fails
+The DB cache write (`PUT /api/blood-report/:id/translations`) only runs `if (anyChanged)` — i.e., only if at least one translated value differs from the English source. When MyMemory is rate-limited, it returns English → no value changes → cache not saved → every revisit re-attempts the failing API → never cached.
+
+#### Root Cause 4 — Chunking multiplies the problem
+`translateAll()` splits keys into chunks of 20, sends each chunk as a separate `POST /voice/translate` call. Each chunk triggers 10–20 MyMemory requests. Any chunk failure leaves that chunk untranslated. Partial result = partial UI translation.
+
+---
+
+### Solution: Replace MyMemory with a Single LLM Call
+
+**Core idea**: Instead of 40+ individual MyMemory HTTP calls, send the entire `{ key: "text" }` JSON to the LLM in ONE call. The LLM translates all values at once and returns the translated JSON.
+
+Benefits:
+- **Speed**: 1 LLM call (~2–4s) vs 40+ HTTP calls (3–30s)
+- **Completeness**: All keys translated in one shot — no partial failures
+- **Free**: Uses existing providers (Cerebras/SambaNova/GitHub) — no new quota
+- **Better quality**: LLM understands medical context; MyMemory is generic MT
+- **Reliable**: Uses existing `callWithFallback()` provider chain in `voice.js`
+- **Cache works correctly**: Full result is always persisted after one successful call
+
+---
+
+### Files to Modify
+
 | File | Change |
 |---|---|
-| `client/src/pages/Patient/Profile.jsx` | Added framer-motion fadeIn entrance animation |
-| `client/src/pages/Patient/Doctors.jsx` | Added framer-motion fadeIn entrance animation |
-| `client/src/components/VoiceIntake.jsx` | Full UI redesign — chat-bubble layout, step tabs, waveform, SVG icons |
+| `server/routes/voice.js` | Replace `myMemoryTranslate` + per-key loop with single LLM call |
+| `client/src/pages/Patient/Analysis.jsx` | Remove chunking — single `api.post('/voice/translate', ...)` call |
+
+**NOT changing:**
+- `buildTranslationBatch()` — already collects the right keys
+- DB cache GET/PUT routes in `bloodReport.js` — already correct
+- i18next setup — already working
+
+---
+
+### Backend Change (`server/routes/voice.js`)
+
+**Delete entirely:**
+- `MYMEMORY_EMAILS` array, `_emailIndex`, `nextEmail()`, `myMemoryTranslate()` function
+- The per-key concurrency loop inside `router.post('/translate', ...)`
+
+**Replace `router.post('/translate', ...)` with:**
+
+```js
+router.post('/translate', verifyToken, async (req, res) => {
+  const { lang, texts } = req.body;
+  if (!lang || !texts || typeof texts !== 'object') {
+    return res.status(400).json({ error: 'lang and texts are required' });
+  }
+  if (lang === 'en') return res.json(texts);
+
+  const entries = Object.entries(texts).filter(([, v]) => v && typeof v === 'string' && v.trim());
+  if (!entries.length) return res.json({});
+
+  const textObj = Object.fromEntries(entries);
+  const LANG_NAMES = { es: 'Spanish', fr: 'French', hi: 'Hindi', de: 'German', pt: 'Portuguese', zh: 'Chinese' };
+  const langName = LANG_NAMES[lang] || lang;
+
+  const systemPrompt = `You are a medical translation assistant. Translate values accurately, preserving clinical terminology.`;
+  const userPrompt = `Translate ALL values in this JSON object from English to ${langName}.
+Rules:
+- Return ONLY valid JSON — no markdown fences, no explanation outside the JSON
+- Keep every key exactly as-is, only translate the string values
+- Preserve medical terms, drug names, and numeric references accurately
+- If a value is already in ${langName}, keep it unchanged
+
+${JSON.stringify(textObj)}`;
+
+  try {
+    const raw = await callWithFallback(userPrompt, systemPrompt, 3000);
+    const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    const translated = JSON.parse(clean);
+    return res.json(translated);
+  } catch (err) {
+    console.error('[translate] LLM translation failed:', err.message);
+    // Return original English texts as fallback — client handles gracefully
+    return res.json(Object.fromEntries(entries));
+  }
+});
+```
+
+> **Note**: `callWithFallback(userPrompt, systemPrompt, maxTokens)` already exists in `voice.js` from the voice session. Check its exact signature — it may take `(prompt, systemPrompt)` or `(messages)`. Adjust accordingly. The key is passing `maxTokens: 3000` so the full JSON fits in the response.
+
+---
+
+### Frontend Change (`client/src/pages/Patient/Analysis.jsx`)
+
+**In `translateAll()`** — replace the two chunked-batch blocks (cache-miss path and incremental path) with a single API call each.
+
+**Cache-miss path** (currently lines 447–468) — replace with:
+```js
+// Single LLM call for all keys at once
+const newTranslated = await api.post('/voice/translate', { lang, texts })
+  .then((r) => r.data)
+  .catch(() => ({}));
+
+if (Object.keys(newTranslated).length) {
+  setTranslatedData(newTranslated);
+  const anyChanged = Object.entries(newTranslated).some(([k, v]) => v !== texts[k]);
+  if (anyChanged) {
+    api.put(`/blood-report/${reportId}/translations`, { lang, data: newTranslated }).catch(() => {});
+  }
+}
+```
+
+**Incremental path** (currently lines 419–443) — replace chunk loop with:
+```js
+const toTranslate = Object.fromEntries(missingKeys.map((k) => [k, texts[k]]));
+const newTranslated = await api.post('/voice/translate', { lang, texts: toTranslate })
+  .then((r) => r.data)
+  .catch(() => ({}));
+
+const merged = { ...cached, ...newTranslated };
+setTranslatedData(merged);
+const anyNew = Object.keys(newTranslated).some((k) => newTranslated[k] !== toTranslate[k]);
+if (anyNew) {
+  api.put(`/blood-report/${reportId}/translations`, { lang, data: merged }).catch(() => {});
+}
+```
+
+---
+
+### How Cache Works After Fix
+
+**First visit (cache miss):**
+1. `GET /api/blood-report/:id/translations?lang=es` → empty
+2. Single `POST /voice/translate` LLM call → all 40–60 keys translated in ~3s
+3. `PUT /api/blood-report/:id/translations` saves full result to DB
+4. `setTranslatedData(translated)` → page renders fully in Spanish
+
+**Revisit (cache hit):**
+1. `GET /api/blood-report/:id/translations?lang=es` → returns full cached JSON (~100ms)
+2. `missingKeys` = [] → `setTranslatedData(cached)` immediately
+3. Zero API calls, instant render
+
+**When riskScores/followUp arrive late:**
+1. `translateAll()` re-runs (dependency on `riskScores`/`followUp` state)
+2. Cache hit for existing keys; only `risk_*` and `followup_*` are missing
+3. One small LLM call for just the missing keys → merges with cache → saves updated cache
+
+---
+
+### Verification Steps
+1. Switch language to Spanish on Analysis page
+2. Check: Overall Summary, Abnormal Findings, Diet Plan, Recovery Ingredients, Risk Scores, Follow-Up cards all show Spanish text (not just headings)
+3. Check browser Network tab: only ONE `POST /voice/translate` request fires (not 40+)
+4. Revisit page and switch to Spanish: translation appears instantly (DB cache hit, no API call)
+5. Check Render logs: `[translate] LLM translation...` log appears once per first visit
+6. Verify cache: `GET /api/blood-report/:id/translations?lang=es` returns full JSON
+
+---
+
+### Key File Locations
+- `server/routes/voice.js` — lines ~343–406 (entire translate section to replace)
+- `client/src/pages/Patient/Analysis.jsx` — lines ~393–473 (`buildTranslationBatch` + `translateAll`)
+- `client/src/pages/Patient/Analysis.jsx` — lines ~476–489 (translation `useEffect` — no change needed)
+- `server/routes/bloodReport.js` — lines ~580–618 (GET/PUT translations — no change needed)
+- `client/src/locales/en.json` + `es.json` — static i18n labels (no change needed)

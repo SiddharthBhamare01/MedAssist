@@ -341,39 +341,13 @@ ${ingredientsList ? `Helpful recovery ingredients: ${ingredientsList}` : ''}`;
 });
 
 // ─── POST /api/voice/translate ─────────────────────────────────────────────
-// Batch-translates a flat key→text object using MyMemory free translation API.
+// Batch-translates a flat key→text object using the existing LLM provider chain.
+// One LLM call translates ALL keys at once — much faster and more reliable than
+// per-key HTTP calls to external MT APIs.
 // Body: { lang: 'es', texts: { [key]: string } }
 // Returns: { [key]: string }  (same keys, translated values)
 
-// Round-robin across up to 2 MyMemory accounts to double the daily word quota.
-// MYMEMORY_EMAIL  → account 1 (10,000 words/day)
-// MYMEMORY_EMAIL_2 → account 2 (10,000 words/day)  → combined: 20,000 words/day
-const MYMEMORY_EMAILS = [
-  process.env.MYMEMORY_EMAIL,
-  process.env.MYMEMORY_EMAIL_2,
-].filter(Boolean);
-
-let _emailIndex = 0;
-function nextEmail() {
-  if (!MYMEMORY_EMAILS.length) return '';
-  const email = MYMEMORY_EMAILS[_emailIndex % MYMEMORY_EMAILS.length];
-  _emailIndex++;
-  return email;
-}
-
-// Translates a single string via MyMemory public API (~150-200ms per call).
-// Falls back to original text on any error.
-async function myMemoryTranslate(text, targetLang) {
-  const email = nextEmail();
-  const q = text.slice(0, 500); // MyMemory free limit per request
-  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=en|${targetLang}${email ? `&de=${encodeURIComponent(email)}` : ''}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-  if (!res.ok) throw new Error(`MyMemory HTTP ${res.status}`);
-  const data = await res.json();
-  // eslint-disable-next-line eqeqeq
-  if (data.responseStatus != 200) throw new Error(`MyMemory: ${data.responseDetails}`);
-  return data.responseData.translatedText || text;
-}
+const LANG_NAMES = { es: 'Spanish', fr: 'French', hi: 'Hindi', de: 'German', pt: 'Portuguese', zh: 'Chinese' };
 
 router.post('/translate', verifyToken, async (req, res) => {
   const { lang, texts } = req.body;
@@ -385,21 +359,50 @@ router.post('/translate', verifyToken, async (req, res) => {
   const entries = Object.entries(texts).filter(([, v]) => v && typeof v === 'string' && v.trim());
   if (!entries.length) return res.json({});
 
-  // Fire all translations in parallel, capped at 10 concurrent requests to avoid rate limits.
-  // Requests alternate between MYMEMORY_EMAIL and MYMEMORY_EMAIL_2 (round-robin).
-  const CONCURRENCY = 10;
-  const translated = {};
-  for (let i = 0; i < entries.length; i += CONCURRENCY) {
-    const batch = entries.slice(i, i + CONCURRENCY);
-    await Promise.allSettled(
-      batch.map(async ([key, text]) => {
-        try {
-          translated[key] = await myMemoryTranslate(text, lang);
-        } catch {
-          translated[key] = text; // fallback to English on error
-        }
-      })
-    );
+  const textObj = Object.fromEntries(entries);
+  const langName = LANG_NAMES[lang] || lang;
+
+  const systemPrompt = `You are a medical translation assistant. Translate values accurately, preserving clinical terminology.`;
+  const userPrompt = `Translate ALL values in this JSON object from English to ${langName}.
+Rules:
+- Return ONLY valid JSON — no markdown fences, no explanation outside the JSON
+- Keep every key exactly as-is, only translate the string values
+- Preserve medical terms, drug names, and numeric references accurately
+- If a value is already in ${langName}, keep it unchanged
+
+${JSON.stringify(textObj)}`;
+
+  const providers = getProviders();
+  const available = getAvailableProviders();
+
+  let translated = null;
+  for (const name of available) {
+    const provider = providers[name];
+    try {
+      const response = await provider.client.chat.completions.create({
+        model: provider.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.2,
+        max_tokens: 3000,
+      });
+      const raw = response.choices[0]?.message?.content?.trim() || '';
+      const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+      translated = JSON.parse(clean);
+      break;
+    } catch (err) {
+      const status = err?.status || err?.response?.status;
+      if (status === 429 || status === 503) { continue; }
+      console.error(`[translate] Provider ${name} failed:`, err.message);
+      continue;
+    }
+  }
+
+  if (!translated) {
+    console.error('[translate] All providers failed — returning English fallback');
+    return res.json(Object.fromEntries(entries));
   }
 
   return res.json(translated);

@@ -418,21 +418,9 @@ export default function Analysis() {
         }
 
         const toTranslate = Object.fromEntries(missingKeys.map((k) => [k, texts[k]]));
-        const CHUNK = 20;
-        const missingEntries = Object.entries(toTranslate);
-        const newChunks = [];
-        for (let i = 0; i < missingEntries.length; i += CHUNK) {
-          newChunks.push(Object.fromEntries(missingEntries.slice(i, i + CHUNK)));
-        }
-
-        const newResults = await Promise.allSettled(
-          newChunks.map((chunk) =>
-            api.post('/voice/translate', { lang, texts: chunk }).then((r) => r.data)
-          )
-        );
-
-        const newTranslated = {};
-        newResults.forEach((r) => { if (r.status === 'fulfilled') Object.assign(newTranslated, r.value); });
+        const newTranslated = await api.post('/voice/translate', { lang, texts: toTranslate })
+          .then((r) => r.data)
+          .catch(() => ({}));
 
         const merged = { ...cached, ...newTranslated };
         setTranslatedData(merged);
@@ -444,27 +432,16 @@ export default function Analysis() {
         return;
       }
 
-      // 2. Cache miss (or poisoned cache) — full batch translation
-      const CHUNK = 20;
-      const chunks = [];
-      for (let i = 0; i < entries.length; i += CHUNK) {
-        chunks.push(Object.fromEntries(entries.slice(i, i + CHUNK)));
-      }
+      // 2. Cache miss (or poisoned cache) — single LLM call for all keys at once
+      const newTranslated = await api.post('/voice/translate', { lang, texts })
+        .then((r) => r.data)
+        .catch(() => ({}));
 
-      const results = await Promise.allSettled(
-        chunks.map((chunk) =>
-          api.post('/voice/translate', { lang, texts: chunk }).then((r) => r.data)
-        )
-      );
-
-      const merged = {};
-      results.forEach((r) => { if (r.status === 'fulfilled') Object.assign(merged, r.value); });
-      if (Object.keys(merged).length) {
-        setTranslatedData(merged);
-        // Only persist to DB if at least some values actually changed (guard against rate-limited no-ops)
-        const anyChanged = Object.entries(merged).some(([k, v]) => v !== texts[k]);
+      if (Object.keys(newTranslated).length) {
+        setTranslatedData(newTranslated);
+        const anyChanged = Object.entries(newTranslated).some(([k, v]) => v !== texts[k]);
         if (anyChanged) {
-          api.put(`/blood-report/${reportId}/translations`, { lang, data: merged }).catch(() => {});
+          api.put(`/blood-report/${reportId}/translations`, { lang, data: newTranslated }).catch(() => {});
         }
       }
     } catch {
