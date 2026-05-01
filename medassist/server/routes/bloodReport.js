@@ -175,17 +175,20 @@ router.post('/risk-scores', verifyToken, async (req, res) => {
     const patientProfile = await getPatientProfile(req.user.userId).catch(() => null);
 
     const { runRiskScoringAgent } = require('../agents/riskScoringAgent');
-    const riskScores = await runRiskScoringAgent({
+
+    runRiskScoringAgent({
       extractedValues: report.extracted_values || [],
       patientProfile: patientProfile || null,
-    });
+    })
+      .then(async (riskScores) => {
+        await pool.query(
+          'UPDATE blood_reports SET risk_scores = $1 WHERE id = $2',
+          [JSON.stringify(riskScores), reportId]
+        );
+      })
+      .catch((err) => console.error('[bloodReport] Background risk scoring error:', err.message));
 
-    await pool.query(
-      'UPDATE blood_reports SET risk_scores = $1 WHERE id = $2',
-      [JSON.stringify(riskScores), reportId]
-    );
-
-    return res.json({ reportId, riskScores });
+    return res.json({ reportId, status: 'processing' });
   } catch (err) {
     console.error('Risk scores error:', err);
     return res.status(500).json({ error: err.message || 'Risk scoring failed' });
@@ -213,46 +216,48 @@ router.post('/follow-up', verifyToken, async (req, res) => {
     }
 
     const { runFollowUpAgent } = require('../agents/followUpAgent');
-    const followUp = await runFollowUpAgent({
+    const patientId = req.user.userId;
+
+    runFollowUpAgent({
       abnormalFindings: report.analysis?.abnormal_findings || [],
       tabletRecommendations: report.tablet_recommendations || [],
-    });
-
-    await pool.query(
-      'UPDATE blood_reports SET follow_up = $1 WHERE id = $2',
-      [JSON.stringify(followUp), reportId]
-    );
-
-    // Schedule email reminders — delete existing unsent ones first (idempotent)
-    try {
-      await pool.query('DELETE FROM reminders WHERE report_id = $1 AND sent = false', [reportId]);
-      const items = Array.isArray(followUp) ? followUp : [followUp];
-      for (const item of items) {
-        const recheckIn = item.recheck_in || item.timeframe || '';
-        const m = recheckIn.match(/(\d+)\s*(day|week|month)s?/i);
-        if (!m) continue;
-        let days = parseInt(m[1]);
-        const unit = m[2].toLowerCase();
-        if (unit === 'week') days *= 7;
-        if (unit === 'month') days *= 30;
-        // Send reminder 3 days before the recheck date
-        const sendAt = new Date();
-        sendAt.setDate(sendAt.getDate() + Math.max(1, days - 3));
+    })
+      .then(async (followUp) => {
         await pool.query(
-          'INSERT INTO reminders (patient_id, report_id, message, send_at) VALUES ($1, $2, $3, $4)',
-          [
-            req.user.userId,
-            reportId,
-            `Reminder: Time to recheck "${item.test || item.name}" — recommended recheck: ${recheckIn}.`,
-            sendAt,
-          ]
+          'UPDATE blood_reports SET follow_up = $1 WHERE id = $2',
+          [JSON.stringify(followUp), reportId]
         );
-      }
-    } catch (reminderErr) {
-      console.warn('[bloodReport] Could not schedule reminders:', reminderErr.message);
-    }
+        // Schedule email reminders — delete existing unsent ones first (idempotent)
+        try {
+          await pool.query('DELETE FROM reminders WHERE report_id = $1 AND sent = false', [reportId]);
+          const items = Array.isArray(followUp) ? followUp : [followUp];
+          for (const item of items) {
+            const recheckIn = item.recheck_in || item.timeframe || '';
+            const m = recheckIn.match(/(\d+)\s*(day|week|month)s?/i);
+            if (!m) continue;
+            let days = parseInt(m[1]);
+            const unit = m[2].toLowerCase();
+            if (unit === 'week') days *= 7;
+            if (unit === 'month') days *= 30;
+            const sendAt = new Date();
+            sendAt.setDate(sendAt.getDate() + Math.max(1, days - 3));
+            await pool.query(
+              'INSERT INTO reminders (patient_id, report_id, message, send_at) VALUES ($1, $2, $3, $4)',
+              [
+                patientId,
+                reportId,
+                `Reminder: Time to recheck "${item.test || item.name}" — recommended recheck: ${recheckIn}.`,
+                sendAt,
+              ]
+            );
+          }
+        } catch (reminderErr) {
+          console.warn('[bloodReport] Could not schedule reminders:', reminderErr.message);
+        }
+      })
+      .catch((err) => console.error('[bloodReport] Background follow-up error:', err.message));
 
-    return res.json({ reportId, followUp });
+    return res.json({ reportId, status: 'processing' });
   } catch (err) {
     console.error('Follow-up error:', err);
     return res.status(500).json({ error: err.message || 'Follow-up agent failed' });

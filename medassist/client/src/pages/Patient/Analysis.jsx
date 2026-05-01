@@ -150,14 +150,34 @@ export default function Analysis() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const pollForField = (dbField, setter, setLoading) => {
+    const poll = () => {
+      api.get(`/blood-report/${reportId}`)
+        .then(({ data }) => {
+          if (data[dbField]) {
+            setter(data[dbField]);
+            setLoading(false);
+          } else {
+            setTimeout(poll, 5000);
+          }
+        })
+        .catch(() => setTimeout(poll, 5000));
+    };
+    poll();
+  };
+
   const handleRiskScores = async () => {
     setLoadingRisk(true);
     try {
       const { data } = await api.post('/blood-report/risk-scores', { reportId });
-      setRiskScores(data.riskScores);
+      if (data.riskScores) {
+        setRiskScores(data.riskScores);
+        setLoadingRisk(false);
+      } else {
+        pollForField('risk_scores', setRiskScores, setLoadingRisk);
+      }
     } catch (err) {
       toast.error('Risk scoring failed');
-    } finally {
       setLoadingRisk(false);
     }
   };
@@ -166,10 +186,14 @@ export default function Analysis() {
     setLoadingFollowUp(true);
     try {
       const { data } = await api.post('/blood-report/follow-up', { reportId });
-      setFollowUp(data.followUp);
+      if (data.followUp) {
+        setFollowUp(data.followUp);
+        setLoadingFollowUp(false);
+      } else {
+        pollForField('follow_up', setFollowUp, setLoadingFollowUp);
+      }
     } catch (err) {
       toast.error('Follow-up generation failed');
-    } finally {
       setLoadingFollowUp(false);
     }
   };
