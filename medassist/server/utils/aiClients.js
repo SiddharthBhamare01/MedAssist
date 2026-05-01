@@ -55,12 +55,6 @@ function getProviders() {
       client: cerebrasClient,
       model: 'qwen-3-235b-a22b-instruct-2507',
     },
-    // Cerebras Llama 3.3 70B — second ensemble opinion (replaces deprecated llama3.1-8b)
-    cerebras_fast: {
-      name: 'Cerebras Llama-3.3-70B',
-      client: cerebrasClient,  // same key, different model
-      model: 'llama-3.3-70b',
-    },
     // SambaNova — free, OpenAI-compatible, no monthly cap
     sambanova: {
       name: 'SambaNova Llama-3.3-70B',
