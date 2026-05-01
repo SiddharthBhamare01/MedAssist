@@ -133,7 +133,13 @@ export default function Analysis() {
     };
 
     api.post('/blood-report/analyze', { reportId })
-      .then((res) => applyResult(res.data))
+      .then((res) => {
+        if (res.data.status === 'processing') {
+          pollForResult();
+        } else {
+          applyResult(res.data);
+        }
+      })
       .catch(() => {
         if (!cancelled) pollForResult();
       });

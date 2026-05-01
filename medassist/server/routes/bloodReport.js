@@ -98,64 +98,54 @@ router.post('/analyze', verifyToken, async (req, res) => {
     // patientProfile may be null for users who skipped profile setup — agent handles null safely
     const patientProfile = await getPatientProfile(req.user.userId).catch(() => null);
 
-    const { analysis, tabletRecommendations, doctorReferralNeeded, steps, turns } =
-      await runBloodReportAgent({ reportId, extractedValues, patientProfile: patientProfile || null });
+    // Capture closure values before sending response (req may be GC'd after res.json)
+    const patientId = req.user.userId;
+    const sessionId = report.session_id;
 
-    // Advance session status if this report is linked to a session
-    if (report.session_id) {
-      await updateSessionStatus(report.session_id, 'analyzed').catch((e) =>
-        console.warn('[bloodReport] Could not update session status:', e.message)
-      );
-    }
-
-    // Auto-populate medication_logs from tablet recommendations
-    if (tabletRecommendations?.length > 0) {
-      try {
-        for (const tab of tabletRecommendations) {
-          const medName = tab.name || tab.generic_name;
-          if (!medName) continue;
-          // Check if already exists to avoid duplicates
-          const { rows: existing } = await pool.query(
-            `SELECT id FROM medication_logs
-             WHERE patient_id = $1 AND medication_name = $2 AND report_id = $3`,
-            [req.user.userId, medName, reportId]
+    // Fire-and-forget — analysis takes 60-120s, far beyond Render's request timeout.
+    // Client polls GET /blood-report/:id until analysis appears in DB.
+    runBloodReportAgent({ reportId, extractedValues, patientProfile: patientProfile || null })
+      .then(async ({ tabletRecommendations, doctorReferralNeeded }) => {
+        // Advance session status
+        if (sessionId) {
+          await updateSessionStatus(sessionId, 'analyzed').catch((e) =>
+            console.warn('[bloodReport] Could not update session status:', e.message)
           );
-          if (existing.length === 0) {
-            await pool.query(
-              `INSERT INTO medication_logs (patient_id, medication_name, dose, report_id, active)
-               VALUES ($1, $2, $3, $4, true)`,
-              [req.user.userId, medName, tab.dosage || tab.dose || null, reportId]
-            );
+        }
+        // Auto-populate medication_logs from tablet recommendations
+        if (tabletRecommendations?.length > 0) {
+          try {
+            for (const tab of tabletRecommendations) {
+              const medName = tab.name || tab.generic_name;
+              if (!medName) continue;
+              const { rows: existing } = await pool.query(
+                `SELECT id FROM medication_logs
+                 WHERE patient_id = $1 AND medication_name = $2 AND report_id = $3`,
+                [patientId, medName, reportId]
+              );
+              if (existing.length === 0) {
+                await pool.query(
+                  `INSERT INTO medication_logs (patient_id, medication_name, dose, report_id, active)
+                   VALUES ($1, $2, $3, $4, true)`,
+                  [patientId, medName, tab.dosage || tab.dose || null, reportId]
+                );
+              }
+            }
+            console.log(`[bloodReport] Auto-populated ${tabletRecommendations.length} medications`);
+          } catch (medErr) {
+            console.warn('[bloodReport] Could not auto-populate medications:', medErr.message);
           }
         }
-        console.log(`[bloodReport] Auto-populated ${tabletRecommendations.length} medications`);
-      } catch (medErr) {
-        console.warn('[bloodReport] Could not auto-populate medications:', medErr.message);
-      }
-    }
+        // Clear stale translations so the next language switch re-translates fresh content
+        if (forceReanalyze) {
+          await pool.query('UPDATE blood_reports SET translations = NULL WHERE id = $1', [reportId])
+            .catch((e) => console.warn('[bloodReport] Could not clear translations cache:', e.message));
+        }
+      })
+      .catch((err) => console.error('[bloodReport] Background analysis error:', err.message));
 
-    // Clear stale translations so the next language switch re-translates fresh content
-    if (forceReanalyze) {
-      await pool.query('UPDATE blood_reports SET translations = NULL WHERE id = $1', [reportId])
-        .catch((e) => console.warn('[bloodReport] Could not clear translations cache:', e.message));
-    }
-
-    // Fetch any previously calculated risk_scores / follow_up
-    const { rows: updatedRows } = await pool.query(
-      'SELECT risk_scores, follow_up FROM blood_reports WHERE id = $1',
-      [reportId]
-    );
-
-    return res.json({
-      reportId,
-      analysis,
-      tabletRecommendations,
-      doctorReferralNeeded,
-      riskScores: updatedRows[0]?.risk_scores || null,
-      followUp: updatedRows[0]?.follow_up || null,
-      agentSteps: steps,
-      turns,
-    });
+    // Respond immediately — client will poll GET /blood-report/:id every 5s
+    return res.json({ reportId, status: 'processing' });
   } catch (err) {
     console.error('Blood report analysis error:', err);
     return res.status(500).json({ error: err.message || 'Blood Report Agent failed' });
