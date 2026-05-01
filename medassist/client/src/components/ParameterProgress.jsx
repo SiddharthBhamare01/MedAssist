@@ -265,7 +265,7 @@ export default function ParameterProgress({ extractedValues }) {
       )}
 
       {/* Parameter rows */}
-      <div className="space-y-1 divide-y divide-slate-50">
+      <div className="space-y-1 divide-y divide-slate-50 max-h-[420px] overflow-y-auto pr-1">
         {abnormal.map((param, i) => (
           <ParamRow key={i} param={param} />
         ))}
