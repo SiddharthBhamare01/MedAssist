@@ -104,11 +104,11 @@ function getProviders() {
 }
 
 // Default order — heavy reasoning tasks (diagnostic agents, blood report analysis)
-const PRIORITY_ORDER = ['cerebras', 'cerebras_fast', 'sambanova', 'openrouter', 'github'];
+const PRIORITY_ORDER = ['cerebras', 'sambanova', 'openrouter', 'github'];
 
 // Voice/lightweight order — GitHub gpt-4o-mini first (generous rate limits, fast JSON extraction)
 // Falls back to Cerebras only if GitHub is unavailable
-const VOICE_PRIORITY_ORDER = ['github', 'cerebras', 'cerebras_fast', 'sambanova', 'openrouter'];
+const VOICE_PRIORITY_ORDER = ['github', 'cerebras', 'sambanova', 'openrouter'];
 
 // Providers to exclude (set via EXCLUDED_AI_PROVIDERS env var, comma-separated)
 const EXCLUDED_PROVIDERS = new Set(
@@ -118,7 +118,7 @@ const EXCLUDED_PROVIDERS = new Set(
 function _filterAvailable(order) {
   const providers = getProviders();
   return order.filter(
-    (name) => providers[name]?.client !== null && !EXCLUDED_PROVIDERS.has(name)
+    (name) => providers[name]?.client != null && !EXCLUDED_PROVIDERS.has(name)
   );
 }
 
