@@ -47,15 +47,39 @@ function markProviderLimited(providerName) {
   _hardLimitedProviders.set(providerName, now);
 }
 
+// Track per-provider model index for iterating fallback models within a provider
+const _providerModelIndex = new Map(); // providerName → index into fallbackModels
+
 /**
  * Try the next available provider after a hard 429.
+ * For providers with fallbackModels, cycles through them before moving on.
  * Returns { client, model, providerName } or null if none left.
  */
-function getNextProvider() {
+function getNextProvider(currentProviderName, currentModel) {
   const available = getAvailableProviders();
   const providers = getProviders();
+
+  // First, try next fallback model within the same provider (if applicable)
+  if (currentProviderName) {
+    const p = providers[currentProviderName];
+    const fallbacks = p?.fallbackModels;
+    if (fallbacks?.length && !isHardLimited(currentProviderName)) {
+      const idx = _providerModelIndex.get(currentProviderName) ?? 0;
+      if (idx < fallbacks.length) {
+        const nextModel = fallbacks[idx];
+        if (nextModel !== currentModel) {
+          _providerModelIndex.set(currentProviderName, idx + 1);
+          console.log(`[agentRunner] Trying next model on ${currentProviderName}: ${nextModel}`);
+          return { client: p.client, model: nextModel, providerName: currentProviderName };
+        }
+      }
+    }
+  }
+
+  // Move to the next provider entirely
   for (const name of available) {
     if (!isHardLimited(name)) {
+      _providerModelIndex.delete(name); // reset model index for fresh provider
       console.log(`[agentRunner] Falling back to provider: ${providers[name].name} (${name})`);
       return { client: providers[name].client, model: providers[name].model, providerName: name };
     }
@@ -117,24 +141,23 @@ async function groqCreateWithRetry(client, params, maxRetries = 2) {
         if (currentProviderName) markProviderLimited(currentProviderName);
         console.warn(`[agentRunner] Hard ${status} on ${currentProviderName || 'unknown'} (x-should-retry: false). Trying next provider…`);
 
-        const next = getNextProvider();
+        const next = getNextProvider(currentProviderName, currentModel);
         if (next) {
           groq = next.client;
           currentModel = next.model;
           currentProviderName = next.providerName;
-          attempt = -1; // reset retry counter for new provider
+          attempt = -1;
           continue;
         }
         console.error('[agentRunner] All providers exhausted — no fallback left.');
         throw err;
       }
 
-      // 400 invalid_request from provider (e.g. SambaNova rejects tool format) — skip to next provider.
-      // Don't catch tool_use_failed here; that's handled by the caller (runAgent).
+      // 400 invalid_request — mark provider limited, try next
       if (status === 400 && err.error?.type === 'invalid_request_error') {
         if (currentProviderName) markProviderLimited(currentProviderName);
         console.warn(`[agentRunner] 400 invalid_request on ${currentProviderName || 'unknown'} — skipping to next provider…`);
-        const next = getNextProvider();
+        const next = getNextProvider(currentProviderName, currentModel);
         if (next) {
           groq = next.client;
           currentModel = next.model;
@@ -145,7 +168,7 @@ async function groqCreateWithRetry(client, params, maxRetries = 2) {
         throw err;
       }
 
-      // Daily limit exhausted (e.g. SambaNova 20 req/day) — skip to next provider immediately
+      // Daily limit exhausted — skip to next provider immediately
       if (status === 429) {
         const remainingDay =
           (typeof headers?.get === 'function' ? headers.get('x-ratelimit-remaining-requests-day') : null) ||
@@ -154,7 +177,7 @@ async function groqCreateWithRetry(client, params, maxRetries = 2) {
         if (remainingDay === '0') {
           if (currentProviderName) markProviderLimited(currentProviderName);
           console.warn(`[agentRunner] Daily limit hit on ${currentProviderName || 'unknown'} — skipping to next provider…`);
-          const next = getNextProvider();
+          const next = getNextProvider(currentProviderName, currentModel);
           if (next) { groq = next.client; currentModel = next.model; currentProviderName = next.providerName; attempt = -1; continue; }
           throw err;
         }
@@ -174,28 +197,34 @@ async function groqCreateWithRetry(client, params, maxRetries = 2) {
         continue;
       }
 
-      // Soft 429 retries exhausted — try next provider instead of throwing
+      // Soft 429 retries exhausted — try next provider
       if (status === 429) {
         if (currentProviderName) markProviderLimited(currentProviderName);
         console.warn(`[agentRunner] 429 retries exhausted on ${currentProviderName || 'unknown'} — trying next provider…`);
-        const next = getNextProvider();
+        const next = getNextProvider(currentProviderName, currentModel);
         if (next) { groq = next.client; currentModel = next.model; currentProviderName = next.providerName; attempt = -1; continue; }
         throw err;
       }
 
-      // 4xx client errors not handled above (e.g. OpenRouter 404 "no endpoints support tool use")
-      // — skip to the next provider immediately, don't retry.
+      // 4xx client errors (e.g. OpenRouter 404 model not found) — try next model/provider, don't mark limited immediately
       if (status >= 400 && status < 500) {
-        if (currentProviderName) markProviderLimited(currentProviderName);
-        console.warn(`[agentRunner] ${status} client error on ${currentProviderName || 'unknown'} — skipping to next provider…`);
-        const next = getNextProvider();
+        const next = getNextProvider(currentProviderName, currentModel);
         if (next) {
+          if (next.providerName !== currentProviderName) {
+            // Exhausted all models on current provider — mark it limited
+            if (currentProviderName) markProviderLimited(currentProviderName);
+            console.warn(`[agentRunner] ${status} on ${currentProviderName || 'unknown'} (all models tried) — switching to ${next.providerName}`);
+          } else {
+            console.warn(`[agentRunner] ${status} on model ${currentModel} — trying next model on ${currentProviderName}`);
+          }
           groq = next.client;
           currentModel = next.model;
           currentProviderName = next.providerName;
           attempt = -1;
           continue;
         }
+        if (currentProviderName) markProviderLimited(currentProviderName);
+        console.warn(`[agentRunner] ${status} on ${currentProviderName || 'unknown'} — all providers exhausted`);
         throw err;
       }
 
@@ -212,7 +241,7 @@ async function groqCreateWithRetry(client, params, maxRetries = 2) {
         if (currentProviderName) markProviderLimited(currentProviderName);
         console.warn(`[agentRunner] ${status} on ${currentProviderName || 'unknown'} after ${maxRetries} retries. Trying next provider…`);
 
-        const next = getNextProvider();
+        const next = getNextProvider(currentProviderName, currentModel);
         if (next) {
           groq = next.client;
           currentModel = next.model;
