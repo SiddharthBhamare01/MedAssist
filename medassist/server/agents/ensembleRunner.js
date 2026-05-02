@@ -20,8 +20,9 @@ async function callProvider(provider, systemPrompt, userMessage, maxTokens = 200
   if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
   messages.push({ role: 'user', content: userMessage });
 
-  // If provider has fallback models, try each in order until one works
-  const modelsToTry = provider.fallbackModels || [provider.model];
+  // For analysis tasks, prefer analysisModels (larger, no tool-use needed);
+  // fall back to fallbackModels or the primary model
+  const modelsToTry = provider.analysisModels || provider.fallbackModels || [provider.model];
 
   let lastErr;
   for (const model of modelsToTry) {

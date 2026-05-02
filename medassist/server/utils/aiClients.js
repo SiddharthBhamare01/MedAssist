@@ -75,15 +75,23 @@ function getProviders() {
             },
           })
         : null,
-      // Fallback model list — tried in order until one works
+      // Tool-calling fallbacks (need function calling support)
       model: 'meta-llama/llama-3.1-8b-instruct:free',
       fallbackModels: [
         'meta-llama/llama-3.1-8b-instruct:free',
         'mistralai/mistral-7b-instruct:free',
-        'google/gemma-3-12b-it:free',
         'google/gemma-3-27b-it:free',
+        'google/gemma-3-12b-it:free',
         'google/gemma-3n-e4b-it:free',
         'google/gemma-3-4b-it:free',
+      ],
+      // Analysis-only models (no tool calling needed — bigger/stronger free models)
+      analysisModels: [
+        'deepseek/deepseek-chat-v3-0324:free',
+        'deepseek/deepseek-r1-distill-llama-70b:free',
+        'google/gemma-3-27b-it:free',
+        'mistralai/mistral-nemo:free',
+        'meta-llama/llama-3.1-8b-instruct:free',
       ],
     },
     // GitHub Models — gpt-4o-mini, needs PAT with models:read scope
