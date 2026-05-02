@@ -111,12 +111,11 @@ function getProviders() {
   return _providers;
 }
 
-// Default order — heavy reasoning tasks (diagnostic agents, blood report analysis)
-const PRIORITY_ORDER = ['cerebras', 'sambanova', 'openrouter', 'github'];
+// Default order — SambaNova is primary (stable 70B), Cerebras last (fast but RPM-limited)
+const PRIORITY_ORDER = ['sambanova', 'openrouter', 'github', 'cerebras'];
 
 // Voice/lightweight order — GitHub gpt-4o-mini first (generous rate limits, fast JSON extraction)
-// Falls back to Cerebras only if GitHub is unavailable
-const VOICE_PRIORITY_ORDER = ['github', 'cerebras', 'sambanova', 'openrouter'];
+const VOICE_PRIORITY_ORDER = ['github', 'sambanova', 'openrouter', 'cerebras'];
 
 // Providers to exclude (set via EXCLUDED_AI_PROVIDERS env var, comma-separated)
 const EXCLUDED_PROVIDERS = new Set(
@@ -157,7 +156,7 @@ function getPrimaryProvider() {
 
 const _limitedProviders = new Map(); // name → { blockedAt, ttl }
 const HARD_LIMIT_TTL_MS = 5 * 60 * 1000; // 5 min: daily/account quota exhausted
-const RPM_LIMIT_TTL_MS  = 90 * 1000;     // 90 sec: per-minute RPM limit
+const RPM_LIMIT_TTL_MS  = 3 * 60 * 1000; // 3 min: per-minute RPM limit (prevents rapid re-retry)
 
 function isProviderLimited(name) {
   const entry = _limitedProviders.get(name);
