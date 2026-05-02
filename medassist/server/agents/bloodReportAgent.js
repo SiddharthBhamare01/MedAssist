@@ -72,18 +72,14 @@ function repairTruncatedJSON(str) {
   return null;
 }
 
-// Blood Report Agent only needs these 4 tools (not lookup_icd_code)
-const TOOL_NAMES = ['get_lab_reference_range', 'search_drug_by_condition', 'get_drug_details', 'check_drug_interactions'];
+// Only lab reference range — drug tools removed (drug info not shown in UI, saves API quota)
+const TOOL_NAMES = ['get_lab_reference_range'];
 const definitions = allDefinitions.filter((d) => TOOL_NAMES.includes(d.name));
 
-// Phase 1 — simple tool-calling prompt (no JSON schema, avoids tool_use_failed)
-// Limit tool calls to conserve TPM: max 3 abnormal params + 1 drug search + 1 drug detail
+// Phase 1 — get reference ranges only (max 3 tool calls for the most abnormal parameters)
 const PHASE1_SYSTEM = `You are a medical blood report analyzer. Call tools to gather clinical data.
 
-Call tools in this order (keep it concise — max 5 tool calls total):
-1. Call get_lab_reference_range for the TOP 3 most abnormal parameters only
-2. Call search_drug_by_condition for the primary condition identified
-3. Call get_drug_details for the top drug found
+Call get_lab_reference_range for the TOP 3 most abnormal parameters only. No other tool calls.
 
 When all tool calls are done, respond with exactly: TOOLS_COMPLETE`;
 

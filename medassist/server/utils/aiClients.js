@@ -116,7 +116,7 @@ const PRIORITY_ORDER = ['cerebras', 'sambanova', 'github', 'openrouter'];
 
 // Tool-calling order — only providers with reliable OpenAI-compatible function calling
 // OpenRouter free models do NOT support tool use reliably — excluded here
-const TOOL_PROVIDERS_ORDER = ['cerebras', 'sambanova', 'github'];
+const TOOL_PROVIDERS_ORDER = ['sambanova', 'cerebras', 'github'];
 
 // Voice/lightweight order — GitHub gpt-4o-mini first (generous rate limits, fast JSON extraction)
 const VOICE_PRIORITY_ORDER = ['github', 'sambanova', 'openrouter', 'cerebras'];

@@ -15,7 +15,7 @@ const { getProviders, getAvailableProviders, isProviderLimited } = require('../u
 
 // ─── Low-level helpers ────────────────────────────────────────────────────────
 
-async function callProvider(provider, systemPrompt, userMessage, maxTokens = 2000) {
+async function callProvider(provider, systemPrompt, userMessage, maxTokens = 2000, isJudge = false) {
   const messages = [];
   if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
   messages.push({ role: 'user', content: userMessage });
@@ -23,6 +23,11 @@ async function callProvider(provider, systemPrompt, userMessage, maxTokens = 200
   // For analysis tasks, prefer analysisModels (larger, no tool-use needed);
   // fall back to fallbackModels or the primary model
   const modelsToTry = provider.analysisModels || provider.fallbackModels || [provider.model];
+
+  // Tag calls for Helicone observability so judge calls are visually distinct
+  const heliconeHeaders = process.env.HELICONE_API_KEY ? {
+    'Helicone-Property-Call-Type': isJudge ? 'consensus-judge' : 'ensemble-agent',
+  } : {};
 
   let lastErr;
   for (const model of modelsToTry) {
@@ -32,7 +37,7 @@ async function callProvider(provider, systemPrompt, userMessage, maxTokens = 200
         messages,
         temperature: 0,
         max_tokens: maxTokens,
-      });
+      }, { headers: heliconeHeaders });
       const msg = response.choices[0]?.message;
       // Some models (reasoning/thinking) put output in reasoning_content with null content
       const text = msg?.content || msg?.reasoning_content || '';
@@ -174,7 +179,7 @@ ${agentOutputs.map((a, i) => `=== Agent ${i + 1} (${a.providerName}) ===\n${a.ou
   let lastErr;
   for (const name of available) {
     try {
-      const raw = await callProvider(providers[name], '', judgePrompt, 3000);
+      const raw = await callProvider(providers[name], '', judgePrompt, 3000, true);
       const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
       return clean;
     } catch (err) {
