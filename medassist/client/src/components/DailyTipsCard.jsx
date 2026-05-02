@@ -1,13 +1,27 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
+import { useLang } from '../context/LanguageContext';
 
 export default function DailyTipsCard() {
   const { t } = useTranslation();
+  const { lang } = useLang();
   const [tips, setTips] = useState([]);
+  const [translatedTips, setTranslatedTips] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [empty, setEmpty] = useState(false);
+
+  useEffect(() => {
+    if (lang !== 'es' || !tips.length) { setTranslatedTips(null); return; }
+    const texts = Object.fromEntries(tips.map((tip, i) => [`tip_${i}`, tip]));
+    api.post('/voice/translate', { lang, texts })
+      .then((r) => {
+        const result = tips.map((tip, i) => r.data[`tip_${i}`] || tip);
+        setTranslatedTips(result);
+      })
+      .catch(() => {});
+  }, [lang, tips]);
 
   const fetchTips = async (force = false) => {
     force ? setRefreshing(true) : setLoading(true);
@@ -78,7 +92,7 @@ export default function DailyTipsCard() {
         </button>
       </div>
       <div className="space-y-3">
-        {tips.map((tip, i) => (
+        {(translatedTips ?? tips).map((tip, i) => (
           <div key={i} className="flex items-start gap-3">
             <div className="w-6 h-6 rounded-full bg-teal-500 text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
               {i + 1}

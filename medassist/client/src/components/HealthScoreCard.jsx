@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
+import { useLang } from '../context/LanguageContext';
 
 function ScoreGauge({ score, riskLevel }) {
   const radius = 52;
@@ -42,8 +43,10 @@ function ScoreGauge({ score, riskLevel }) {
 
 export default function HealthScoreCard() {
   const { t } = useTranslation();
+  const { lang } = useLang();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [translatedSummary, setTranslatedSummary] = useState(null);
 
   useEffect(() => {
     api.get('/blood-report/latest-score')
@@ -51,6 +54,13 @@ export default function HealthScoreCard() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (lang !== 'es' || !data?.summary) { setTranslatedSummary(null); return; }
+    api.post('/voice/translate', { lang, texts: { summary: data.summary } })
+      .then((r) => { if (r.data?.summary) setTranslatedSummary(r.data.summary); })
+      .catch(() => {});
+  }, [lang, data?.summary]);
 
   if (loading) {
     return (
@@ -105,7 +115,7 @@ export default function HealthScoreCard() {
               {data.risk_level ? t(`analysis.riskLevels.${(data.risk_level || '').toLowerCase()}`, { defaultValue: `${data.risk_level} ${t('healthScore.risk')}` }) : ''}
             </p>
             {data.summary && (
-              <p className="text-xs text-slate-500 mt-1 line-clamp-3 leading-relaxed">{data.summary}</p>
+              <p className="text-xs text-slate-500 mt-1 line-clamp-3 leading-relaxed">{translatedSummary ?? data.summary}</p>
             )}
           </div>
           {sparkData.length > 1 && (
