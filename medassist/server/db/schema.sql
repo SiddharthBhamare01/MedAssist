@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS blood_reports (
   analysis JSONB,
   tablet_recommendations JSONB,
   complexity_flag BOOLEAN DEFAULT FALSE,
+  translations JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
