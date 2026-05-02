@@ -30,7 +30,7 @@ async function callProvider(provider, systemPrompt, userMessage, maxTokens = 200
       const response = await provider.client.chat.completions.create({
         model,
         messages,
-        temperature: 0.2,
+        temperature: 0,
         max_tokens: maxTokens,
       });
       const msg = response.choices[0]?.message;
@@ -119,7 +119,7 @@ Compare drug interaction analyses from each agent.
  * Returns array of { provider, providerName, output } for successful calls.
  */
 // Cap parallel providers to limit free-tier API consumption
-const MAX_ENSEMBLE_PROVIDERS = 2;
+const MAX_ENSEMBLE_PROVIDERS = 3;
 
 async function runParallel(systemPrompt, userMessage, maxTokens = 2000) {
   const available = getAvailableProviders()

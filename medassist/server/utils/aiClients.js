@@ -112,11 +112,11 @@ function getProviders() {
 }
 
 // Default order — SambaNova is primary (stable 70B), Cerebras last (fast but RPM-limited)
-const PRIORITY_ORDER = ['sambanova', 'openrouter', 'github', 'cerebras'];
+const PRIORITY_ORDER = ['cerebras', 'sambanova', 'github', 'openrouter'];
 
 // Tool-calling order — only providers with reliable OpenAI-compatible function calling
 // OpenRouter free models do NOT support tool use reliably — excluded here
-const TOOL_PROVIDERS_ORDER = ['sambanova', 'github', 'cerebras'];
+const TOOL_PROVIDERS_ORDER = ['cerebras', 'sambanova', 'github'];
 
 // Voice/lightweight order — GitHub gpt-4o-mini first (generous rate limits, fast JSON extraction)
 const VOICE_PRIORITY_ORDER = ['github', 'sambanova', 'openrouter', 'cerebras'];
