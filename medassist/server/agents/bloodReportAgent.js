@@ -212,11 +212,11 @@ Tool data: ${toolSummary || 'none'}`;
   const doctorReferralNeeded = medical?.summary?.doctor_referral_needed || false;
   const analysis = {
     summary: medical?.summary || {
-      overall_assessment: 'Analysis completed. Please consult a doctor for interpretation.',
-      root_cause: 'Unable to parse agent response',
+      overall_assessment: 'AI providers are temporarily overloaded — please retry in a few minutes.',
+      root_cause: 'All AI providers rate-limited. Re-upload your report or wait ~5 minutes and try again.',
       complexity: 'Medium',
       doctor_referral_needed: true,
-      referral_reason: 'AI response parsing failed — manual review recommended',
+      referral_reason: 'Analysis incomplete due to temporary AI overload — manual review recommended',
     },
     abnormal_findings: medical?.abnormal_findings || abnormal.map((v) => ({
       parameter: v.parameter,

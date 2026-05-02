@@ -127,8 +127,11 @@ export default function Analysis() {
             pollTimer = setTimeout(pollForResult, 5000);
           }
         })
-        .catch(() => {
-          if (!cancelled) pollTimer = setTimeout(pollForResult, 5000);
+        .catch((err) => {
+          if (!cancelled) {
+            const is429 = err?.response?.status === 429;
+            pollTimer = setTimeout(pollForResult, is429 ? 30000 : 5000);
+          }
         });
     };
 
@@ -161,7 +164,10 @@ export default function Analysis() {
             setTimeout(poll, 5000);
           }
         })
-        .catch(() => setTimeout(poll, 5000));
+        .catch((err) => {
+          const is429 = err?.response?.status === 429;
+          setTimeout(poll, is429 ? 30000 : 5000);
+        });
     };
     poll();
   };

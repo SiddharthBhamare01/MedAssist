@@ -33,9 +33,11 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Rate limiting for agent routes (agents make multiple API calls per request)
+// GET requests (result polling, fetching stored reports) are database reads — skip them
 const agentLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
+  skip: (req) => req.method === 'GET',
   message: { error: 'Too many requests to AI agent. Please wait a moment.' }
 });
 
