@@ -1,7 +1,7 @@
 const router  = require('express').Router();
 const https   = require('https');
 const verifyToken = require('../middleware/auth');
-const { getProviders, getAvailableProviders } = require('../utils/aiClients');
+const { getProviders, getAvailableProviders, getAvailableVoiceProviders } = require('../utils/aiClients');
 
 const ELEVENLABS_VOICE_ID = 'W1TKxm4MpGXSlpN7iVQy';
 const ELEVENLABS_MODEL    = 'eleven_turbo_v2';
@@ -397,7 +397,7 @@ router.post('/translate', verifyToken, async (req, res) => {
 
   const langName = LANG_NAMES[lang] || lang;
   const providers = getProviders();
-  const available = getAvailableProviders();
+  const available = getAvailableVoiceProviders(); // GitHub gpt-4o-mini first — higher RPM than Cerebras
 
   // Split into segments of 15 keys — each segment stays well under 4096 output tokens
   const SEGMENT_SIZE = 15;
