@@ -406,14 +406,12 @@ router.post('/translate', verifyToken, async (req, res) => {
     segments.push(Object.fromEntries(entries.slice(i, i + SEGMENT_SIZE)));
   }
 
-  const results = await Promise.allSettled(
-    segments.map((seg) => translateSegment(seg, langName, providers, available))
-  );
-
+  // Sequential — avoids concurrent request limits on GitHub (5/s) and Cerebras
   const merged = {};
-  results.forEach((r) => {
-    if (r.status === 'fulfilled') Object.assign(merged, r.value);
-  });
+  for (const seg of segments) {
+    const result = await translateSegment(seg, langName, providers, available);
+    Object.assign(merged, result);
+  }
 
   return res.json(merged);
 });
