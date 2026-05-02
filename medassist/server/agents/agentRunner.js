@@ -1,15 +1,14 @@
-const { getPrimaryProvider, getAvailableProviders, getProviders } = require('../utils/aiClients');
+const {
+  getPrimaryProvider, getAvailableProviders, getProviders,
+  isProviderLimited, markProviderLimited, markProviderLimitedRPM,
+} = require('../utils/aiClients');
 
 const MAX_TURNS = 6;
-const INTER_TURN_DELAY_MS = 500; // Small delay between turns; reduce from 2s since Cerebras/GitHub have higher limits
+const INTER_TURN_DELAY_MS = 500;
 
 /** Sleep for ms milliseconds */
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/**
- * Resolve which provider client + model to use.
- * If overrides are given, use those. Otherwise pick primary.
- */
 function resolveProvider(clientOverride, modelOverride) {
   const primary = getPrimaryProvider();
   return {
@@ -18,52 +17,22 @@ function resolveProvider(clientOverride, modelOverride) {
   };
 }
 
-// Track providers that returned hard 429, with a timestamp for TTL-based recovery.
-// Providers sharing the same underlying API key (e.g. cerebras & cerebras_fast) are grouped.
-const _hardLimitedProviders = new Map(); // name → Date.now() when blocked
-const HARD_LIMIT_TTL_MS = 5 * 60 * 1000; // retry blocked providers after 5 minutes
-
-function isHardLimited(name) {
-  const blockedAt = _hardLimitedProviders.get(name);
-  if (!blockedAt) return false;
-  if (Date.now() - blockedAt > HARD_LIMIT_TTL_MS) {
-    _hardLimitedProviders.delete(name);
-    console.log(`[agentRunner] Provider ${name} TTL expired — will retry.`);
-    return false;
-  }
-  return true;
-}
-
-/**
- * Mark a provider (and any siblings sharing the same client) as hard-limited.
- */
-function markProviderLimited(providerName) {
-  const now = Date.now();
-  const providers = getProviders();
-  const limitedClient = providers[providerName]?.client;
-  for (const [name, p] of Object.entries(providers)) {
-    if (p.client === limitedClient) _hardLimitedProviders.set(name, now);
-  }
-  _hardLimitedProviders.set(providerName, now);
-}
-
 // Track per-provider model index for iterating fallback models within a provider
 const _providerModelIndex = new Map(); // providerName → index into fallbackModels
 
 /**
- * Try the next available provider after a hard 429.
- * For providers with fallbackModels, cycles through them before moving on.
- * Returns { client, model, providerName } or null if none left.
+ * Returns the next available provider/model, cycling through fallbackModels before
+ * switching providers. Returns null when all options are exhausted.
  */
 function getNextProvider(currentProviderName, currentModel) {
   const available = getAvailableProviders();
   const providers = getProviders();
 
-  // First, try next fallback model within the same provider (if applicable)
+  // Try next fallback model on the same provider first
   if (currentProviderName) {
     const p = providers[currentProviderName];
     const fallbacks = p?.fallbackModels;
-    if (fallbacks?.length && !isHardLimited(currentProviderName)) {
+    if (fallbacks?.length && !isProviderLimited(currentProviderName)) {
       const idx = _providerModelIndex.get(currentProviderName) ?? 0;
       if (idx < fallbacks.length) {
         const nextModel = fallbacks[idx];
@@ -78,8 +47,8 @@ function getNextProvider(currentProviderName, currentModel) {
 
   // Move to the next provider entirely
   for (const name of available) {
-    if (!isHardLimited(name)) {
-      _providerModelIndex.delete(name); // reset model index for fresh provider
+    if (!isProviderLimited(name)) {
+      _providerModelIndex.delete(name);
       console.log(`[agentRunner] Falling back to provider: ${providers[name].name} (${name})`);
       return { client: providers[name].client, model: providers[name].model, providerName: name };
     }
@@ -183,8 +152,17 @@ async function groqCreateWithRetry(client, params, maxRetries = 2) {
         }
       }
 
-      // Soft 429 — retry same provider with backoff, then fall to next provider
+      // Soft 429 (RPM limit) — if a fallback exists, switch immediately; only backoff if no alternative
       if (status === 429 && attempt < maxRetries) {
+        const next = getNextProvider(currentProviderName, currentModel);
+        if (next) {
+          // Fast switch — mark current provider RPM-limited for 90s, no waiting
+          if (currentProviderName) markProviderLimitedRPM(currentProviderName);
+          console.warn(`[agentRunner] 429 RPM on ${currentProviderName || 'unknown'} — fast-switching to ${next.providerName} (no wait)`);
+          groq = next.client; currentModel = next.model; currentProviderName = next.providerName;
+          attempt = -1; continue;
+        }
+        // No fallback available — wait with backoff and retry same provider
         const retryAfterRaw =
           (typeof headers?.get === 'function' ? headers.get('retry-after') : null) ||
           headers?.['retry-after'] ||
@@ -192,15 +170,15 @@ async function groqCreateWithRetry(client, params, maxRetries = 2) {
         const retryAfterSec = retryAfterRaw ? parseInt(retryAfterRaw, 10) : null;
         const backoff = Math.min(5 * Math.pow(2, attempt), 30);
         const waitSec = retryAfterSec && retryAfterSec < 60 ? retryAfterSec + 1 : backoff;
-        console.log(`[agentRunner] Rate limited (429). Waiting ${waitSec}s before retry ${attempt + 1}/${maxRetries}…`);
+        console.log(`[agentRunner] 429 on ${currentProviderName}, no fallback — waiting ${waitSec}s…`);
         await sleep(waitSec * 1000);
         continue;
       }
 
-      // Soft 429 retries exhausted — try next provider
+      // 429 with no retries left — switch provider
       if (status === 429) {
-        if (currentProviderName) markProviderLimited(currentProviderName);
-        console.warn(`[agentRunner] 429 retries exhausted on ${currentProviderName || 'unknown'} — trying next provider…`);
+        if (currentProviderName) markProviderLimitedRPM(currentProviderName);
+        console.warn(`[agentRunner] 429 on ${currentProviderName || 'unknown'} — trying next provider…`);
         const next = getNextProvider(currentProviderName, currentModel);
         if (next) { groq = next.client; currentModel = next.model; currentProviderName = next.providerName; attempt = -1; continue; }
         throw err;

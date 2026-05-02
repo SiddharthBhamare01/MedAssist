@@ -11,7 +11,7 @@
  *   );
  */
 
-const { getProviders, getAvailableProviders } = require('../utils/aiClients');
+const { getProviders, getAvailableProviders, isProviderLimited } = require('../utils/aiClients');
 
 // ─── Low-level helpers ────────────────────────────────────────────────────────
 
@@ -118,7 +118,7 @@ Compare drug interaction analyses from each agent.
  * Returns array of { provider, providerName, output } for successful calls.
  */
 async function runParallel(systemPrompt, userMessage, maxTokens = 2000) {
-  const available = getAvailableProviders();
+  const available = getAvailableProviders().filter(name => !isProviderLimited(name));
   if (available.length === 0) throw new Error('No AI providers configured');
 
   const providers = getProviders();
@@ -153,7 +153,7 @@ async function runParallel(systemPrompt, userMessage, maxTokens = 2000) {
  */
 async function runConsensus(agentOutputs, taskType) {
   const providers = getProviders();
-  const available = getAvailableProviders();
+  const available = getAvailableProviders().filter(name => !isProviderLimited(name));
   const instruction = TASK_INSTRUCTIONS[taskType] || 'Merge the outputs, preferring items that appear in multiple outputs. Return ONLY JSON.';
 
   const judgePrompt = `You are a medical AI consensus judge.

@@ -143,4 +143,41 @@ function getPrimaryProvider() {
   return getProviders()[available[0]];
 }
 
-module.exports = { getProviders, getAvailableProviders, getAvailableVoiceProviders, getPrimaryProvider };
+// ─── Shared rate-limit tracking ───────────────────────────────────────────────
+// Used by both agentRunner and ensembleRunner so a 429 in Phase 1 prevents
+// wasted retries in Phase 2 ensemble.
+
+const _limitedProviders = new Map(); // name → { blockedAt, ttl }
+const HARD_LIMIT_TTL_MS = 5 * 60 * 1000; // 5 min: daily/account quota exhausted
+const RPM_LIMIT_TTL_MS  = 90 * 1000;     // 90 sec: per-minute RPM limit
+
+function isProviderLimited(name) {
+  const entry = _limitedProviders.get(name);
+  if (!entry) return false;
+  if (Date.now() - entry.blockedAt > entry.ttl) {
+    _limitedProviders.delete(name);
+    console.log(`[aiClients] Provider ${name} rate-limit TTL expired — will retry.`);
+    return false;
+  }
+  return true;
+}
+
+function markProviderLimited(name, ttl = HARD_LIMIT_TTL_MS) {
+  const now = Date.now();
+  const providers = getProviders();
+  const limitedClient = providers[name]?.client;
+  // Also block any sibling provider sharing the same API key
+  for (const [n, p] of Object.entries(providers)) {
+    if (p.client === limitedClient) _limitedProviders.set(n, { blockedAt: now, ttl });
+  }
+  _limitedProviders.set(name, { blockedAt: now, ttl });
+}
+
+function markProviderLimitedRPM(name) {
+  markProviderLimited(name, RPM_LIMIT_TTL_MS);
+}
+
+module.exports = {
+  getProviders, getAvailableProviders, getAvailableVoiceProviders, getPrimaryProvider,
+  isProviderLimited, markProviderLimited, markProviderLimitedRPM,
+};
