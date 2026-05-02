@@ -341,13 +341,49 @@ ${ingredientsList ? `Helpful recovery ingredients: ${ingredientsList}` : ''}`;
 });
 
 // ─── POST /api/voice/translate ─────────────────────────────────────────────
-// Batch-translates a flat key→text object using the existing LLM provider chain.
-// One LLM call translates ALL keys at once — much faster and more reliable than
-// per-key HTTP calls to external MT APIs.
 // Body: { lang: 'es', texts: { [key]: string } }
 // Returns: { [key]: string }  (same keys, translated values)
+// Splits large payloads into segments of 15 keys to avoid LLM max_tokens truncation.
 
 const LANG_NAMES = { es: 'Spanish', fr: 'French', hi: 'Hindi', de: 'German', pt: 'Portuguese', zh: 'Chinese' };
+
+async function translateSegment(textObj, langName, providers, available) {
+  const systemPrompt = `You are a medical translation assistant. Translate values accurately, preserving clinical terminology.`;
+  const userPrompt = `Translate ALL values in this JSON object from English to ${langName}.
+Rules:
+- Return ONLY valid JSON — no markdown fences, no explanation outside the JSON
+- Keep every key exactly as-is, only translate the string values
+- Preserve medical terms, drug names, and numeric references accurately
+- If a value is already in ${langName}, keep it unchanged
+
+${JSON.stringify(textObj)}`;
+
+  for (const name of available) {
+    const provider = providers[name];
+    try {
+      const response = await provider.client.chat.completions.create({
+        model: provider.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.2,
+        max_tokens: 4096,
+      });
+      const raw = response.choices[0]?.message?.content?.trim() || '';
+      const clean = raw
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')  // strip qwen-3/reasoning model think tokens
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```\s*$/i, '')
+        .trim();
+      return JSON.parse(clean);
+    } catch (err) {
+      console.error(`[translate] Provider ${name} segment failed:`, err.message);
+      continue;
+    }
+  }
+  return textObj; // English fallback for this segment only
+}
 
 router.post('/translate', verifyToken, async (req, res) => {
   const { lang, texts } = req.body;
@@ -359,53 +395,27 @@ router.post('/translate', verifyToken, async (req, res) => {
   const entries = Object.entries(texts).filter(([, v]) => v && typeof v === 'string' && v.trim());
   if (!entries.length) return res.json({});
 
-  const textObj = Object.fromEntries(entries);
   const langName = LANG_NAMES[lang] || lang;
-
-  const systemPrompt = `You are a medical translation assistant. Translate values accurately, preserving clinical terminology.`;
-  const userPrompt = `Translate ALL values in this JSON object from English to ${langName}.
-Rules:
-- Return ONLY valid JSON — no markdown fences, no explanation outside the JSON
-- Keep every key exactly as-is, only translate the string values
-- Preserve medical terms, drug names, and numeric references accurately
-- If a value is already in ${langName}, keep it unchanged
-
-${JSON.stringify(textObj)}`;
-
   const providers = getProviders();
   const available = getAvailableProviders();
 
-  let translated = null;
-  for (const name of available) {
-    const provider = providers[name];
-    try {
-      const response = await provider.client.chat.completions.create({
-        model: provider.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.2,
-        max_tokens: 3000,
-      });
-      const raw = response.choices[0]?.message?.content?.trim() || '';
-      const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-      translated = JSON.parse(clean);
-      break;
-    } catch (err) {
-      const status = err?.status || err?.response?.status;
-      if (status === 429 || status === 503) { continue; }
-      console.error(`[translate] Provider ${name} failed:`, err.message);
-      continue;
-    }
+  // Split into segments of 15 keys — each segment stays well under 4096 output tokens
+  const SEGMENT_SIZE = 15;
+  const segments = [];
+  for (let i = 0; i < entries.length; i += SEGMENT_SIZE) {
+    segments.push(Object.fromEntries(entries.slice(i, i + SEGMENT_SIZE)));
   }
 
-  if (!translated) {
-    console.error('[translate] All providers failed — returning English fallback');
-    return res.json(Object.fromEntries(entries));
-  }
+  const results = await Promise.allSettled(
+    segments.map((seg) => translateSegment(seg, langName, providers, available))
+  );
 
-  return res.json(translated);
+  const merged = {};
+  results.forEach((r) => {
+    if (r.status === 'fulfilled') Object.assign(merged, r.value);
+  });
+
+  return res.json(merged);
 });
 
 module.exports = router;

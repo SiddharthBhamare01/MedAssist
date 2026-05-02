@@ -342,6 +342,8 @@ export default function Analysis() {
     if (!result) return texts;
     const { analysis: a } = result;
     const sum = a?.summary;
+    texts.summary_subtitle = 'Your personalized health snapshot';
+    if (sum?.complexity) texts.complexity_level = sum.complexity;
     if (sum?.overall_assessment) texts.overall_assessment = sum.overall_assessment;
     if (sum?.root_cause) texts.root_cause = sum.root_cause;
     if (sum?.referral_reason) texts.referral_reason = sum.referral_reason;
@@ -411,7 +413,7 @@ export default function Analysis() {
       if (cached && Object.keys(cached).length > 0 && !isPoisoned) {
         // Incremental path: only translate keys that are not yet in the cache
         // (e.g. risk_summary, followup_* that load after the initial translation)
-        const missingKeys = Object.keys(texts).filter((k) => !(k in cached));
+        const missingKeys = Object.keys(texts).filter((k) => !(k in cached) || cached[k] === texts[k]);
         if (missingKeys.length === 0) {
           setTranslatedData(cached);
           return;
@@ -652,12 +654,12 @@ export default function Analysis() {
                     <span className="text-xl">🩺</span>
                     <div>
                       <p className="text-sm font-bold text-slate-800">{t('analysis.overallSummary')}</p>
-                      <p className="text-[11px] text-slate-400">Your personalized health snapshot</p>
+                      <p className="text-[11px] text-slate-400">{translatedData?.summary_subtitle ?? 'Your personalized health snapshot'}</p>
                     </div>
                   </div>
                   {cmplx && (
                     <span className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 border ${COMPLEXITY_STYLE[cmplx] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                      {cmplx} {t('analysis.complexity')}
+                      {(translatedData?.complexity_level ?? cmplx)} {t('analysis.complexity')}
                     </span>
                   )}
                 </div>
