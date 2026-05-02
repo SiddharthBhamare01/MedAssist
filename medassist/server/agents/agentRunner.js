@@ -152,13 +152,19 @@ async function groqCreateWithRetry(client, params, maxRetries = 2) {
         }
       }
 
-      // Soft 429 (RPM limit) — if a fallback exists, switch immediately; only backoff if no alternative
+      // Soft 429 — if a fallback exists, switch immediately; only backoff if no alternative
       if (status === 429 && attempt < maxRetries) {
         const next = getNextProvider(currentProviderName, currentModel);
         if (next) {
-          // Fast switch — mark current provider RPM-limited for 90s, no waiting
-          if (currentProviderName) markProviderLimitedRPM(currentProviderName);
-          console.warn(`[agentRunner] 429 RPM on ${currentProviderName || 'unknown'} — fast-switching to ${next.providerName} (no wait)`);
+          // Quota exhaustion (daily/account) → hard limit; RPM → short limit
+          const errType = err.error?.error?.type || err.error?.type || '';
+          const errCode = err.error?.error?.code || err.error?.code || '';
+          const isQuotaExhausted = errType === 'rate_limit_exceeded' || errCode === 'request_quota_exceeded';
+          if (currentProviderName) {
+            if (isQuotaExhausted) markProviderLimited(currentProviderName);  // 5 min
+            else markProviderLimitedRPM(currentProviderName);               // 3 min
+          }
+          console.warn(`[agentRunner] 429 on ${currentProviderName || 'unknown'} (${isQuotaExhausted ? 'quota' : 'RPM'}) — fast-switching to ${next.providerName}`);
           groq = next.client; currentModel = next.model; currentProviderName = next.providerName;
           attempt = -1; continue;
         }
@@ -177,7 +183,13 @@ async function groqCreateWithRetry(client, params, maxRetries = 2) {
 
       // 429 with no retries left — switch provider
       if (status === 429) {
-        if (currentProviderName) markProviderLimitedRPM(currentProviderName);
+        const errType = err.error?.error?.type || err.error?.type || '';
+        const errCode = err.error?.error?.code || err.error?.code || '';
+        const isQuotaExhausted = errType === 'rate_limit_exceeded' || errCode === 'request_quota_exceeded';
+        if (currentProviderName) {
+          if (isQuotaExhausted) markProviderLimited(currentProviderName);
+          else markProviderLimitedRPM(currentProviderName);
+        }
         console.warn(`[agentRunner] 429 on ${currentProviderName || 'unknown'} — trying next provider…`);
         const next = getNextProvider(currentProviderName, currentModel);
         if (next) { groq = next.client; currentModel = next.model; currentProviderName = next.providerName; attempt = -1; continue; }

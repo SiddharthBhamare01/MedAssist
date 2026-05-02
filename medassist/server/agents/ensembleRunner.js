@@ -118,8 +118,13 @@ Compare drug interaction analyses from each agent.
  * Run the same prompt on all available providers in parallel.
  * Returns array of { provider, providerName, output } for successful calls.
  */
+// Cap parallel providers to limit free-tier API consumption
+const MAX_ENSEMBLE_PROVIDERS = 2;
+
 async function runParallel(systemPrompt, userMessage, maxTokens = 2000) {
-  const available = getAvailableProviders().filter(name => !isProviderLimited(name));
+  const available = getAvailableProviders()
+    .filter(name => !isProviderLimited(name))
+    .slice(0, MAX_ENSEMBLE_PROVIDERS);
   if (available.length === 0) throw new Error('No AI providers configured');
 
   const providers = getProviders();
