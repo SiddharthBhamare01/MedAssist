@@ -11,7 +11,7 @@
  *   );
  */
 
-const { getProviders, getAvailableProviders, isProviderLimited } = require('../utils/aiClients');
+const { getProviders, getAvailableProviders, isProviderLimited, markProviderLimited } = require('../utils/aiClients');
 
 // ─── Low-level helpers ────────────────────────────────────────────────────────
 
@@ -137,8 +137,13 @@ async function runParallel(systemPrompt, userMessage, maxTokens = 2000) {
   const results = await Promise.allSettled(
     available.map(async (name) => {
       const provider = providers[name];
-      const output = await callProvider(provider, systemPrompt, userMessage, maxTokens);
-      return { provider: name, providerName: provider.name, output };
+      try {
+        const output = await callProvider(provider, systemPrompt, userMessage, maxTokens);
+        return { provider: name, providerName: provider.name, output };
+      } catch (err) {
+        if (err.status === 429) markProviderLimited(name);
+        throw err;
+      }
     })
   );
 
@@ -179,11 +184,12 @@ ${agentOutputs.map((a, i) => `=== Agent ${i + 1} (${a.providerName}) ===\n${a.ou
   let lastErr;
   for (const name of available) {
     try {
-      const raw = await callProvider(providers[name], '', judgePrompt, 3000, true);
+      const raw = await callProvider(providers[name], '', judgePrompt, 2000, true);
       const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
       return clean;
     } catch (err) {
       if (err.status === 429 || err.status === 503) {
+        if (err.status === 429) markProviderLimited(name);
         lastErr = err;
         continue;
       }
