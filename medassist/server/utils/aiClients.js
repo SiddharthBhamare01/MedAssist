@@ -114,6 +114,10 @@ function getProviders() {
 // Default order — SambaNova is primary (stable 70B), Cerebras last (fast but RPM-limited)
 const PRIORITY_ORDER = ['sambanova', 'openrouter', 'github', 'cerebras'];
 
+// Tool-calling order — only providers with reliable OpenAI-compatible function calling
+// OpenRouter free models do NOT support tool use reliably — excluded here
+const TOOL_PROVIDERS_ORDER = ['sambanova', 'github', 'cerebras'];
+
 // Voice/lightweight order — GitHub gpt-4o-mini first (generous rate limits, fast JSON extraction)
 const VOICE_PRIORITY_ORDER = ['github', 'sambanova', 'openrouter', 'cerebras'];
 
@@ -134,9 +138,29 @@ function getAvailableProviders() {
   return _filterAvailable(PRIORITY_ORDER);
 }
 
+/** Returns provider names that reliably support tool/function calling */
+function getAvailableToolProviders() {
+  return _filterAvailable(TOOL_PROVIDERS_ORDER);
+}
+
 /** Returns provider names for lightweight tasks (voice parsing, quick JSON extraction) */
 function getAvailableVoiceProviders() {
   return _filterAvailable(VOICE_PRIORITY_ORDER);
+}
+
+/** Best available tool-capable provider — skips ones already rate-limited */
+function getPrimaryToolProvider() {
+  const providers = getProviders();
+  // Prefer non-limited tool providers
+  const toolAvailable = getAvailableToolProviders().filter(name => !isProviderLimited(name));
+  if (toolAvailable.length > 0) return providers[toolAvailable[0]];
+  // All tool providers limited — fall back to any available provider
+  const anyAvailable = getAvailableProviders().filter(name => !isProviderLimited(name));
+  if (anyAvailable.length > 0) return providers[anyAvailable[0]];
+  // Everything limited — return first configured provider and let it retry/fail gracefully
+  const all = getAvailableProviders();
+  if (all.length > 0) return providers[all[0]];
+  throw new Error('No AI provider configured. Add CEREBRAS_API_KEY or GITHUB_TOKEN to your .env file.');
 }
 
 /** Primary provider — first available key in .env */
@@ -185,6 +209,7 @@ function markProviderLimitedRPM(name) {
 }
 
 module.exports = {
-  getProviders, getAvailableProviders, getAvailableVoiceProviders, getPrimaryProvider,
+  getProviders, getAvailableProviders, getAvailableToolProviders, getAvailableVoiceProviders,
+  getPrimaryProvider, getPrimaryToolProvider,
   isProviderLimited, markProviderLimited, markProviderLimitedRPM,
 };

@@ -1,5 +1,6 @@
 const {
-  getPrimaryProvider, getAvailableProviders, getProviders,
+  getAvailableToolProviders, getProviders,
+  getPrimaryToolProvider,
   isProviderLimited, markProviderLimited, markProviderLimitedRPM,
 } = require('../utils/aiClients');
 
@@ -10,7 +11,7 @@ const INTER_TURN_DELAY_MS = 500;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function resolveProvider(clientOverride, modelOverride) {
-  const primary = getPrimaryProvider();
+  const primary = getPrimaryToolProvider();
   return {
     groq: clientOverride || primary.client,
     MODEL: modelOverride || primary.model,
@@ -25,27 +26,29 @@ const _providerModelIndex = new Map(); // providerName → index into fallbackMo
  * switching providers. Returns null when all options are exhausted.
  */
 function getNextProvider(currentProviderName, currentModel) {
-  const available = getAvailableProviders();
+  // Use tool-capable providers only — OpenRouter free models don't support function calling
+  const available = getAvailableToolProviders();
   const providers = getProviders();
 
-  // Try next fallback model on the same provider first
+  // Scan forward through fallback models on the same provider, skipping currentModel
   if (currentProviderName) {
     const p = providers[currentProviderName];
     const fallbacks = p?.fallbackModels;
     if (fallbacks?.length && !isProviderLimited(currentProviderName)) {
-      const idx = _providerModelIndex.get(currentProviderName) ?? 0;
-      if (idx < fallbacks.length) {
-        const nextModel = fallbacks[idx];
-        if (nextModel !== currentModel) {
-          _providerModelIndex.set(currentProviderName, idx + 1);
-          console.log(`[agentRunner] Trying next model on ${currentProviderName}: ${nextModel}`);
-          return { client: p.client, model: nextModel, providerName: currentProviderName };
+      const startIdx = _providerModelIndex.get(currentProviderName) ?? 0;
+      for (let i = startIdx; i < fallbacks.length; i++) {
+        if (fallbacks[i] !== currentModel) {
+          _providerModelIndex.set(currentProviderName, i + 1);
+          console.log(`[agentRunner] Trying next model on ${currentProviderName}: ${fallbacks[i]}`);
+          return { client: p.client, model: fallbacks[i], providerName: currentProviderName };
         }
       }
+      // All fallback models exhausted on this provider — mark limited so the loop below skips it
+      markProviderLimited(currentProviderName);
     }
   }
 
-  // Move to the next provider entirely
+  // Move to the next available tool-capable provider
   for (const name of available) {
     if (!isProviderLimited(name)) {
       _providerModelIndex.delete(name);

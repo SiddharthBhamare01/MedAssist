@@ -457,9 +457,9 @@ Overall assessment: ${summary}
 Return ONLY a JSON array of 3 strings. Example format:
 ["Your hemoglobin is low — add spinach or lentils to your lunch today.", "...", "..."]`;
 
-    const { getProviders, getAvailableProviders } = require('../utils/aiClients');
+    const { getProviders, getAvailableProviders, isProviderLimited } = require('../utils/aiClients');
     const providers = getProviders();
-    const available = getAvailableProviders();
+    const available = getAvailableProviders().filter(name => !isProviderLimited(name));
 
     let tips = null;
     for (const name of available) {
@@ -484,7 +484,7 @@ Return ONLY a JSON array of 3 strings. Example format:
         }
       } catch (err) {
         const status = err?.status || err?.response?.status;
-        if (status === 429 || status === 503) continue;
+        if (status >= 400) continue; // skip any failed provider — never throw for tips
         throw err;
       }
     }
@@ -493,7 +493,7 @@ Return ONLY a JSON array of 3 strings. Example format:
       tips = [
         'Stay hydrated — drink at least 8 glasses of water daily.',
         'Try adding more leafy greens to your meals this week.',
-        'A 20-minute walk after meals helps regulate blood sugar levels.',
+        'A 20-minute walk after meals helps regulate blood sugar and energy levels.',
       ];
     }
 
