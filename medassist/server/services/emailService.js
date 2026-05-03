@@ -1,55 +1,49 @@
 const nodemailer = require('nodemailer');
-const { resolve4 } = require('dns').promises;
 
 /**
- * Creates a nodemailer transporter using an explicitly-resolved IPv4 address.
- * Render's DNS resolves smtp.gmail.com to IPv6 which it can't route outbound.
- * dns.resolve4() asks only for A records, bypassing the OS IPv6 preference.
+ * Render blocks all outbound SMTP (ports 25/465/587) at the firewall — ETIMEDOUT at CONN.
+ * Resend HTTP API bypasses this entirely (just HTTPS to api.resend.com).
+ * Gmail SMTP fallback is kept for local development only.
  */
-async function createTransporter() {
-  const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const smtpPort = parseInt(process.env.SMTP_PORT || '587');
-  const smtpSecure = process.env.SMTP_SECURE === 'true';
-
-  let host = smtpHost;
-  try {
-    const [ipv4] = await resolve4(smtpHost);
-    host = ipv4; // connect via IPv4 address directly
-    console.log(`[emailService] Resolved ${smtpHost} → ${host}`);
-  } catch {
-    // fallback to hostname if DNS lookup fails
-  }
-
-  return nodemailer.createTransport({
-    host,
-    port: smtpPort,
-    secure: smtpSecure,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-    tls: {
-      servername: smtpHost,       // original hostname for TLS certificate validation
-      rejectUnauthorized: false,
-    },
-  });
-}
-
 async function sendEmail({ to, subject, html }) {
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.log(`[emailService] DEV — no SMTP configured. To: ${to} | Subject: ${subject}`);
-    return { dev: true };
+  if (process.env.RESEND_API_KEY) {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: process.env.EMAIL_FROM || 'MedAssist AI <onboarding@resend.dev>',
+        to: [to],
+        subject,
+        html,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || JSON.stringify(data));
+    console.log(`[emailService] Sent via Resend to ${to}: ${data.id}`);
+    return data;
   }
 
-  const transporter = await createTransporter();
-  const info = await transporter.sendMail({
-    from: process.env.SMTP_FROM || `"MedAssist AI" <${process.env.SMTP_USER}>`,
-    to,
-    subject,
-    html,
-  });
-  console.log(`[emailService] Email sent to ${to}: ${info.messageId}`);
-  return info;
+  // Local dev only — Gmail SMTP (blocked on Render)
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    });
+    const info = await transporter.sendMail({
+      from: `"MedAssist AI" <${process.env.SMTP_USER}>`,
+      to, subject, html,
+    });
+    console.log(`[emailService] Sent via Gmail to ${to}: ${info.messageId}`);
+    return info;
+  }
+
+  console.log(`[emailService] No provider configured. To: ${to} | Subject: ${subject}`);
+  return { dev: true };
 }
 
 async function sendAnalysisComplete(email, sessionId) {

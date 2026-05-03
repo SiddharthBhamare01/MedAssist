@@ -1,5 +1,4 @@
 const nodemailer = require('nodemailer');
-const { resolve4 } = require('dns').promises;
 
 function formatDateTime(iso) {
   if (!iso) return 'TBD';
@@ -45,31 +44,45 @@ function row(label, value) {
 }
 
 async function sendAppointmentEmail({ to, subject, title, body }) {
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.warn('[email] SMTP not configured — skipping');
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: process.env.EMAIL_FROM || 'MedAssist AI <onboarding@resend.dev>',
+          to: [to],
+          subject,
+          html: wrapHtml(title, body),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || JSON.stringify(data));
+      console.log(`[email] Sent via Resend to ${to}: ${data.id}`);
+    } catch (err) {
+      console.error('[email] Resend failed:', err.message);
+    }
+    return;
+  }
+
+  // Local dev only — Gmail SMTP (blocked on Render)
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    console.warn('[email] No email provider configured — skipping');
     return;
   }
   try {
-    // Resolve to IPv4 explicitly — Render DNS returns IPv6 for smtp.gmail.com
-    const smtpHost = process.env.SMTP_HOST;
-    let host = smtpHost;
-    try {
-      const [ipv4] = await resolve4(smtpHost);
-      host = ipv4;
-    } catch { /* use hostname if resolution fails */ }
-
     const transporter = nodemailer.createTransport({
-      host,
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: process.env.SMTP_SECURE === 'true',
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-      tls: { servername: smtpHost, rejectUnauthorized: false },
     });
     await transporter.sendMail({
       from: `"MedAssist AI" <${process.env.SMTP_USER}>`,
-      to,
-      subject,
-      html: wrapHtml(title, body),
+      to, subject, html: wrapHtml(title, body),
     });
     console.log(`[email] Sent to ${to}`);
   } catch (err) {
