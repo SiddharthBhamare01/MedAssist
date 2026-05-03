@@ -133,18 +133,6 @@ const PATIENT_LINKS = [
   { to: '/patient/history',        key: 'nav.myReports',    icon: Icons.chartBar },
   { to: '/patient/vitals',         key: 'nav.vitals',       icon: Icons.heart },
   { to: '/patient/profile',        key: 'nav.myProfile',    icon: Icons.idCard },
-  { to: '/patient/doctors',        key: 'nav.findLab',      icon: Icons.building },
-];
-
-const DOCTOR_LINKS = [
-  { to: '/doctor/dashboard',      key: 'nav.dashboard',      icon: Icons.chartBar },
-  { to: '/doctor/assist',         key: 'nav.newAssist',      icon: Icons.beaker },
-  { to: '/doctor/profile',        key: 'nav.myProfile',      icon: Icons.idCard },
-  { to: '/doctor/shared-reports', key: 'nav.sharedReports',  icon: Icons.document },
-  { to: '/doctor/prescriptions',  key: 'nav.prescriptions',  icon: Icons.documentText },
-  { to: '/doctor/drug-checker',   key: 'nav.drugChecker',    icon: Icons.shieldCheck },
-  { to: '/doctor/analytics',      key: 'nav.analytics',      icon: Icons.chartPie },
-  { to: '/doctor/appointments',   key: 'nav.appointments',   icon: Icons.calendarCheck },
 ];
 
 const ADMIN_LINKS = [
@@ -176,9 +164,7 @@ export default function Navbar() {
 
   if (!user) return null;
 
-  const navLinks = user.role === 'admin' ? ADMIN_LINKS
-                 : user.role === 'doctor' ? DOCTOR_LINKS
-                 : PATIENT_LINKS;
+  const navLinks = user.role === 'admin' ? ADMIN_LINKS : PATIENT_LINKS;
 
   const initial = (user.name || user.email || '?').charAt(0).toUpperCase();
 

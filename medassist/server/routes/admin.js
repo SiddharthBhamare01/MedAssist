@@ -93,11 +93,10 @@ router.get('/sessions', async (req, res) => {
 // GET /api/admin/stats — aggregate usage stats
 router.get('/stats', async (req, res) => {
   try {
-    const [usersRes, sessionsRes, reportsRes, doctorsRes] = await Promise.all([
+    const [usersRes, sessionsRes, reportsRes] = await Promise.all([
       pool.query('SELECT COUNT(*) AS total FROM users'),
       pool.query('SELECT COUNT(*) AS total FROM symptom_sessions'),
       pool.query('SELECT COUNT(*) AS total FROM blood_reports'),
-      pool.query("SELECT COUNT(*) AS total FROM users WHERE role = 'doctor'"),
     ]);
 
     // Users registered per day (last 30 days)
@@ -113,7 +112,6 @@ router.get('/stats', async (req, res) => {
       totalUsers: parseInt(usersRes.rows[0].total),
       totalSessions: parseInt(sessionsRes.rows[0].total),
       totalReports: parseInt(reportsRes.rows[0].total),
-      totalDoctors: parseInt(doctorsRes.rows[0].total),
       userTrend,
     });
   } catch (err) {

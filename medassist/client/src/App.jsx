@@ -21,21 +21,8 @@ import PatientDashboard from './pages/Patient/PatientDashboard';
 import ReportHistory from './pages/Patient/ReportHistory';
 import UploadReport from './pages/Patient/UploadReport';
 import Analysis from './pages/Patient/Analysis';
-import Doctors from './pages/Patient/Doctors';
 import PatientProfile from './pages/Patient/Profile';
 import Vitals from './pages/Patient/Vitals';
-
-// Doctor pages
-import DoctorDashboard from './pages/Doctor/Dashboard';
-import DoctorAssist from './pages/Doctor/Assist';
-import SharedReports from './pages/Doctor/SharedReports';
-import DoctorPrescriptions from './pages/Doctor/Prescriptions';
-import DrugChecker from './pages/Doctor/DrugChecker';
-import DoctorAnalytics from './pages/Doctor/Analytics';
-import DoctorProfile from './pages/Doctor/Profile';
-
-// Appointments (doctor only)
-import DoctorAppointments from './pages/Doctor/Appointments';
 
 // Admin pages
 import AdminDashboard from './pages/Admin/AdminDashboard';
@@ -70,15 +57,11 @@ function SmartRedirect() {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
   if (user.role === 'admin') return <Navigate to="/admin/dashboard" replace />;
-  if (user.role === 'doctor') return <Navigate to="/doctor/dashboard" replace />;
   return <Navigate to="/patient/dashboard" replace />;
 }
 
 function P({ children }) {
   return <PrivateRoute role="patient"><Layout>{children}</Layout></PrivateRoute>;
-}
-function D({ children }) {
-  return <PrivateRoute role="doctor"><Layout>{children}</Layout></PrivateRoute>;
 }
 function A({ children }) {
   return <PrivateRoute role="admin"><Layout>{children}</Layout></PrivateRoute>;
@@ -114,17 +97,6 @@ export default function App() {
           <Route path="/patient/upload-report/:sessionId" element={<P><UploadReport /></P>} />
           <Route path="/patient/analysis/:reportId" element={<P><Analysis /></P>} />
           <Route path="/patient/analysis" element={<P><Analysis /></P>} />
-          <Route path="/patient/doctors" element={<P><Doctors /></P>} />
-
-          {/* Doctor */}
-          <Route path="/doctor/dashboard" element={<D><DoctorDashboard /></D>} />
-          <Route path="/doctor/assist" element={<D><DoctorAssist /></D>} />
-          <Route path="/doctor/shared-reports" element={<D><SharedReports /></D>} />
-          <Route path="/doctor/prescriptions" element={<D><DoctorPrescriptions /></D>} />
-          <Route path="/doctor/drug-checker" element={<D><DrugChecker /></D>} />
-          <Route path="/doctor/analytics" element={<D><DoctorAnalytics /></D>} />
-          <Route path="/doctor/profile" element={<D><DoctorProfile /></D>} />
-          <Route path="/doctor/appointments" element={<D><DoctorAppointments /></D>} />
 
           {/* Admin */}
           <Route path="/admin/dashboard" element={<A><AdminDashboard /></A>} />

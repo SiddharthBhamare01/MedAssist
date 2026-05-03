@@ -48,8 +48,8 @@ router.post('/register', async (req, res) => {
   if (!email || !password || !role || !fullName) {
     return res.status(400).json({ error: 'All fields are required' });
   }
-  if (!['patient', 'doctor'].includes(role)) {
-    return res.status(400).json({ error: 'Role must be patient or doctor' });
+  if (role !== 'patient') {
+    return res.status(400).json({ error: 'Role must be patient' });
   }
   if (password.length < 6) {
     return res.status(400).json({ error: 'Password must be at least 6 characters' });
@@ -64,17 +64,10 @@ router.post('/register', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await createUser({ email, passwordHash, role, fullName });
 
-    if (role === 'patient') {
-      await pool.query(
-        'INSERT INTO patient_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING',
-        [user.id]
-      );
-    } else if (role === 'doctor') {
-      await pool.query(
-        'INSERT INTO doctor_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING',
-        [user.id]
-      );
-    }
+    await pool.query(
+      'INSERT INTO patient_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING',
+      [user.id]
+    );
 
     const { devLink } = await sendVerificationEmail(user.id, email);
 
@@ -436,27 +429,12 @@ router.post('/google', async (req, res) => {
       });
     }
 
-    // New user — ask for role first
-    if (!role) {
-      return res.json({ needsRole: true, profile: { name, email } });
-    }
-    if (!['patient', 'doctor'].includes(role)) {
-      return res.status(400).json({ error: 'Role must be patient or doctor' });
-    }
-
     // Create account, send verification email
-    user = await createUser({ email, passwordHash: 'OAUTH_GOOGLE', role, fullName: name });
-    if (role === 'patient') {
-      await pool.query(
-        'INSERT INTO patient_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING',
-        [user.id]
-      );
-    } else {
-      await pool.query(
-        'INSERT INTO doctor_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING',
-        [user.id]
-      );
-    }
+    user = await createUser({ email, passwordHash: 'OAUTH_GOOGLE', role: 'patient', fullName: name });
+    await pool.query(
+      'INSERT INTO patient_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING',
+      [user.id]
+    );
 
     const { devLink } = await sendVerificationEmail(user.id, email);
     return res.json({

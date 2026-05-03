@@ -14,7 +14,6 @@ export default function Register() {
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'patient',
   });
   const [loading, setLoading] = useState(false);
   const [registered, setRegistered] = useState(false);
@@ -24,13 +23,12 @@ export default function Register() {
 
   function redirectAfterLogin(user) {
     if (user.role === 'admin') return navigate('/admin/dashboard');
-    if (user.role === 'doctor') return navigate('/doctor/dashboard');
     return navigate('/patient/dashboard');
   }
 
   const handleGoogleSuccess = async ({ credential }) => {
     try {
-      const { data } = await api.post('/auth/google', { credential, role: form.role });
+      const { data } = await api.post('/auth/google', { credential });
       if (data.requiresVerification) {
         if (data.devLink) console.log('[Dev] Verify link:', data.devLink);
         setRegisteredEmail(data.email);
@@ -65,7 +63,7 @@ export default function Register() {
         fullName: form.fullName,
         email: form.email,
         password: form.password,
-        role: form.role,
+        role: 'patient',
       });
       setRegisteredEmail(form.email);
       setRegistered(true);
@@ -133,32 +131,6 @@ export default function Register() {
 
         <h2 className="text-lg font-semibold text-slate-800 mb-6">Create your account</h2>
 
-        {/* Role selector shown above Google button so it's used for Google sign-up too */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-slate-600 mb-2">I am a...</label>
-          <div className="grid grid-cols-2 gap-3">
-            {['patient', 'doctor'].map((r) => (
-              <label
-                key={r}
-                className={`flex items-center justify-center gap-2 border-2 rounded-xl py-3 cursor-pointer transition-all text-sm font-semibold capitalize
-                  ${form.role === r
-                    ? 'border-teal-500 bg-teal-50 text-teal-700 shadow-sm'
-                    : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50'
-                  }`}
-              >
-                <input
-                  type="radio"
-                  name="role"
-                  value={r}
-                  checked={form.role === r}
-                  onChange={handleChange}
-                  className="sr-only"
-                />
-                <span className="text-lg">{r === 'patient' ? '🤒' : '🩺'}</span> {r}
-              </label>
-            ))}
-          </div>
-        </div>
 
         {/* Social sign-up */}
         <div className="mb-4">

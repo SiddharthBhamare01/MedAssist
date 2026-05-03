@@ -28,7 +28,6 @@ export default function Login() {
   function redirectAfterLogin(user) {
     if (returnUrl) return navigate(returnUrl);
     if (user.role === 'admin') return navigate('/admin/dashboard');
-    if (user.role === 'doctor') return navigate('/doctor/dashboard');
     return navigate('/patient/dashboard');
   }
 

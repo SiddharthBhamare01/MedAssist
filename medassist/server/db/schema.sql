@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email VARCHAR(255) UNIQUE NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
-  role VARCHAR(20) NOT NULL CHECK (role IN ('patient', 'doctor')),
+  role VARCHAR(20) NOT NULL CHECK (role IN ('patient')),
   full_name VARCHAR(255) NOT NULL,
   created_at TIMESTAMP DEFAULT NOW()
 );
@@ -55,28 +55,6 @@ CREATE TABLE IF NOT EXISTS blood_reports (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Doctor profiles (linked to users with role='doctor')
-CREATE TABLE IF NOT EXISTS doctor_profiles (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  specialization VARCHAR(255),
-  hospital_name VARCHAR(255),
-  city VARCHAR(100),
-  state VARCHAR(100),
-  latitude FLOAT,
-  longitude FLOAT,
-  phone VARCHAR(30),
-  available BOOLEAN DEFAULT TRUE
-);
-
--- Doctor AI assist sessions
-CREATE TABLE IF NOT EXISTS doctor_assist_sessions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  doctor_id UUID REFERENCES users(id),
-  patient_summary JSONB,
-  suggested_tests TEXT[],
-  created_at TIMESTAMP DEFAULT NOW()
-);
 
 -- Agent execution audit log (for course submission + debugging)
 CREATE TABLE IF NOT EXISTS agent_logs (
