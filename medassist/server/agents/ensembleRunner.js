@@ -11,7 +11,7 @@
  *   );
  */
 
-const { getProviders, getAvailableProviders, isProviderLimited, markProviderLimited } = require('../utils/aiClients');
+const { getProviders, getAvailableProviders, getAvailableJudgeProviders, isProviderLimited, markProviderLimited } = require('../utils/aiClients');
 
 // ─── Low-level helpers ────────────────────────────────────────────────────────
 
@@ -124,7 +124,7 @@ Compare drug interaction analyses from each agent.
  * Returns array of { provider, providerName, output } for successful calls.
  */
 // Cap parallel providers to limit free-tier API consumption
-const MAX_ENSEMBLE_PROVIDERS = 3;
+const MAX_ENSEMBLE_PROVIDERS = 2;
 
 async function runParallel(systemPrompt, userMessage, maxTokens = 2000) {
   const available = getAvailableProviders()
@@ -169,7 +169,8 @@ async function runParallel(systemPrompt, userMessage, maxTokens = 2000) {
  */
 async function runConsensus(agentOutputs, taskType) {
   const providers = getProviders();
-  const available = getAvailableProviders().filter(name => !isProviderLimited(name));
+  // Use judge-specific order: OpenAI gpt-4o first, free models as fallback
+  const available = getAvailableJudgeProviders().filter(name => !isProviderLimited(name));
   const instruction = TASK_INSTRUCTIONS[taskType] || 'Merge the outputs, preferring items that appear in multiple outputs. Return ONLY JSON.';
 
   const judgePrompt = `You are a medical AI consensus judge.

@@ -49,7 +49,13 @@ function getProviders() {
   if (_providers) return _providers;
   const cerebrasClient = makeClient(process.env.CEREBRAS_API_KEY, 'https://api.cerebras.ai/v1');
   _providers = {
-    // Cerebras Qwen 235B — best model for medical reasoning, use as primary
+    // OpenAI — paid key, gpt-4o, used as dedicated judge + Phase 1 tool calls
+    openai: {
+      name: 'OpenAI gpt-4o',
+      client: makeClient(process.env.OPENAI_API_KEY, 'https://api.openai.com/v1'),
+      model: 'gpt-4o',
+    },
+    // Cerebras Qwen 235B — last-resort fallback, free but RPM-limited
     cerebras: {
       name: 'Cerebras Qwen-235B',
       client: cerebrasClient,
@@ -111,12 +117,14 @@ function getProviders() {
   return _providers;
 }
 
-// Default order — SambaNova is primary (stable 70B), Cerebras last (fast but RPM-limited)
-const PRIORITY_ORDER = ['cerebras', 'sambanova', 'github', 'openrouter'];
+// Ensemble agents — free models run in parallel (OpenAI excluded: it's the dedicated judge)
+const PRIORITY_ORDER = ['sambanova', 'github', 'openrouter', 'cerebras'];
 
-// Tool-calling order — only providers with reliable OpenAI-compatible function calling
-// OpenRouter free models do NOT support tool use reliably — excluded here
-const TOOL_PROVIDERS_ORDER = ['sambanova', 'cerebras', 'github'];
+// Tool-calling — OpenAI first (paid, most reliable function calling), then free fallbacks
+const TOOL_PROVIDERS_ORDER = ['openai', 'sambanova', 'github', 'cerebras'];
+
+// Judge — OpenAI gpt-4o first (paid, independent from ensemble agents → best accuracy)
+const JUDGE_PRIORITY_ORDER = ['openai', 'sambanova', 'github'];
 
 // Voice/lightweight order — GitHub gpt-4o-mini first (generous rate limits, fast JSON extraction)
 const VOICE_PRIORITY_ORDER = ['github', 'sambanova', 'openrouter', 'cerebras'];
@@ -146,6 +154,11 @@ function getAvailableToolProviders() {
 /** Returns provider names for lightweight tasks (voice parsing, quick JSON extraction) */
 function getAvailableVoiceProviders() {
   return _filterAvailable(VOICE_PRIORITY_ORDER);
+}
+
+/** Returns provider names for consensus judge — OpenAI first for highest accuracy */
+function getAvailableJudgeProviders() {
+  return _filterAvailable(JUDGE_PRIORITY_ORDER);
 }
 
 /** Best available tool-capable provider — skips ones already rate-limited */
@@ -209,7 +222,8 @@ function markProviderLimitedRPM(name) {
 }
 
 module.exports = {
-  getProviders, getAvailableProviders, getAvailableToolProviders, getAvailableVoiceProviders,
+  getProviders, getAvailableProviders, getAvailableToolProviders,
+  getAvailableVoiceProviders, getAvailableJudgeProviders,
   getPrimaryProvider, getPrimaryToolProvider,
   isProviderLimited, markProviderLimited, markProviderLimitedRPM,
 };

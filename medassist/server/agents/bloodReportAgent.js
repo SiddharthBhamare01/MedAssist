@@ -188,7 +188,7 @@ Tool data: ${toolSummary || 'none'}`;
       PHASE2B_SYSTEM,
       `${sharedContext}\nGenerate the diet and recovery JSON now.`,
       'blood_analysis',
-      2500
+      3500
     );
     console.log(`[bloodReportAgent] Phase 2b ensemble (${ac2b} providers), length: ${raw2b.length}`);
     try {
