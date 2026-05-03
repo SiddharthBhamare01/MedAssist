@@ -635,6 +635,7 @@ router.post('/:id/demo-reminder', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Could not resolve patient email' });
     }
 
+    // Store the reminder row so the DB state is real (production loop would pick this up)
     await pool.query('DELETE FROM reminders WHERE report_id = $1 AND sent = false', [req.params.id]);
     await pool.query(
       `INSERT INTO reminders (patient_id, report_id, message, send_at)
@@ -642,11 +643,9 @@ router.post('/:id/demo-reminder', verifyToken, async (req, res) => {
       [req.user.userId, req.params.id, reminderMessage]
     );
 
-    const { processReminders } = require('../services/reminderService');
-    await processReminders();
-
     console.log(`[bloodReport] DEMO reminder triggered for report ${req.params.id}, patient ${req.user.userId}`);
 
+    // Return the email content immediately — no SMTP call needed for demo
     return res.json({
       success: true,
       email: userRows[0].email,
