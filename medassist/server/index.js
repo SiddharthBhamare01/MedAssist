@@ -1,4 +1,6 @@
 require('dotenv').config();
+// Force IPv4 for all DNS lookups — Render free tier has no IPv6 outbound (Gmail SMTP needs this)
+require('dns').setDefaultResultOrder('ipv4first');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
