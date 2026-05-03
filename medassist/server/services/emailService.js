@@ -1,14 +1,12 @@
 const nodemailer = require('nodemailer');
 
-// If SMTP creds are configured, use real transporter; otherwise log to console
-const isConfigured = process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS;
+// Use Gmail service (same as email.js / forgot-password) — only needs SMTP_USER + SMTP_PASS
+const isConfigured = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
 
 let transporter = null;
 if (isConfigured) {
   transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
+    service: 'gmail',
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
