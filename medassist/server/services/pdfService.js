@@ -138,7 +138,7 @@ function buildHtml({ patientName, disease, symptoms, analysis, tabletRecommendat
     const s = STATUS_STYLE[f.status] ?? STATUS_STYLE.normal;
     const label = STATUS_LABEL[f.status] ?? f.status;
     return `
-      <tr style="background:${i % 2 === 0 ? '#fff' : '#f8fafc'}">
+      <tr style="background:${i % 2 === 0 ? '#fff' : '#f8fafc'};page-break-inside:avoid;break-inside:avoid">
         <td style="padding:7px 10px;font-weight:600;color:#1e293b;white-space:nowrap">${sanitize(f.parameter)}</td>
         <td style="padding:7px 10px;font-family:monospace;color:#334155;white-space:nowrap">${sanitize(f.your_value)}</td>
         <td style="padding:7px 10px;font-family:monospace;color:#64748b;font-size:11px;white-space:nowrap">${sanitize(f.normal_range)}</td>
@@ -154,7 +154,7 @@ function buildHtml({ patientName, disease, symptoms, analysis, tabletRecommendat
     const name = sanitize(m.name || m.generic_name || 'Unknown');
     const generic = m.generic_name && m.generic_name !== m.name ? `<span style="font-family:monospace;font-size:11px;color:#94a3b8;margin-left:6px">(${sanitize(m.generic_name)})</span>` : '';
     return `
-      <div style="display:flex;gap:16px;border:1px solid #e2e8f0;border-radius:6px;padding:14px;margin-bottom:10px">
+      <div style="display:flex;gap:16px;border:1px solid #e2e8f0;border-radius:6px;padding:14px;margin-bottom:10px;page-break-inside:avoid;break-inside:avoid">
         <div style="width:30px;height:30px;border-radius:50%;background:#0d9488;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">${i + 1}</div>
         <div style="flex:1;min-width:0">
           <div style="margin-bottom:6px">
@@ -197,7 +197,7 @@ function buildHtml({ patientName, disease, symptoms, analysis, tabletRecommendat
       `<li><b>${sanitize(f.food)}</b>${f.reason ? ` — ${sanitize(f.reason)}` : ''}</li>`
     ).join('');
     const mealItems = (dietPlan.meal_schedule || []).map(m =>
-      `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 12px;margin-bottom:6px">
+      `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 12px;margin-bottom:6px;page-break-inside:avoid;break-inside:avoid">
         <b style="font-size:11px;color:#166534;text-transform:uppercase">${sanitize(m.meal)}</b>
         <p style="margin:2px 0 0;font-size:12px;color:#334155">${sanitize(m.suggestion)}</p>
       </div>`
@@ -282,7 +282,7 @@ function buildHtml({ patientName, disease, symptoms, analysis, tabletRecommendat
     <section style="margin-bottom:32px">
       ${sectionHeader(L.followUpSchedule)}
       ${fu.map((f, i) => `
-        <div style="display:flex;gap:16px;align-items:flex-start;border:1px solid #e2e8f0;border-radius:6px;padding:12px 14px;margin-bottom:8px">
+        <div style="display:flex;gap:16px;align-items:flex-start;border:1px solid #e2e8f0;border-radius:6px;padding:12px 14px;margin-bottom:8px;page-break-inside:avoid;break-inside:avoid">
           <span style="font-size:12px;font-weight:700;color:#94a3b8;width:16px;flex-shrink:0">${i + 1}.</span>
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:2px">
@@ -313,6 +313,11 @@ function buildHtml({ patientName, disease, symptoms, analysis, tabletRecommendat
   ul { padding-left: 20px; }
   li { margin-bottom: 4px; }
   p { line-height: 1.6; }
+  section { page-break-inside: avoid; break-inside: avoid; }
+  @media print {
+    section { page-break-inside: avoid; break-inside: avoid; }
+    tr { page-break-inside: avoid; break-inside: avoid; }
+  }
 </style>
 </head>
 <body>
@@ -340,7 +345,7 @@ function buildHtml({ patientName, disease, symptoms, analysis, tabletRecommendat
 
   <!-- SUMMARY -->
   ${sum.overall_assessment ? `
-  <section style="margin-bottom:32px">
+  <section style="margin-bottom:32px;page-break-inside:avoid;break-inside:avoid">
     ${sectionHeader(L.clinicalSummary)}
     <div style="display:grid;grid-template-columns:4px 1fr;gap:0 16px">
       <div style="background:#0d9488;border-radius:99px"></div>
@@ -352,9 +357,13 @@ function buildHtml({ patientName, disease, symptoms, analysis, tabletRecommendat
   </section>
   <hr style="border:none;border-top:1px solid #e2e8f0;margin-bottom:32px"/>` : ''}
 
+  <!-- CLINICAL RISK ASSESSMENT -->
+  ${riskHtml}
+  ${riskHtml ? '<hr style="border:none;border-top:1px solid #e2e8f0;margin-bottom:32px"/>' : ''}
+
   <!-- SYMPTOMS -->
   ${symptomText ? `
-  <section style="margin-bottom:32px">
+  <section style="margin-bottom:32px;page-break-inside:avoid;break-inside:avoid">
     ${sectionHeader('Reported Symptoms')}
     <p style="font-size:13px;color:#475569">${symptomText}</p>
   </section>
@@ -397,20 +406,16 @@ function buildHtml({ patientName, disease, symptoms, analysis, tabletRecommendat
   </section>
   <hr style="border:none;border-top:1px solid #e2e8f0;margin-bottom:32px"/>` : ''}
 
+  <!-- FOLLOW-UP -->
+  ${followUpHtml}
+  ${followUpHtml ? '<hr style="border:none;border-top:1px solid #e2e8f0;margin-bottom:32px"/>' : ''}
+
   <!-- DIET PLAN -->
   ${dietHtml}
   ${dietHtml ? '<hr style="border:none;border-top:1px solid #e2e8f0;margin-bottom:32px"/>' : ''}
 
   <!-- RECOVERY INGREDIENTS -->
   ${recoveryHtml}
-  ${recoveryHtml ? '<hr style="border:none;border-top:1px solid #e2e8f0;margin-bottom:32px"/>' : ''}
-
-  <!-- RISK SCORES -->
-  ${riskHtml}
-  ${riskHtml ? '<hr style="border:none;border-top:1px solid #e2e8f0;margin-bottom:32px"/>' : ''}
-
-  <!-- FOLLOW-UP -->
-  ${followUpHtml}
 
 </div>
 
@@ -469,7 +474,7 @@ async function generateSessionPDF(sessionData) {
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
-      margin: { top: '0', right: '0', bottom: '0', left: '0' },
+      margin: { top: '16px', right: '0', bottom: '16px', left: '0' },
     });
     return pdfBuffer;
   } finally {
@@ -613,7 +618,7 @@ async function generateSummaryCardPDF(data) {
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
-      margin: { top: '0', right: '0', bottom: '0', left: '0' },
+      margin: { top: '16px', right: '0', bottom: '16px', left: '0' },
     });
     return pdfBuffer;
   } finally {
