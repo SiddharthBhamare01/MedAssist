@@ -612,6 +612,53 @@ router.put('/:id/translations', verifyToken, async (req, res) => {
   }
 });
 
+// POST /api/blood-report/:id/demo-reminder — demo-only: bypasses timer, fires reminder immediately
+router.post('/:id/demo-reminder', verifyToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM blood_reports WHERE id = $1 AND patient_id = $2',
+      [req.params.id, req.user.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Report not found' });
+
+    const followUp = rows[0].follow_up;
+    if (!followUp) return res.status(400).json({ error: 'No follow-up data — generate follow-up recommendations first' });
+
+    const item = Array.isArray(followUp) ? followUp[0] : followUp;
+    const reminderMessage = `Reminder: Time to recheck "${item.test || item.name}" — recommended recheck: ${item.recheck_in || item.timeframe || 'TBD'}.`;
+
+    const { rows: userRows } = await pool.query(
+      'SELECT email, full_name FROM users WHERE id = $1',
+      [req.user.userId]
+    );
+    if (!userRows.length || !userRows[0].email) {
+      return res.status(500).json({ error: 'Could not resolve patient email' });
+    }
+
+    await pool.query('DELETE FROM reminders WHERE report_id = $1 AND sent = false', [req.params.id]);
+    await pool.query(
+      `INSERT INTO reminders (patient_id, report_id, message, send_at)
+       VALUES ($1, $2, $3, NOW() - INTERVAL '1 second')`,
+      [req.user.userId, req.params.id, reminderMessage]
+    );
+
+    const { processReminders } = require('../services/reminderService');
+    await processReminders();
+
+    console.log(`[bloodReport] DEMO reminder triggered for report ${req.params.id}, patient ${req.user.userId}`);
+
+    return res.json({
+      success: true,
+      email: userRows[0].email,
+      subject: 'MedAssist AI — Blood Test Recheck Reminder',
+      message: reminderMessage,
+    });
+  } catch (err) {
+    console.error('[demo-reminder]', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/blood-report/:id
 router.get('/:id', verifyToken, async (req, res) => {
   try {

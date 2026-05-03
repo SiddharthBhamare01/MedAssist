@@ -57,6 +57,8 @@ export default function Analysis() {
   const [summaryExporting, setSummaryExporting] = useState(false);
   const [supplementLogs, setSupplementLogs] = useState(new Set());
   const [supplementStreaks, setSupplementStreaks] = useState(new Map());
+  const [demoLoading, setDemoLoading] = useState(false);
+  const [demoModal, setDemoModal] = useState(null);
 
   const [isNarrating, setIsNarrating] = useState(false);
   const [isLoadingNarration, setIsLoadingNarration] = useState(false);
@@ -312,6 +314,18 @@ export default function Analysis() {
     }
   };
 
+  const handleDemoReminder = async () => {
+    setDemoLoading(true);
+    try {
+      const { data } = await api.post(`/blood-report/${reportId}/demo-reminder`);
+      setDemoModal({ email: data.email, subject: data.subject, message: data.message });
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Demo reminder failed');
+    } finally {
+      setDemoLoading(false);
+    }
+  };
+
   const handleToggleSupplement = async (ingredientName) => {
     try {
       const { data } = await api.post('/patient/supplement-log', { ingredient_name: ingredientName });
@@ -564,6 +578,31 @@ export default function Analysis() {
                 </svg>
                 {summaryExporting ? t('analysis.generating') : t('analysis.printSummaryCard')}
               </button>
+              {followUp && !loadingFollowUp && (
+                <button
+                  onClick={handleDemoReminder}
+                  disabled={demoLoading}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-xl transition-all shadow-sm disabled:opacity-50"
+                >
+                  {demoLoading ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                      </svg>
+                      Sending…
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                      </svg>
+                      Simulate Reminder
+                      <span className="ml-1 bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md tracking-wider">DEMO</span>
+                    </>
+                  )}
+                </button>
+              )}
               <button
                 onClick={() => setShowShareModal(true)}
                 className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-xl transition-all shadow-sm"
@@ -621,6 +660,47 @@ export default function Analysis() {
             <div className="pt-2 border-t border-slate-100">
               <p className="text-xs text-slate-400">{t('analysis.aiDisclaimer')}</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Demo Reminder Modal */}
+      {demoModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={() => setDemoModal(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">✅</span>
+                <div>
+                  <h3 className="font-bold text-slate-800">Reminder Sent!</h3>
+                  <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md tracking-wider">DEMO MODE</span>
+                </div>
+              </div>
+              <button onClick={() => setDemoModal(null)} className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 shrink-0">✕</button>
+            </div>
+            <div className="space-y-3">
+              <div className="bg-slate-50 rounded-xl p-3">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Recipient</p>
+                <p className="text-sm font-mono text-slate-700">{demoModal.email}</p>
+              </div>
+              <div className="bg-slate-50 rounded-xl p-3">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Subject</p>
+                <p className="text-sm text-slate-700">{demoModal.subject}</p>
+              </div>
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
+                <p className="text-[11px] font-bold text-amber-600 uppercase tracking-wider mb-1">Reminder Message</p>
+                <p className="text-sm text-slate-700 leading-relaxed">{demoModal.message}</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-400 pt-2 border-t border-slate-100">
+              In production, this email fires automatically when the recheck date approaches. Demo mode bypasses the timer.
+            </p>
           </div>
         </div>
       )}
