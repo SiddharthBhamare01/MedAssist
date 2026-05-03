@@ -1,12 +1,14 @@
 const nodemailer = require('nodemailer');
 
-// Use Gmail service (same as email.js / forgot-password) — only needs SMTP_USER + SMTP_PASS
 const isConfigured = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
 
 let transporter = null;
 if (isConfigured) {
   transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // STARTTLS — port 465 (SSL) is blocked on Render
+    family: 4,     // force IPv4 — Render free tier has no IPv6 outbound
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
