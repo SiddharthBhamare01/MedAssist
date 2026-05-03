@@ -1,30 +1,47 @@
 const nodemailer = require('nodemailer');
+const { resolve4 } = require('dns').promises;
 
-const isConfigured = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
+/**
+ * Creates a nodemailer transporter using an explicitly-resolved IPv4 address.
+ * Render's DNS resolves smtp.gmail.com to IPv6 which it can't route outbound.
+ * dns.resolve4() asks only for A records, bypassing the OS IPv6 preference.
+ */
+async function createTransporter() {
+  const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+  const smtpPort = parseInt(process.env.SMTP_PORT || '587');
+  const smtpSecure = process.env.SMTP_SECURE === 'true';
 
-let transporter = null;
-if (isConfigured) {
-  transporter = nodemailer.createTransport({
-    service: 'gmail',
+  let host = smtpHost;
+  try {
+    const [ipv4] = await resolve4(smtpHost);
+    host = ipv4; // connect via IPv4 address directly
+    console.log(`[emailService] Resolved ${smtpHost} → ${host}`);
+  } catch {
+    // fallback to hostname if DNS lookup fails
+  }
+
+  return nodemailer.createTransport({
+    host,
+    port: smtpPort,
+    secure: smtpSecure,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
+    tls: {
+      servername: smtpHost,       // original hostname for TLS certificate validation
+      rejectUnauthorized: false,
+    },
   });
 }
 
-/**
- * Send an email. Falls back to console.log in dev mode.
- */
 async function sendEmail({ to, subject, html }) {
-  if (!transporter) {
-    console.log('[emailService] DEV MODE — email not sent:');
-    console.log(`  To: ${to}`);
-    console.log(`  Subject: ${subject}`);
-    console.log(`  Body: ${html}`);
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    console.log(`[emailService] DEV — no SMTP configured. To: ${to} | Subject: ${subject}`);
     return { dev: true };
   }
 
+  const transporter = await createTransporter();
   const info = await transporter.sendMail({
     from: process.env.SMTP_FROM || `"MedAssist AI" <${process.env.SMTP_USER}>`,
     to,
@@ -35,9 +52,6 @@ async function sendEmail({ to, subject, html }) {
   return info;
 }
 
-/**
- * Notify patient that blood report analysis is complete.
- */
 async function sendAnalysisComplete(email, sessionId) {
   const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
   return sendEmail({
@@ -52,9 +66,6 @@ async function sendAnalysisComplete(email, sessionId) {
   });
 }
 
-/**
- * Notify a doctor that a report has been shared with them.
- */
 async function sendReportShared(email, shareToken) {
   const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
   return sendEmail({
@@ -69,9 +80,6 @@ async function sendReportShared(email, shareToken) {
   });
 }
 
-/**
- * Send a follow-up reminder to a patient.
- */
 async function sendFollowUpReminder(email, patientName, message) {
   const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
   return sendEmail({
