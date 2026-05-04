@@ -7,6 +7,9 @@ const nodemailer = require('nodemailer');
  */
 async function sendEmail({ to, subject, html }) {
   if (process.env.RESEND_API_KEY) {
+    // RESEND_TO_OVERRIDE redirects all mail to a single address (required while using
+    // onboarding@resend.dev which can only deliver to the Resend account owner's email)
+    const actualTo = process.env.RESEND_TO_OVERRIDE || to;
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -15,14 +18,14 @@ async function sendEmail({ to, subject, html }) {
       },
       body: JSON.stringify({
         from: process.env.EMAIL_FROM || 'MedAssist AI <onboarding@resend.dev>',
-        to: [to],
+        to: [actualTo],
         subject,
         html,
       }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || JSON.stringify(data));
-    console.log(`[emailService] Sent via Resend to ${to}: ${data.id}`);
+    console.log(`[emailService] Sent via Resend to ${actualTo}: ${data.id}`);
     return data;
   }
 
