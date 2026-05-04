@@ -1,575 +1,553 @@
-# MedAssist AI
+# MedAssist AI — Intelligent Medical Assistant Platform
 
-**AI-powered medical assistant that transforms raw blood reports into clear, actionable health guidance — with voice, chat, bilingual support, and automated follow-up.**
+<div align="center">
 
-![Stack](https://img.shields.io/badge/React-18-61DAFB?logo=react)
-![Stack](https://img.shields.io/badge/Express-4-000000?logo=express)
-![Stack](https://img.shields.io/badge/PostgreSQL-Supabase-3ECF8E?logo=supabase)
-![Stack](https://img.shields.io/badge/AI-Multi--Agent_Ensemble-8B5CF6)
-![Stack](https://img.shields.io/badge/Course-CS_595_Medical_Informatics-blue)
+![MedAssist AI](https://img.shields.io/badge/MedAssist-AI%20Platform-0d9488?style=for-the-badge&logo=heart&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![Node.js](https://img.shields.io/badge/Node.js-Express%205-339933?style=for-the-badge&logo=node.js&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![Ensemble](https://img.shields.io/badge/Ensemble-4%20LLM%20Providers-8B5CF6?style=for-the-badge&logoColor=white)
 
----
+**A full-stack AI-powered medical assistant that transforms blood reports into actionable health insights.**
 
-## Table of Contents
+[Live Demo](https://medassist-phi.vercel.app/) · [Backend API](https://medassist-backend-1rne.onrender.com/health) · [System Architecture](#high-level-design-hld)
 
-1. [Problem Statement](#1-problem-statement)
-2. [How MedAssist Solves It](#2-how-medassist-solves-it)
-3. [Core Features](#3-core-features)
-4. [Application Flow](#4-application-flow)
-5. [High-Level Design (HLD)](#5-high-level-design-hld)
-6. [Multi-Agent Ensemble Architecture](#6-multi-agent-ensemble-architecture)
-7. [Security Model](#7-security-model)
-8. [Follow-up Reminder System](#8-follow-up-reminder-system)
-9. [Tech Stack](#9-tech-stack)
-10. [Project Setup](#10-project-setup)
+[![View System Architecture](https://img.shields.io/badge/View-System%20Architecture%20(HLD)-ff6b6b?style=for-the-badge&logo=diagrams.net&logoColor=white)](#high-level-design-hld)
+
+</div>
 
 ---
 
-## 1. Problem Statement
+## Overview
 
-### Blood Report Literacy Gap
+MedAssist AI is a full-stack medical informatics platform built for **CS 595 — Medical Informatics & AI** at Illinois Institute of Technology. It allows patients to upload blood reports for deep AI analysis and track their health progress over time — all powered by a **multi-provider LLM ensemble**: OpenAI GPT-4o acts as the consensus judge while SambaNova, GitHub Models, and OpenRouter serve as free-tier parallel agents. Google Gemini and OpenRouter Vision handle blood report OCR.
 
-Patients who receive blood reports often lack the medical knowledge to interpret their results and must schedule a doctor's appointment solely for report analysis — adding cost, time, and unnecessary friction to their healthcare journey.
-
-A typical CBC or lipid panel returns 20–40 parameters with numeric values, reference ranges, and medical abbreviations that are opaque to the average patient. The result: patients either ignore reports until something critical is missed, or over-schedule appointments that a brief AI-assisted interpretation could have resolved.
-
-### Lack of Actionable Follow-up
-
-Even when a report flags an abnormality, patients are rarely told *when* to recheck, *what* to recheck, or *why* rechecking matters. Without structured follow-up, chronic conditions go unmonitored and early interventions are missed.
-
-### No Patient Engagement After Diagnosis
-
-Once a patient receives their report, there is no mechanism to ask follow-up questions, hear the findings explained in simple terms, or track their health progress over time. The experience is a one-time event rather than an ongoing health journey.
-
-### Language Barrier and Accessibility
-
-Spanish-speaking patients cannot fully benefit from English-only medical reports. Paper reports are also difficult to share with family or caregivers, and there is no unified way to track how parameters change across multiple visits.
+The system features three independent AI agents, real-time agent status tracking, multi-language support (English & Spanish), HIPAA-compliant audit logging, nearby clinics & labs discovery via OpenStreetMap, and a comprehensive suite of patient tools including a vitals tracker, medical ID card, report sharing, audio narration, and PDF export.
 
 ---
 
-## 2. How MedAssist Solves It
+## High-Level Design (HLD)
 
-| Problem | MedAssist Solution |
-|---|---|
-| Uninterpretable blood reports | Multi-phase AI analysis: plain-English summary, abnormal findings, diet plan, recovery guidance |
-| No follow-up guidance | Automated follow-up recommendations + email reminders sent 3 days before recheck date |
-| No way to ask questions | Per-report AI chatbot — type or speak your question, get a contextual doctor-style answer |
-| Report not accessible | Bilingual support (English + Spanish), voice narration, shareable links, PDF export |
-| No health trend visibility | Full report history with trend charts and side-by-side report comparison to track improvements or changes across visits |
-| Uploading PDFs is inconvenient | Camera mode: take a photo of the report directly in the app — no conversion needed |
-| Single-model AI unreliability | Ensemble of 2 parallel AI providers + a consensus judge to increase accuracy and safety |
+### System Architecture
+
+[![MedAssist AI HLD](HLD_MedAssist_AI.drawio.png)](HLD_MedAssist_AI.drawio.png)
 
 ---
 
-## 3. Core Features
-
-### Primary Features
-
-#### Blood Report Upload and Analysis *(Main Feature)*
-
-- **Two input modes**: drag-drop a PDF or image file, OR capture a photo directly using the device camera (rear-facing, portrait guide frame overlay — no file conversion needed)
-- OCR (Gemini Vision) extracts every parameter with value, unit, and status immediately on upload
-- AI analysis runs in multiple phases after the patient clicks "Analyze":
-  - **Phase 1** — Agent calls lab reference range tools for the most abnormal parameters
-  - **Phase 2a (Medical)** — Overall assessment, root cause, complexity rating, doctor referral recommendation, all in plain English
-  - **Phase 2b (Lifestyle)** — Personalized diet plan (foods to eat/avoid, full daily meal schedule) and recovery ingredients with usage guidance
-- Composite clinical risk score 0–100 computed across four validated frameworks: Framingham (cardiovascular), FINDRISC (diabetes), CKD-EPI (kidney), Child-Pugh (liver)
-- Individual parameter explanation: click "Explain This" on any abnormal finding for a 2–3 sentence plain-English explanation of what that value means for the patient personally
-- Auto-generated medication log entries from tablet recommendations in the analysis
-
-#### Per-Report AI Chatbot
-
-Every analyzed report has a floating AI chatbot tied specifically to that report's data. The chatbot persona is "Dr. MedAssist" — a warm, experienced family doctor speaking to the patient as if in a real consultation.
-
-**Text input**: Type any question about the report. The AI cites the patient's actual values (e.g., "Your hemoglobin came back at 10.2, which is below the normal 12–16 range...") rather than giving generic advice.
-
-**Voice input**: Tap the microphone button and speak — Web Speech Recognition transcribes the question and sends it automatically. Supports both English and Spanish voice recognition.
-
-**Voice output (auto-speak)**: AI replies are spoken aloud automatically (toggle on/off). English uses ElevenLabs TTS; Spanish uses the browser's native SpeechSynthesis with an `es-ES` voice. Each individual message also has a play/stop button.
-
-**Multilingual**: The chatbot responds in the patient's currently selected language — the same `lang` setting used by the rest of the app.
-
-**Session history**: The last 10 messages are included in each request, so the AI maintains context across a conversation.
-
-**Quick-reply suggestions**: Four pre-written question chips appear on first open so patients can get started without typing.
-
-#### Doctor-Style Voice Narration of Report
-
-A dedicated "Hear Report" feature generates a warm, empathetic 2-minute spoken narration of the full analysis — structured like a real doctor's consultation:
-1. Greeting and report overview
-2. Diagnosis and root cause (spoken first, most important)
-3. Walk-through of each abnormal value in plain language
-4. Practical lifestyle suggestions
-5. Closing encouragement and follow-up reminder
-
-The narration script is generated by AI, then converted to natural speech by ElevenLabs TTS. This gives patients a personal-touch experience without requiring them to read through the full analysis text.
-
-#### Bilingual Support (English + Spanish)
-
-The entire application is available in English and Spanish, switchable at any time via the language toggle in the navbar.
-
-- **UI strings**: every label, button, tooltip, and navigation item is translated via `i18next` / `react-i18next`
-- **AI-generated content**: the full analysis (summary, abnormal findings, diet plan, recovery ingredients, follow-up) is translated to Spanish via a batched AI translation endpoint; results are cached in the database so re-loading the Spanish view does not re-translate
-- **Chatbot**: responds in the patient's active language — Spanish replies use a Spanish doctor persona, English replies use ElevenLabs TTS; both support voice input via the Web Speech API
-- **Individual explanations**: the "Explain This" feature also returns Spanish when the app is in Spanish mode
-
-#### Report Comparison
-
-Patients can select any two of their analyzed reports and compare them side-by-side:
-- Each parameter shown with values from both reports, normal reference range, and status badges (normal / high / low)
-- Delta display: upward/downward arrow with the percentage change between reports
-- Trend label per parameter: "Worsened", "Improved", or "Stable"
-- Visual **RangeBar**: a horizontal track showing the normal range with two dot markers — one for each report — so patients can see exactly where their values sit and how they shifted
-
-#### Report History and Trend Tracking
-
-- All uploaded and analyzed reports listed chronologically on the Report History page
-- Composite health score (0–100) plotted as a sparkline across the last 10 reports
-- Per-report summary: total parameters, abnormal count, analyzed status
-- Select any two reports to launch the comparison view
-
-### Supporting Features
-
-| Feature | Description |
-|---|---|
-| Follow-up recommendations | AI recommends recheck timing for every abnormal finding with priority (urgent / routine / monitoring) |
-| Automated email reminders | Email sent 3 days before the recommended recheck date (see §8) |
-| Vital sign tracking | Manual entry of glucose, blood pressure, heart rate, weight, SpO2, temperature with 30-day trend charts |
-| Vital insights | LLM-generated correlation between daily vitals and the latest blood test findings (2-hour cache) |
-| Supplement tracker | Daily supplement log with a 30-day consecutive-day streak counter |
-| Health engagement badges | First Report, On Track, Improving, Follow-up Champion — awarded automatically |
-| Daily health tips | 3 AI-generated personalized tips per day based on the latest report findings (24-hour cache) |
-| 48-hour shareable report link | Read-only token-gated URL to share analysis with a doctor or family member; expires automatically |
-| PDF export | Summary Card (1 page, patient-friendly) and Full Report (comprehensive, clinical detail) |
-| Patient profile | Demographics, blood group, existing conditions, allergies, medications, smoking/alcohol status |
-| Medication auto-log | Tablet recommendations from blood analysis are automatically added to the medication log |
-| Admin dashboard | Platform statistics, user management, 30-day registration trend chart, paginated audit trail |
-
----
-
-## 4. Application Flow
+### Blood Report Processing Flow
 
 ```
-User                           Client                         Server                          AI Layer
- │                                │                               │                               │
- ├─ Register / Login ───────────► │                               │                               │
- │◄─ JWT token ──────────────────┤◄─ POST /auth/login ───────────┤                               │
- │                                │                               │                               │
- ├─ Upload report ──────────────► │                               │                               │
- │  (drag-drop PDF/image          │                               │                               │
- │   OR take photo via camera)    │                               │                               │
- │                                ├─ POST /blood-report/upload ──►│                               │
- │                                │                               ├─ Gemini Vision OCR ──────────►│
- │                                │◄─ { reportId, extractedValues}┤◄─ Extracted parameters ───────┤
- │◄─ Preview: all parameters ────┤                               │                               │
- │   with values + status badges  │                               │                               │
- │                                │                               │                               │
- ├─ Click "Analyze" ────────────► │                               │                               │
- │                                ├─ POST /blood-report/analyze ─►│                               │
- │◄─ { status: "processing" } ───┤◄─ immediate response ─────────┤                               │
- │                                │                               │                               │
- │  (client polls GET /:id        │                               ├─ Phase 1: Tool calls ─────────►│
- │   every 5s until analyzed)     │                               │  get_lab_reference_range       │
- │                                │                               │  (top 3 abnormal parameters)  │
- │                                │                               │◄─ reference data ─────────────┤
- │                                │                               │                               │
- │                                │                               ├─ Phase 2a: Ensemble ──────────►│
- │                                │                               │  2 providers in parallel       │
- │                                │                               │◄─ output_A + output_B ─────────┤
- │                                │                               ├─ Consensus judge ─────────────►│
- │                                │                               │◄─ merged medical analysis ─────┤
- │                                │                               │  (summary, abnormal findings)  │
- │                                │                               │                               │
- │                                │                               ├─ Phase 2b: Ensemble ──────────►│
- │                                │                               │  2 providers in parallel       │
- │                                │                               │◄─ output_A + output_B ─────────┤
- │                                │                               ├─ Consensus judge ─────────────►│
- │                                │                               │◄─ merged lifestyle plan ───────┤
- │                                │                               │  (diet plan, ingredients)      │
- │                                │                               │                               │
- │                                │                               ├─ Risk scoring agent ──────────►│
- │                                │                               │◄─ composite score 0-100 ───────┤
- │                                │                               │                               │
- │                                │                               ├─ Follow-up agent ─────────────►│
- │                                │                               │◄─ recheck schedule ────────────┤
- │                                │                               │                               │
- │                                │                               ├─ Save to DB                   │
- │                                │                               ├─ Schedule email reminders      │
- │                                │                               ├─ Auto-populate medication log  │
- │                                │                               │                               │
- │◄─ Full analysis dashboard ────┤◄─ GET /blood-report/:id ──────┤                               │
- │                                │                               │                               │
- │─── (Patient interacts with results) ─────────────────────────────────────────────────────────►│
- │                                │                               │                               │
- ├─ Ask chatbot question ───────► │                               │                               │
- │  (type or speak into mic)      ├─ POST /voice/report-chat ────►│                               │
- │                                │   { reportId, message, lang } ├─ AI responds in patient lang ─►│
- │◄─ Text reply ─────────────────┤◄──────────────────────────────┤◄──────────────────────────────┤
- │◄─ (auto-spoken via TTS) ──────┤◄─ POST /voice/speak ──────────┤◄─ ElevenLabs audio ───────────┤
- │                                │                               │                               │
- ├─ "Hear Report" button ───────► │                               │                               │
- │                                ├─ POST /voice/narrate-report ─►│                               │
- │                                │                               ├─ AI writes doctor script ─────►│
- │◄─ Doctor-style audio ─────────┤◄─ ElevenLabs TTS audio ───────┤◄──────────────────────────────┤
- │                                │                               │                               │
- ├─ Switch language ────────────► │                               │                               │
- │                                ├─ POST /voice/translate ──────►│                               │
- │                                │   { lang, texts }             ├─ Batch AI translation ────────►│
- │◄─ Translated report content ──┤◄─ cached in DB ───────────────┤◄──────────────────────────────┤
- │                                │                               │                               │
- ├─ Compare two reports ────────► │                               │                               │
- │                                ├─ GET /blood-report/compare ──►│                               │
- │◄─ Side-by-side diff ──────────┤◄─ diff + delta + trend ────────┤                               │
+  Patient uploads PDF / Image
+           │
+           ▼
+  ┌─────────────────────┐
+  │  Gemini Vision OCR  │  ← extracts 40+ blood parameters
+  └──────────┬──────────┘
+             │
+             ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │                  PHASE 1 — Tool Calls                    │
+  │  OpenAI GPT-4o (dedicated)                              │
+  │  → Fetch lab reference ranges from OpenFDA & RxNorm     │
+  │    for top 3 abnormal parameters                        │
+  └──────────────────────────┬──────────────────────────────┘
+                             │
+             ┌───────────────┴──────────────┐
+             ▼                              ▼
+  ┌─────────────────────────┐   ┌─────────────────────────────┐
+  │  PHASE 2a — Medical      │   │  PHASE 2b — Lifestyle        │
+  │  Ensemble (parallel)     │   │  Ensemble (parallel)         │
+  │  SambaNova + GitHub +   │   │  SambaNova + GitHub +        │
+  │  OpenRouter             │   │  OpenRouter                  │
+  │  → Judge: OpenAI GPT-4o │   │  → Judge: OpenAI GPT-4o      │
+  │                          │   │                              │
+  │  Output:                 │   │  Output:                     │
+  │  • summary               │   │  • diet_plan                 │
+  │  • abnormal_findings     │   │  • recovery_ingredients      │
+  │  • complexity_flag       │   │                              │
+  │  • referral_needed       │   │                              │
+  └──────────────┬──────────┘   └──────────────┬──────────────┘
+                 │                              │
+                 └──────────────┬───────────────┘
+                                ▼
+                 ┌──────────────────────────────┐
+                 │   Merge → blood_reports DB    │
+                 │   status: analyzed            │
+                 └──────────────┬───────────────┘
+                                │
+              ┌─────────────────┼─────────────────┐
+              ▼                 ▼                  ▼
+  ┌───────────────────┐ ┌─────────────┐ ┌──────────────────┐
+  │  Risk Scoring     │ │  Follow-Up  │ │  PDF / Summary   │
+  │  Agent            │ │  Agent      │ │  Card Export     │
+  │  0–100 composite  │ │  recheck    │ │  (Puppeteer)     │
+  │  Framingham       │ │  schedule + │ │                  │
+  │  FINDRISC         │ │  email      │ │                  │
+  │  CKD-EPI          │ │  reminders  │ │                  │
+  │  Child-Pugh       │ │             │ │                  │
+  └───────────────────┘ └─────────────┘ └──────────────────┘
 ```
 
 ---
 
-## 5. High-Level Design (HLD)
+## Live Deployment
+
+| Service | URL |
+|---------|-----|
+| Frontend (Vercel) | https://medassist-phi.vercel.app/ |
+| Backend API (Render) | https://medassist-backend-1rne.onrender.com |
+
+---
+
+## Tech Stack
+
+### Frontend
+| Technology | Purpose |
+|------------|---------|
+| React 19 + Vite | SPA framework & build tool |
+| Tailwind CSS | Utility-first styling with dark mode |
+| React Router v7 | Client-side routing |
+| Recharts | Trend charts & sparklines |
+| Leaflet + React Leaflet | Interactive maps |
+| Framer Motion | Page transitions & animations |
+| react-hook-form | Form state management |
+| i18next + react-i18next | English / Spanish i18n |
+| Axios | HTTP client with JWT interceptor |
+| @react-oauth/google | Google OAuth login |
+
+### Backend
+| Technology | Purpose |
+|------------|---------|
+| Node.js + Express 5 | REST API server |
+| PostgreSQL (Supabase) | Primary database |
+| JSON Web Tokens | Stateless authentication |
+| bcryptjs | Password hashing |
+| Speakeasy + QRCode | TOTP 2-factor authentication |
+| Multer | File upload handling |
+| PDFKit + Puppeteer Core | PDF generation & export |
+| pdf-parse | Blood report PDF text extraction |
+| Nodemailer | Email reminders & verification |
+| express-rate-limit | API rate limiting (4 layers) |
+
+### AI / External APIs
+| API | Role |
+|-----|------|
+| **OpenAI GPT-4o** | Consensus judge + tool-calling (primary) |
+| **SambaNova (Llama 3.3 70B)** | Ensemble agent — free tier |
+| **GitHub Models (GPT-4o mini)** | Ensemble agent — free via GitHub PAT |
+| **OpenRouter** | Ensemble agent — fallback model chain (Llama, DeepSeek, Gemma, Mistral) |
+| **Google Gemini Vision** | Blood report OCR (image/PDF → 40+ parameters) |
+| **ElevenLabs** | Text-to-speech report narration |
+| **OpenFDA** | Drug information & adverse events |
+| **RxNorm (NIH)** | Drug name normalization & interaction checking |
+| **OpenStreetMap / Overpass API** | Nearby clinics, labs & hospitals search |
+| **Google OAuth** | Federated authentication |
+
+---
+
+## Project Structure
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────────────┐
-│                              CLIENT  (React 18 + Vite)                               │
-│                                                                                      │
-│  ┌──────────────────┐  ┌───────────────────────┐  ┌──────────────────────────────┐  │
-│  │   Auth Pages     │  │  Blood Report Pages   │  │   Supporting Pages           │  │
-│  │  Login, Register │  │  Upload (file/camera) │  │  Report History, Comparison  │  │
-│  │  2FA, Verify     │  │  Analysis Dashboard   │  │  Vitals, Profile, Badges     │  │
-│  │  Forgot Password │  │  Report Chatbot       │  │  Admin, Emergency Medical ID │  │
-│  │  Google OAuth    │  │  Voice Narration      │  │  Shared Report (public link) │  │
-│  └──────────────────┘  │  Language Switcher    │  └──────────────────────────────┘  │
-│                        └───────────────────────┘                                    │
-│                                                                                      │
-│              axios + JWT Bearer  /  SSE EventSource  /  i18next                     │
-└───────────────────────────────────┬──────────────────────────────────────────────────┘
-                                    │
-┌───────────────────────────────────▼──────────────────────────────────────────────────┐
-│                              SERVER  (Express.js)                                    │
-│                                                                                      │
-│  ┌──────────────┐  ┌────────────────┐  ┌────────────────┐  ┌──────────────────────┐ │
-│  │  /auth       │  │ /blood-report  │  │  /patient      │  │  /voice              │ │
-│  │  /admin      │  │ upload, analyze│  │  profile       │  │  speak, narrate      │ │
-│  │  /shared     │  │ compare        │  │  vitals        │  │  report-chat         │ │
-│  │              │  │ history, export│  │  supplements   │  │  explain-finding     │ │
-│  │              │  │ translate, tips│  │  badges        │  │  translate           │ │
-│  └──────────────┘  └───────┬────────┘  └────────────────┘  └──────────────────────┘ │
-│                            │                                                         │
-│          ┌─────────────────▼─────────────────────────────────────────────────────┐  │
-│          │                       AGENT LAYER                                     │  │
-│          │                                                                       │  │
-│          │  ┌────────────────────────────────────────────────────────────────┐  │  │
-│          │  │                   ensembleRunner.js                            │  │  │
-│          │  │                                                                │  │  │
-│          │  │  ┌──────────────────────┐    ┌──────────────────────┐         │  │  │
-│          │  │  │    Provider A        │    │    Provider B         │         │  │  │
-│          │  │  │  SambaNova           │    │  Cerebras             │         │  │  │
-│          │  │  │  Llama-3.3-70B       │    │  Qwen-3-235B          │         │  │  │
-│          │  │  └──────────┬───────────┘    └───────────┬──────────┘         │  │  │
-│          │  │             │   same prompt, parallel     │                    │  │  │
-│          │  │             └──────────────┬──────────────┘                   │  │  │
-│          │  │                            │ output_A + output_B              │  │  │
-│          │  │                            ▼                                  │  │  │
-│          │  │               ┌────────────────────────┐                     │  │  │
-│          │  │               │    Consensus Judge      │                     │  │  │
-│          │  │               │  GitHub GPT-4o-mini     │                     │  │  │
-│          │  │               │  task-specific merge    │                     │  │  │
-│          │  │               └────────────┬───────────┘                     │  │  │
-│          │  └────────────────────────────┼───────────────────────────────── ┘  │  │
-│          │                               │ merged, confidence-scored result     │  │
-│          │                               ▼                                      │  │
-│          │  ┌──────────────────┐  ┌──────────────┐  ┌──────────────────────┐   │  │
-│          │  │ bloodReportAgent │  │ riskScoring  │  │ followUpAgent        │   │  │
-│          │  │ Phase 2a: medical│  │ Agent        │  │ (recheck schedule +  │   │  │
-│          │  │ Phase 2b: lifestyle  │ (0-100 score)│  │  reminder trigger)   │   │  │
-│          │  └──────────────────┘  └──────────────┘  └──────────────────────┘   │  │
-│          └────────────────────────────────────────────────────────────────────── ┘  │
-│                                                                                      │
-│  ┌─────────────────────────┐  ┌────────────────────────┐  ┌──────────────────────┐  │
-│  │  reminderService.js     │  │  pdfService.js          │  │  emailService.js     │  │
-│  │  (hourly loop)          │  │  (Puppeteer / PDFKit)   │  │  (nodemailer)        │  │
-│  └────────────┬────────────┘  └────────────────────────┘  └──────────────────────┘  │
-└───────────────┼──────────────────────────────────────────────────────────────────────┘
-                │
-┌───────────────▼──────────────────────────────────────────────────────────────────────┐
-│                        DATABASE  (PostgreSQL — Supabase)                             │
-│                                                                                      │
-│  users  ·  patient_profiles  ·  blood_reports  ·  vital_readings                    │
-│  medication_logs  ·  supplement_logs  ·  reminders  ·  agent_logs  ·  audit_trail   │
-└──────────────────────────────────────────────────────────────────────────────────────┘
+medassist/
+├── client/                        # React + Vite frontend (Vercel)
+│   └── src/
+│       ├── pages/
+│       │   ├── Auth/              # Login, Register, Reset Password, Email Verify
+│       │   ├── Patient/           # Dashboard, Upload, Analysis, History, Vitals, Profile
+│       │   ├── Shared/            # Public report view, Medical ID lookup
+│       │   └── Admin/             # System stats, User management, Audit log
+│       ├── components/            # HealthScoreCard, DailyTipsCard, AgentStatusPanel, Modals
+│       ├── context/               # AuthContext, LanguageContext
+│       ├── services/              # api.js (axios + JWT interceptor)
+│       └── locales/               # en.json, es.json
+│
+└── server/                        # Express API (Render)
+    ├── routes/                    # auth, patient, bloodReport, voice, admin, shared
+    ├── agents/                    # bloodReportAgent, riskScoringAgent, followUpAgent
+    │   └── tools/                 # medicalTools.js (lab ranges, drug lookups)
+    ├── services/                  # geminiService, emailService, reminderService, pdfService
+    ├── models/                    # patientQueries, User
+    ├── middleware/                # auth (JWT verify), upload (Multer)
+    └── db/                        # pool, schema.sql, migrate.js, migrations/
 ```
 
 ---
 
-## 6. Multi-Agent Ensemble Architecture
+## Features
 
-### Why an Ensemble?
+### Patient — Blood Report Upload
 
-A single language model can hallucinate medical facts, produce unsafe dosage recommendations, or assign incorrect risk levels. Running the same query through two independent AI providers and merging their outputs through a consensus judge significantly reduces these failure modes — especially for safety-critical fields like drug interactions and diagnostic findings.
+- Upload blood reports as image files (JPG/PNG) or PDF
+- **Live camera capture mode** with guide-frame overlay, front/rear flip, and 2× resolution crop
+- Google Gemini Vision extracts **40+ blood parameters** automatically
 
-### How It Works
+### Patient — AI Blood Report Analysis
 
-#### Step 1 — Parallel Dispatch
+The **Blood Report Agent** runs a 4-phase multi-LLM ensemble:
 
-`ensembleRunner.js` sends the identical prompt to **2 AI providers simultaneously** (`MAX_ENSEMBLE_PROVIDERS = 2`). Both calls run via `Promise.all`, so total latency equals the slower of the two — not the sum.
+| Output | Details |
+|--------|---------|
+| Overall Assessment | 2–3 sentence summary with root cause identification |
+| Abnormal Findings | Value, normal range, status (normal/low/high/critical), plain-English interpretation |
+| Complexity Flag | Low / Medium / High with doctor referral decision |
+| Diet Plan | Meal schedule + foods to eat/avoid |
+| Recovery Ingredients | Natural supplements with targets & how-to-use |
+| Tablet Recommendations | FDA-verified medication suggestions |
+
+### Patient — Clinical Risk Scores
+
+- **Framingham** cardiovascular risk
+- **FINDRISC** diabetes risk
+- **CKD-EPI** kidney function
+- **Child-Pugh** liver function
+- Composite health score (0–100) displayed as a gauge with sparkline trend
+
+### Patient — Follow-Up Scheduling
+
+- Top 3 recommended follow-up tests with recheck timeframes
+  - Critical: 1–2 weeks · Significant: 1–3 months · Mild: 3–6 months
+- Background email reminders 1 day before each scheduled recheck
+
+### Patient — Report History & Trend Analysis
+
+- Full report history with backdated monthly timestamps for demo
+- Interactive trend charts for 10 key parameters across all visits
+- Side-by-side comparison of any 2 reports with delta badges
+
+### Patient — Audio Narration & Explanations
+
+- Doctor-style text-to-speech narration via ElevenLabs
+- Plain-English explanation of any abnormal finding on demand
+- Native Spanish audio when language is set to Spanish
+
+### Patient — Multi-Language Support
+
+- Full English / Spanish UI powered by i18next
+- Smart translation caching (stored in DB, incremental key updates)
+- Poisoned-cache detection (prevents caching failed translations)
+- One-click toggle in sidebar, persists across sessions
+
+### Patient — Report Sharing & Export
+
+- Generate PIN-protected shareable links (7-day expiry)
+- Recipients view full report without an account
+- Full analysis PDF export (multi-language)
+- One-page summary card PDF
+
+### Patient — Vitals Tracker
+
+| Vital | Unit |
+|-------|------|
+| Blood Pressure | mmHg (systolic / diastolic) |
+| Glucose | mg/dL |
+| Weight | kg |
+| Heart Rate | bpm |
+| SpO₂ | % |
+| Temperature | °F |
+
+- 30-day trend charts per vital type
+- AI-generated insights correlating vitals to blood report parameters
+
+### Patient — Supplement Adherence
+
+- Log daily intake of recommended recovery ingredients
+- Streak tracking with consecutive-day counter
+- Weekly adherence check notifications
+
+### Patient — Medical ID (Emergency Card)
+
+- Emergency contact name & phone, blood type, organ donor status, critical notes
+- PIN-protected public lookup by patient ID
+- Brute-force protection (10 attempts / 15 min per IP)
+
+### Patient — Nearby Clinics & Labs
+
+- Searches for doctors, clinics, hospitals, pharmacies, labs, and blood banks within **10 km** of the patient's location
+- Powered by **OpenStreetMap Overpass API** with 3-mirror parallel fallback (14-second timeout per mirror)
+- Results include: name, specialization, address, phone, website, and distance in km
+- **1-hour in-memory cache** per location bucket (up to 200 cached queries) — cache hits bypass the API entirely
+- Circuit breaker: 10-minute cooldown if all Overpass mirrors fail simultaneously
+
+### Patient — Dashboard
+
+- Health score card with AI summary and risk sparkline
+- Daily personalized health tips (AI-generated, refreshable)
+- Recent report cards with status, parameter count, abnormal findings
+- Achievement badges (first report, analysis complete, streaks, etc.)
+
+### Admin
+
+- **System Statistics**: total users, blood reports, analyses generated
+- **User Management**: paginated list with search, suspend/unsuspend
+- **HIPAA Audit Trail**: full action log by user, action type, resource, and date range
+
+---
+
+## AI Agents
+
+### Blood Report Agent
+**`POST /api/blood-report/analyze`**
+
+Four-phase execution with multi-LLM ensemble consensus:
+1. **Tool phase** — fetch lab reference ranges from OpenFDA & RxNorm for top 3 abnormal parameters
+2. **Medical section** — ensemble across providers → generates summary + abnormal findings
+3. **Lifestyle section** — ensemble → generates diet plan + recovery ingredients
+4. **Merge** — combines all outputs with graceful degradation on rate limits
+
+Runs as a fire-and-forget background process; the client polls for completion.
+
+### Risk Scoring Agent
+**`POST /api/blood-report/risk-scores`**
+
+Applies four validated clinical risk models (Framingham, FINDRISC, CKD-EPI, Child-Pugh) to extracted blood values, returning a composite 0–100 health score with per-domain breakdown.
+
+### Follow-Up Agent
+**`POST /api/blood-report/follow-up`**
+
+Recommends the top 3 follow-up tests based on abnormal finding severity with evidence-based recheck timeframes. Automatically triggers the background email reminder scheduler.
+
+### Ensemble Runner
+
+All agents use a multi-provider consensus engine capped at **2 parallel providers** (to preserve free-tier quotas). The same prompt dispatches to SambaNova and GitHub Models simultaneously via `Promise.allSettled()`. **OpenAI GPT-4o** then acts as the consensus judge, merging all outputs into a single higher-accuracy result using task-specific merge strategies (blood_analysis · test_recommendations · drug_interactions). Rate-limit errors (429/503) trigger automatic fallback to the next provider in the priority chain.
+
+---
+
+## Ensemble Architecture
+
+### Step 1 — Parallel Dispatch
 
 ```
-                     ┌──► Provider A (SambaNova — Llama-3.3-70B)  ──► output_A ──┐
-same prompt ─────────┤                                                             ├──► consensus judge
-                     └──► Provider B (Cerebras  — Qwen-3-235B)    ──► output_B ──┘
+                    ┌────────────────────────────────┐
+                    │       Incoming LLM Request      │
+                    └───────────────┬────────────────┘
+                                    │ filter rate-limited providers
+                    ┌───────────────┼───────────────┐
+                    ▼               ▼               ▼
+           ┌─────────────┐  ┌─────────────┐  ┌───────────────┐
+           │  SambaNova  │  │   GitHub    │  │  OpenRouter   │
+           │ Llama 3.3   │  │ GPT-4o mini │  │ DeepSeek /    │
+           │   70B       │  │             │  │ Gemma / Llama │
+           └──────┬──────┘  └──────┬──────┘  └──────┬────────┘
+                  │                │                  │
+                  └────────────────┼──────────────────┘
+                                   │  Promise.allSettled()
+                                   ▼
+                    ┌──────────────────────────────┐
+                    │     Collect Results (1+)      │
+                    └──────────────┬───────────────┘
+                                   │
+                    ┌──────────────▼───────────────┐
+                    │        Consensus Judge        │
+                    │         OpenAI GPT-4o         │ ◄── fallback: SambaNova → GitHub
+                    └──────────────┬───────────────┘
+                                   │  merged JSON output
+                                   ▼
+                    ┌──────────────────────────────┐
+                    │         Final Response        │
+                    │   (higher accuracy result)    │
+                    └──────────────────────────────┘
 ```
 
-#### Step 2 — Consensus Judge
+> If a provider is rate-limited (429/503), it is skipped automatically. The judge still produces a merged result from however many agents responded (minimum 1).
 
-A **third LLM call** (the "judge", run on GitHub GPT-4o-mini) receives both outputs and merges them using task-specific rules. The judge does not redo the analysis — it only adjudicates and combines.
+### Step 2 — Consensus Judge Merge Strategies
 
 ```
-output_A + output_B  ──►  Consensus Judge  ──►  merged_result (with confidence scores)
+┌──────────────────────┬──────────────────────────────────────────────┐
+│ Task                 │ Merge Strategy                               │
+├──────────────────────┼──────────────────────────────────────────────┤
+│ blood_analysis       │ Prefer conservative (lower/safer) values     │
+├──────────────────────┼──────────────────────────────────────────────┤
+│ test_recommendations │ Tests from 2+ agents → high priority         │
+│                      │ Single-agent tests → lower urgency           │
+├──────────────────────┼──────────────────────────────────────────────┤
+│ treatment_plan       │ Prefer safer/lower doses; flag interactions   │
+├──────────────────────┼──────────────────────────────────────────────┤
+│ drug_interactions    │ Use MORE SEVERE rating when agents disagree   │
+└──────────────────────┴──────────────────────────────────────────────┘
 ```
-
-#### Step 3 — Confidence Scoring
-
-| Agreement between agents | Confidence assigned |
-|---|---|
-| Both agents report the same finding | 0.8 – 1.0 (high) |
-| Only one agent reports the finding | 0.4 – 0.6 (moderate — included with caveat) |
-
-### Task-Specific Merge Rules
-
-The consensus instructions differ per task to reflect medical domain priorities:
-
-**Blood Report Analysis**
-- Where agents agree: use the agreed value
-- Where agents conflict: prefer the **conservative / safer** recommendation
-- Each finding tagged with `consensus_note`: high / medium / low agreement
-
-**Treatment Plans**
-- 2+ agents agree → HIGH confidence; include in plan
-- 1 agent only → include only if FDA-approved evidence exists
-- Conflicting doses: prefer the **lower / safer dose** and **shorter duration**
-- Any drug-drug interaction flagged by *either* agent is always surfaced
-
-**Drug Interactions**
-- 2+ agents → high confidence
-- Conflicting severity: use the **more severe** classification (patient safety first)
-
-**Test Recommendations**
-- Tests from 2+ agents → high priority
-- Fuzzy deduplication, sorted by consensus count
-
-### Fallback Behavior
-
-If only one provider is available (due to rate limiting), the consensus step is skipped and the single output is returned directly. Provider rate-limit state is tracked per-session so responses are always served.
 
 ### AI Provider Roster
 
-| Provider | Model | Role |
-|---|---|---|
-| SambaNova | Meta-Llama-3.3-70B-Instruct | Primary ensemble member — stable, free tier |
-| Cerebras | Qwen-3-235B-A22B-Instruct | Secondary ensemble member — strong medical reasoning |
-| OpenRouter | Llama 3.1 8B / Mistral 7B | Lightweight fallback |
-| GitHub Models | GPT-4o-mini | Consensus judge, voice scripts, translations |
-
-Provider selection is **task-aware**: tool-calling tasks exclude OpenRouter free models (no reliable function-calling). Voice and translation tasks prefer GitHub Models for speed and higher rate limits.
-
----
-
-## 7. Security Model
-
-### Authentication
-
-| Mechanism | Details |
-|---|---|
-| Password hashing | bcrypt with salt rounds |
-| Access token | JWT, 7-day expiry; payload: `{ userId, role, name }` |
-| Google OAuth | ID token verified server-side via `google-auth-library` |
-| Two-Factor Auth (TOTP) | QR-code setup via `speakeasy`; login requires email + password + 6-digit TOTP code |
-
-### Email-Based Security Flows
-
-**Email Verification (Magic Link)**
-
-On registration the server generates a cryptographically random token (24-hour expiry) and emails a verification link. Clicking the link calls `GET /auth/verify-email?token=...`, which validates the token, marks the account as verified, and issues a signed JWT. No password travels in this flow — the one-time token *is* the credential.
-
-If the link expires: `POST /auth/resend-verification` issues a fresh 24-hour link.
-
-**Forgot Password / Password Reset**
-
-`POST /auth/forgot-password` creates a 1-hour reset token and emails a reset link. That link posts to `POST /auth/reset-password` with the token and new password. On success the token is invalidated and a confirmation email is sent. Tokens are single-use and time-bound.
-
-### Rate Limiting
-
-| Endpoint group | Limit |
-|---|---|
-| Auth (login, register) | 20 requests / 15 minutes |
-| Agent endpoints (analyze) | 10 requests / minute |
-| Email endpoints (forgot-password, resend) | 3 requests / minute |
-
-### Report Share Tokens
-
-48-hour expiry, read-only, scoped to a single report. Cannot be used to modify any data.
-
----
-
-## 8. Follow-up Reminder System
-
-After a blood report is analyzed, the follow-up agent (`followUpAgent.js`) evaluates every abnormal finding and recommends a recheck schedule:
-
-| Finding Severity | Recommended Recheck |
-|---|---|
-| Critical value | 1–2 weeks |
-| Significantly abnormal | 1–3 months |
-| Mildly abnormal | 3–6 months |
-| New medication started | 4–6 weeks (relevant labs only) |
-
-The agent returns the top 3 follow-up items, each with: test name, recheck timeline, clinical reason, and priority (`urgent` / `routine` / `monitoring`).
-
-### Automated Email Reminders
-
-After follow-up analysis completes, `bloodReport.js` inserts rows into the `reminders` table with:
-
 ```
-send_at = recheck_date − 3 days
+┌────────────────┬────────────────────┬──────────┬────────────────────────┐
+│ Provider       │ Model              │ Cost     │ Role                   │
+├────────────────┼────────────────────┼──────────┼────────────────────────┤
+│ OpenAI         │ GPT-4o             │ Paid     │ Judge + tool-calling   │
+│ SambaNova      │ Llama 3.3 70B      │ Free     │ Ensemble agent         │
+│ GitHub Models  │ GPT-4o mini        │ Free*    │ Ensemble agent         │
+│ OpenRouter     │ Multi-model chain  │ Free     │ Ensemble agent         │
+└────────────────┴────────────────────┴──────────┴────────────────────────┘
+* Free with a GitHub Personal Access Token (PAT)
+
+OpenRouter fallback model chain (in order):
+  DeepSeek Chat v3 → DeepSeek R1 → Gemma 3 27B → Mistral Nemo → Llama 3.1 8B
 ```
 
-`reminderService.js` runs a background loop that:
-1. Starts automatically on server boot
-2. Queries `reminders` every hour for unsent rows whose `send_at` ≤ now
-3. Sends a personalized email via nodemailer with the patient's name, the specific test, the clinical reason, and the target recheck date
-4. Marks the reminder `sent = true` to prevent duplicates
+---
 
-A patient who receives a follow-up recommendation for a hemoglobin recheck in 4 weeks will automatically receive an email 3 days before that date — no manual action required.
+## Caching Layers
+
+Cache hits avoid redundant API calls and improve response latency across the system.
+
+```
+┌─────────────────────────────────┬──────────┬────────────────────────────────┐
+│ Cache Layer                     │ TTL      │ Storage                        │
+├─────────────────────────────────┼──────────┼────────────────────────────────┤
+│ Nearby clinics/labs (OSM)       │ 1 hour   │ In-memory (up to 200 buckets)  │
+│ Report translations (ES)        │ Permanent│ PostgreSQL — blood_reports col  │
+│ Daily health tips               │ 24 hours │ PostgreSQL — blood_reports col  │
+│ Vitals AI insights              │ 2 hours  │ In-memory per patient + type    │
+│ Rate-limit tracking (hard cap)  │ 5 min    │ In-memory — aiClients.js       │
+│ Rate-limit tracking (RPM)       │ 3 min    │ In-memory — aiClients.js       │
+└─────────────────────────────────┴──────────┴────────────────────────────────┘
+```
 
 ---
 
-## 9. Tech Stack
+## Database Schema
 
-### Frontend
-
-| Technology | Purpose |
-|---|---|
-| React 18 + Vite | UI framework and build tooling |
-| Tailwind CSS | Utility-first component styling |
-| React Router v6 | Client-side routing |
-| Recharts | Vital trend charts and health score sparklines |
-| Framer Motion | Page and component animations |
-| i18next / react-i18next | Bilingual UI strings (English + Spanish) |
-| React Hook Form | Form state management and validation |
-| Axios | HTTP client with automatic JWT Bearer injection |
-| Web Speech API | Voice input (speech-to-text) in the chatbot |
-| SpeechSynthesis API | Browser TTS fallback for Spanish chatbot voice output |
-
-### Backend
-
-| Technology | Purpose |
-|---|---|
-| Express.js | REST API server |
-| PostgreSQL (Supabase) | Relational database |
-| jsonwebtoken | JWT creation and verification |
-| bcryptjs | Password and PIN hashing |
-| multer | File upload handling |
-| nodemailer | Transactional email (verification, reset, reminders) |
-| speakeasy + qrcode | TOTP 2FA secret generation and QR code output |
-| google-auth-library | Google OAuth ID token verification |
-| pdf-parse | PDF text extraction |
-| puppeteer-core + @sparticuz/chromium | Headless browser for PDF export |
-| pdfkit | Programmatic PDF generation |
-
-### AI and External APIs
-
-| Service | Purpose |
-|---|---|
-| SambaNova (Llama-3.3-70B) | Primary ensemble AI provider |
-| Cerebras (Qwen-3-235B) | Secondary ensemble AI provider |
-| GitHub Models (GPT-4o-mini) | Consensus judge, narration scripts, translations |
-| OpenRouter | Lightweight fallback tasks |
-| Gemini Vision API | Blood report image OCR |
-| ElevenLabs | Text-to-speech for chatbot voice output and report narration |
-| OpenFDA | Drug reference data (free, 240 RPM, no key) |
-| RxNorm (NIH) | Drug interaction lookup (free) |
-| NIH ClinicalTables | ICD-10 code lookup (free) |
+| Table | Purpose |
+|-------|---------|
+| `users` | Patient / doctor / admin accounts |
+| `patient_profiles` | Health data (age, gender, conditions, allergies, medications, insurance) |
+| `blood_reports` | Reports + full AI analysis, risk scores, follow-up, translations |
+| `vitals_logs` | Daily vital sign history |
+| `medication_logs` | Medication taken timestamps |
+| `supplement_logs` | Supplement adherence streaks |
+| `medical_id` | Emergency card (blood type, organ donor, PIN-protected) |
+| `email_verification_tokens` | 24-hour email verification links |
+| `password_reset_tokens` | 24-hour password reset tokens |
+| `report_shares` | Shareable links with 7-day expiry + access tracking |
+| `agent_logs` | AI agent execution audit (steps, turns, timing) |
+| `audit_trail` | HIPAA action log (user, action, resource, IP, user-agent) |
+| `doctor_profiles` | Doctor specialization and location |
+| `doctor_patients` | Doctor–patient panel relationships |
+| `patient_doctor_access` | Fine-grained doctor record access |
+| `appointments` | Appointment requests and scheduling |
+| `prescriptions` | Doctor-issued digital prescriptions |
+| `reminders` | Scheduled follow-up email reminders |
 
 ---
 
-## 10. Project Setup
+## Authentication & Security
+
+- **JWT** stateless authentication (7-day tokens)
+- **Email verification** required on registration (24-hour link)
+- **Password reset** via time-limited email token (one-time use)
+- **Google OAuth** for passwordless / federated login
+- **TOTP 2FA** compatible with Google Authenticator and Authy
+- **Role-based access control**: `patient` · `doctor` · `admin`
+- **Rate limiting** — 4 independent layers:
+  - Auth: 20 req / 15 min / IP
+  - Email: 3 req / 60 sec / IP
+  - Agent: 10 req / 60 sec / IP
+  - Medical ID PIN: 10 attempts / 15 min / IP
+- **HIPAA audit trail** logs every sensitive action with IP and user-agent
+
+---
+
+## API Reference
+
+| Group | Base Path | Key Endpoints |
+|-------|-----------|---------------|
+| Auth | `/api/auth` | register, login, google, forgot-password, verify-email, 2fa/setup |
+| Patient | `/api/patient` | profile, vitals, vitals/insights, sessions, medical-id, badges |
+| Blood Reports | `/api/blood-report` | upload, analyze, history, /:id, risk-scores, follow-up, export-pdf |
+| Voice | `/api/voice` | speak, narrate-report, explain-finding, translate |
+| Shared | `/api/shared` | share-report, shared/:token, medical-id/:patientId |
+| Admin | `/api/admin` | stats, users, users/:id/suspend |
+| Agent Status | `/api/agent` | status/:sessionId |
+
+---
+
+## Getting Started
 
 ### Prerequisites
 
 - Node.js 18+
-- PostgreSQL database (Supabase project recommended)
-- API keys: SambaNova or Cerebras, GitHub Models, Gemini (for image OCR), ElevenLabs (for voice)
+- PostgreSQL database (or a Supabase project)
+- API keys: OpenAI (judge — required), Gemini (OCR — optional fallback), SambaNova + GitHub PAT + OpenRouter (ensemble agents — free), ElevenLabs (TTS — optional)
 
-### Environment Variables
+### 1. Clone & Install
 
-Create `medassist/server/.env`:
+```bash
+git clone https://github.com/SiddharthBhamare01/medassist-ai.git
+cd medassist-ai
 
+cd server && npm install
+cd ../client && npm install
+```
+
+### 2. Environment Variables
+
+**`server/.env`**
 ```env
 DATABASE_URL=postgresql://...
-JWT_SECRET=your_jwt_secret_here
+JWT_SECRET=your_jwt_secret
 
-# AI Providers
-SAMBANOVA_API_KEY=
-CEREBRAS_API_KEY=
-GITHUB_MODELS_API_KEY=
-OPENROUTER_API_KEY=
-GEMINI_API_KEY=
+# AI — Judge (required)
+OPENAI_API_KEY=your_openai_key
 
-# Voice
-ELEVENLABS_API_KEY=
+# AI — OCR (required)
+GEMINI_API_KEY=your_gemini_key
 
-# Optional observability
-HELICONE_API_KEY=
+# AI — Ensemble agents (free tier)
+SAMBANOVA_API_KEY=your_sambanova_key
+GITHUB_TOKEN=your_github_pat
+OPENROUTER_API_KEY=your_openrouter_key
 
-# Google OAuth
-GOOGLE_CLIENT_ID=
+# Optional
+ELEVENLABS_API_KEY=your_elevenlabs_key
 
-# Email (nodemailer)
-SMTP_HOST=
-SMTP_PORT=
-SMTP_USER=
-SMTP_PASS=
-EMAIL_FROM=
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_secret
+
+EMAIL_USER=your_gmail_address
+EMAIL_PASS=your_gmail_app_password
+
+CLIENT_URL=http://localhost:5173   # use https://medassist-phi.vercel.app/ in production
+PORT=5000
 ```
 
-### Installation
+**`client/.env`**
+```env
+VITE_API_URL=http://localhost:5000/api
+VITE_GOOGLE_CLIENT_ID=your_google_client_id
+```
+
+### 3. Database Setup
+
+Run in order in your Supabase SQL editor:
+
+```
+server/db/schema.sql
+server/db/migrations/001_recommended_tests_jsonb.sql
+server/db/migrations/002_session_status.sql
+server/db/migrations/003_all_features.sql
+server/db/migrations/004_persist_cached_llm_outputs.sql
+server/db/seed.sql        # optional demo data
+```
+
+### 4. Run Locally
 
 ```bash
-# Server dependencies
-cd medassist/server
-npm install
+# Terminal 1 — backend
+cd server && npm run dev
 
-# Client dependencies
-cd ../client
-npm install
+# Terminal 2 — frontend
+cd client && npm run dev
 ```
 
-### Database Setup
-
-```bash
-psql $DATABASE_URL -f medassist/server/db/schema.sql
-```
-
-### Live Deployment
-
-| Layer | URL |
-|---|---|
-| Frontend | https://medassist-phi.vercel.app/ (Vercel) |
-| Backend API | Render (set `VITE_API_URL` in Vercel env to point to your Render service URL) |
-
-### Running Locally
-
-```bash
-# Terminal 1 — API server (port 5000)
-cd medassist/server
-npm run dev
-
-# Terminal 2 — React client (port 5173)
-cd medassist/client
-npm run dev
-```
-
-Open `http://localhost:5173`.
+Frontend: `http://localhost:5173` · Backend: `http://localhost:5000`
 
 ---
 
-## License
+## Project Info
 
-Built for CS 595 — Medical Informatics & AI, Illinois Institute of Technology.
+| | |
+|-|-|
+| **Course** | CS 595 — Medical Informatics & AI |
+| **Institution** | Illinois Institute of Technology |
+| **Developer** | Siddharth Bhamare |
+| **Academic Year** | 2025–2026 |
