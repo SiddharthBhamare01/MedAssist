@@ -23,7 +23,23 @@ async function migrate() {
     )
   `);
 
-  console.log('[migrate] Tables ensured: supplement_logs, reminders');
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS doctor_profiles (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+      specialization VARCHAR(100),
+      hospital_name VARCHAR(255),
+      city VARCHAR(100),
+      state VARCHAR(50),
+      latitude FLOAT,
+      longitude FLOAT,
+      phone VARCHAR(30),
+      available BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  console.log('[migrate] Tables ensured: supplement_logs, reminders, doctor_profiles');
 }
 
 module.exports = migrate;

@@ -415,6 +415,8 @@ export default function Analysis() {
 
   const translateAll = async () => {
     if (!reportId || lang === 'en') return;
+    // Snapshot the key at call time — used to detect if user switched away mid-flight
+    const expectedKey = `${lang}:${reportId}:${!!riskScores}:${!!followUp}`;
     setTranslating(true);
     try {
       const texts = buildTranslationBatch();
@@ -424,6 +426,9 @@ export default function Analysis() {
       // 1. Check DB cache first — fast path (~100ms)
       const cached = await api.get(`/blood-report/${reportId}/translations?lang=${lang}`)
         .then((r) => r.data).catch(() => null);
+
+      // If user switched to English while the cache fetch was in-flight, bail out
+      if (translatedLangRef.current !== expectedKey) return;
 
       // Poisoned-cache guard: if the cached overall_assessment is identical to the
       // English source, a previous rate-limited attempt stored English text as "translations".
@@ -435,7 +440,7 @@ export default function Analysis() {
         // (e.g. risk_summary, followup_* that load after the initial translation)
         const missingKeys = Object.keys(texts).filter((k) => !(k in cached) || cached[k] === texts[k]);
         if (missingKeys.length === 0) {
-          setTranslatedData(cached);
+          if (translatedLangRef.current === expectedKey) setTranslatedData(cached);
           return;
         }
 
@@ -444,6 +449,7 @@ export default function Analysis() {
           .then((r) => r.data)
           .catch(() => ({}));
 
+        if (translatedLangRef.current !== expectedKey) return;
         const merged = { ...cached, ...newTranslated };
         setTranslatedData(merged);
 
@@ -459,6 +465,7 @@ export default function Analysis() {
         .then((r) => r.data)
         .catch(() => ({}));
 
+      if (translatedLangRef.current !== expectedKey) return;
       if (Object.keys(newTranslated).length) {
         setTranslatedData(newTranslated);
         const anyChanged = Object.entries(newTranslated).some(([k, v]) => v !== texts[k]);
