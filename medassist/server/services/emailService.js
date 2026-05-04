@@ -29,10 +29,12 @@ async function sendEmail({ to, subject, html }) {
     }
     const accessToken = tokenData.access_token;
 
+    const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`;
     const raw = Buffer.from(
       `From: MedAssist AI <${process.env.SMTP_USER}>\r\n` +
       `To: ${to}\r\n` +
-      `Subject: ${subject}\r\n` +
+      `Subject: ${encodedSubject}\r\n` +
+      `MIME-Version: 1.0\r\n` +
       `Content-Type: text/html; charset=utf-8\r\n\r\n` +
       html
     ).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
