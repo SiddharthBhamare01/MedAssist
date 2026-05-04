@@ -12,13 +12,6 @@ const nodemailer = require('nodemailer');
 async function sendEmail({ to, subject, html }) {
   // ── 1. Gmail OAuth2 (works on Render — HTTPS, not SMTP port 587) ───────────
   if (process.env.GMAIL_REFRESH_TOKEN) {
-    const { OAuth2Client } = require('google-auth-library');
-    const client = new OAuth2Client(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET
-    );
-    client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
-    const { token: accessToken } = await client.getAccessToken();
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -27,7 +20,6 @@ async function sendEmail({ to, subject, html }) {
         clientId: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
         refreshToken: process.env.GMAIL_REFRESH_TOKEN,
-        accessToken,
       },
     });
     const info = await transporter.sendMail({
