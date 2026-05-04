@@ -18,6 +18,12 @@ L.Icon.Default.mergeOptions({
 
 const FILTERS = ['All', 'Hospital', 'Clinic', 'Lab & Diagnostics', 'Pharmacy', 'Blood Bank', 'General Physician'];
 
+const RADIUS_OPTIONS = [2, 5, 10, 20, 50]; // miles
+const MILES_TO_METERS = 1609.34;
+
+// Zoom levels that keep the full search radius comfortably on screen
+const RADIUS_ZOOM = { 2: 13, 5: 12, 10: 11, 20: 10, 50: 8 };
+
 const BADGE_STYLES = {
   'Hospital':            'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
   'Clinic':              'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
@@ -32,6 +38,24 @@ const BADGE_STYLES = {
   'Healthcare Provider': 'bg-slate-100 text-slate-600 dark:bg-slate-700/40 dark:text-slate-300',
 };
 
+// SVG pin icon factory — blue for user, red for clinics
+function makeIcon(color) {
+  return L.divIcon({
+    className: '',
+    html: `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="38" viewBox="0 0 26 38">
+      <path d="M13 0C5.82 0 0 5.82 0 13c0 9.75 13 25 13 25s13-15.25 13-25C26 5.82 20.18 0 13 0z"
+            fill="${color}" stroke="white" stroke-width="1.5"/>
+      <circle cx="13" cy="13" r="5.5" fill="white"/>
+    </svg>`,
+    iconSize:    [26, 38],
+    iconAnchor:  [13, 38],
+    popupAnchor: [0, -38],
+  });
+}
+
+const userIcon  = makeIcon('#3B82F6'); // blue  — you
+const placeIcon = makeIcon('#EF4444'); // red   — clinics/hospitals/labs
+
 function haversineKm(lat1, lng1, lat2, lng2) {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -42,12 +66,17 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// Flyto helper — re-centres the map when userLoc changes
-function MapController({ center }) {
+function kmToMiles(km) { return km / 1.60934; }
+
+// Re-centres + re-zooms map when user location or radius changes
+function MapController({ center, radiusMiles }) {
   const map = useMap();
   useEffect(() => {
-    if (center) map.flyTo(center, 13, { animate: true, duration: 1 });
-  }, [center, map]);
+    if (center) {
+      const zoom = RADIUS_ZOOM[radiusMiles] ?? 11;
+      map.flyTo(center, zoom, { animate: true, duration: 1 });
+    }
+  }, [center, radiusMiles, map]);
   return null;
 }
 
@@ -65,15 +94,16 @@ function SkeletonCard() {
 }
 
 export default function NearbyClinics() {
-  const [status, setStatus]   = useState('idle');   // idle | locating | loading | done | error
-  const [errorType, setErrorType] = useState('');   // denied | circuit_open | overpass_failed | unknown
-  const [userLoc, setUserLoc] = useState(null);     // { lat, lng }
-  const [places, setPlaces]   = useState([]);
-  const [filter, setFilter]   = useState('All');
+  const [status, setStatus]       = useState('idle');
+  const [errorType, setErrorType] = useState('');
+  const [userLoc, setUserLoc]     = useState(null);
+  const [places, setPlaces]       = useState([]);
+  const [filter, setFilter]       = useState('All');
+  const [radiusMiles, setRadiusMiles] = useState(10);
 
-  const fetchClinics = (lat, lng) => {
+  const fetchClinics = (lat, lng, radiusMeters) => {
     setStatus('loading');
-    api.get(`/patient/clinics?lat=${lat}&lng=${lng}&radius=10000`)
+    api.get(`/patient/clinics?lat=${lat}&lng=${lng}&radius=${Math.round(radiusMeters)}`)
       .then(res => {
         setPlaces(res.data.places || []);
         setStatus('done');
@@ -97,14 +127,19 @@ export default function NearbyClinics() {
       pos => {
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setUserLoc(loc);
-        fetchClinics(loc.lat, loc.lng);
+        fetchClinics(loc.lat, loc.lng, radiusMiles * MILES_TO_METERS);
       },
-      () => {
-        setErrorType('denied');
-        setStatus('error');
-      },
+      () => { setErrorType('denied'); setStatus('error'); },
       { timeout: 12000 }
     );
+  };
+
+  // When radius changes and we already have a location, re-fetch immediately
+  const handleRadiusChange = (miles) => {
+    setRadiusMiles(miles);
+    if (userLoc) {
+      fetchClinics(userLoc.lat, userLoc.lng, miles * MILES_TO_METERS);
+    }
   };
 
   useEffect(() => { requestLocation(); }, []);
@@ -114,16 +149,17 @@ export default function NearbyClinics() {
     return places.filter(p => p.specialization === filter);
   }, [places, filter]);
 
-  const mapCenter = userLoc ? [userLoc.lat, userLoc.lng] : [41.8781, -87.6298]; // Chicago fallback
+  const mapCenter = userLoc ? [userLoc.lat, userLoc.lng] : [41.8781, -87.6298];
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className="max-w-5xl mx-auto space-y-5">
+
+      {/* ── Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Nearby Clinics &amp; Labs</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Healthcare providers within 10 km of your location · OpenStreetMap
+            Healthcare providers within <span className="font-medium text-teal-600">{radiusMiles} mi</span> of your location · OpenStreetMap
           </p>
         </div>
         {(status === 'done' || status === 'error') && (
@@ -139,7 +175,31 @@ export default function NearbyClinics() {
         )}
       </div>
 
-      {/* Locating state */}
+      {/* ── Radius selector ── */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">Radius:</span>
+        {RADIUS_OPTIONS.map(miles => (
+          <button
+            key={miles}
+            onClick={() => handleRadiusChange(miles)}
+            disabled={status === 'locating'}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+              radiusMiles === miles
+                ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-teal-400 disabled:opacity-40'
+            }`}
+          >
+            {miles} mi
+          </button>
+        ))}
+        {status === 'done' && (
+          <span className="text-xs text-slate-400 dark:text-slate-500 ml-1">
+            {places.length} place{places.length !== 1 ? 's' : ''} found
+          </span>
+        )}
+      </div>
+
+      {/* ── Locating spinner ── */}
       {status === 'locating' && (
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-slate-500 dark:text-slate-400">
           <div className="w-10 h-10 border-4 border-teal-200 border-t-teal-600 rounded-full animate-spin" />
@@ -147,7 +207,7 @@ export default function NearbyClinics() {
         </div>
       )}
 
-      {/* Error states */}
+      {/* ── Error states ── */}
       {status === 'error' && (
         <div className="flex flex-col items-center justify-center py-16 gap-4">
           <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
@@ -166,25 +226,19 @@ export default function NearbyClinics() {
             {errorType === 'denied' && (
               <>
                 <p className="font-semibold text-slate-700 dark:text-slate-200">Location access denied</p>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                  Allow location access in your browser settings, then click Refresh.
-                </p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Allow location access in your browser settings, then click Refresh.</p>
               </>
             )}
             {errorType === 'circuit_open' && (
               <>
                 <p className="font-semibold text-slate-700 dark:text-slate-200">Map service temporarily unavailable</p>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                  The OpenStreetMap API is cooling down. Try again in a few minutes.
-                </p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">The OpenStreetMap API is cooling down. Try again in a few minutes.</p>
               </>
             )}
             {(errorType === 'overpass_failed' || errorType === 'unknown') && (
               <>
                 <p className="font-semibold text-slate-700 dark:text-slate-200">Could not fetch nearby places</p>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                  All map mirrors failed. Check your connection and try again.
-                </p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">All map mirrors failed. Check your connection and try again.</p>
               </>
             )}
           </div>
@@ -197,11 +251,21 @@ export default function NearbyClinics() {
         </div>
       )}
 
-      {/* Map + results */}
+      {/* ── Map + results ── */}
       {(status === 'loading' || status === 'done') && (
         <>
+          {/* Legend */}
+          <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-3 rounded-full bg-blue-500" /> You
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-3 rounded-full bg-red-500" /> Healthcare provider
+            </span>
+          </div>
+
           {/* Leaflet Map */}
-          <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm" style={{ height: '360px' }}>
+          <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm" style={{ height: '380px' }}>
             <MapContainer
               center={mapCenter}
               zoom={13}
@@ -212,29 +276,41 @@ export default function NearbyClinics() {
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              <MapController center={userLoc ? [userLoc.lat, userLoc.lng] : null} />
+              <MapController center={userLoc ? [userLoc.lat, userLoc.lng] : null} radiusMiles={radiusMiles} />
 
-              {/* User location pulse */}
+              {/* User location — blue pin + "you are here" dot + dashed search-radius boundary */}
               {userLoc && (
-                <Circle
-                  center={[userLoc.lat, userLoc.lng]}
-                  radius={150}
-                  pathOptions={{ color: '#0d9488', fillColor: '#0d9488', fillOpacity: 0.25, weight: 2 }}
-                />
+                <>
+                  <Circle
+                    center={[userLoc.lat, userLoc.lng]}
+                    radius={200}
+                    pathOptions={{ color: '#3B82F6', fillColor: '#3B82F6', fillOpacity: 0.15, weight: 1.5 }}
+                  />
+                  <Circle
+                    center={[userLoc.lat, userLoc.lng]}
+                    radius={radiusMiles * MILES_TO_METERS}
+                    pathOptions={{ color: '#64748b', fillColor: 'transparent', fillOpacity: 0, weight: 1.5, dashArray: '6 4' }}
+                  />
+                  <Marker position={[userLoc.lat, userLoc.lng]} icon={userIcon}>
+                    <Popup>
+                      <div className="text-sm font-semibold text-blue-600">📍 Your Location</div>
+                    </Popup>
+                  </Marker>
+                </>
               )}
 
-              {/* Place markers */}
+              {/* Clinic / hospital / lab markers — red */}
               {filtered.map(place => (
-                <Marker key={place.id} position={[place.latitude, place.longitude]}>
+                <Marker key={place.id} position={[place.latitude, place.longitude]} icon={placeIcon}>
                   <Popup>
                     <div className="text-sm space-y-0.5 min-w-[160px]">
                       <p className="font-semibold text-slate-800">{place.name}</p>
                       {place.specialization && (
-                        <p className="text-teal-600 text-xs">{place.specialization}</p>
+                        <p className="text-red-500 text-xs">{place.specialization}</p>
                       )}
                       {userLoc && (
                         <p className="text-slate-500 text-xs">
-                          {haversineKm(userLoc.lat, userLoc.lng, place.latitude, place.longitude).toFixed(1)} km away
+                          {kmToMiles(haversineKm(userLoc.lat, userLoc.lng, place.latitude, place.longitude)).toFixed(1)} mi away
                         </p>
                       )}
                     </div>
@@ -272,14 +348,14 @@ export default function NearbyClinics() {
 
             {status === 'done' && filtered.length === 0 && (
               <div className="py-12 text-center text-slate-500 dark:text-slate-400">
-                <p className="font-medium">No results for &ldquo;{filter}&rdquo; within 10 km</p>
-                <p className="text-sm mt-1">Try selecting a different category or refresh your location.</p>
+                <p className="font-medium">No results for &ldquo;{filter}&rdquo; within {radiusMiles} mi</p>
+                <p className="text-sm mt-1">Try a larger radius or select a different category.</p>
               </div>
             )}
 
             {status === 'done' && filtered.map(place => {
-              const distKm = userLoc
-                ? haversineKm(userLoc.lat, userLoc.lng, place.latitude, place.longitude).toFixed(1)
+              const distMiles = userLoc
+                ? kmToMiles(haversineKm(userLoc.lat, userLoc.lng, place.latitude, place.longitude)).toFixed(1)
                 : null;
               const badgeClass = BADGE_STYLES[place.specialization] || BADGE_STYLES['Healthcare Provider'];
               const addressLine = [place.address, place.city, place.state].filter(Boolean).join(', ');
@@ -304,10 +380,7 @@ export default function NearbyClinics() {
                       )}
                       <div className="flex items-center gap-4 mt-2 flex-wrap">
                         {place.phone && (
-                          <a
-                            href={`tel:${place.phone}`}
-                            className="flex items-center gap-1 text-xs text-teal-600 dark:text-teal-400 hover:underline"
-                          >
+                          <a href={`tel:${place.phone}`} className="flex items-center gap-1 text-xs text-teal-600 dark:text-teal-400 hover:underline">
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 0 0 2.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 0 1-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 0 0-1.091-.852H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25Z" />
                             </svg>
@@ -315,12 +388,7 @@ export default function NearbyClinics() {
                           </a>
                         )}
                         {place.website && (
-                          <a
-                            href={place.website}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-xs text-teal-600 dark:text-teal-400 hover:underline"
-                          >
+                          <a href={place.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-teal-600 dark:text-teal-400 hover:underline">
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5a17.919 17.919 0 0 1-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418" />
                             </svg>
@@ -329,10 +397,10 @@ export default function NearbyClinics() {
                         )}
                       </div>
                     </div>
-                    {distKm && (
+                    {distMiles && (
                       <div className="shrink-0 text-right">
-                        <span className="text-lg font-bold text-teal-600 dark:text-teal-400">{distKm}</span>
-                        <span className="text-xs text-slate-500 dark:text-slate-400 ml-0.5">km</span>
+                        <span className="text-lg font-bold text-teal-600 dark:text-teal-400">{distMiles}</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 ml-0.5">mi</span>
                       </div>
                     )}
                   </div>
