@@ -4,12 +4,41 @@ const nodemailer = require('nodemailer');
  * Send an email.
  *
  * Priority:
- *  1. Brevo HTTP API  — works on Render, sends to ANY recipient, FROM = your Gmail
- *  2. Resend HTTP API — fallback (requires RESEND_TO_OVERRIDE for non-account emails)
- *  3. Gmail SMTP      — local dev only (Render blocks outbound port 587 to Gmail)
+ *  1. Gmail OAuth2    — HTTPS API, works on Render, sends to ANY recipient
+ *  2. Brevo HTTP API  — fallback HTTP API
+ *  3. Resend HTTP API — fallback (free tier restricted to account owner email)
+ *  4. Gmail SMTP      — local dev only (Render blocks outbound port 587)
  */
 async function sendEmail({ to, subject, html }) {
-  // ── 1. Brevo (recommended for Render) ──────────────────────────────────────
+  // ── 1. Gmail OAuth2 (works on Render — HTTPS, not SMTP port 587) ───────────
+  if (process.env.GMAIL_REFRESH_TOKEN) {
+    const { OAuth2Client } = require('google-auth-library');
+    const client = new OAuth2Client(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET
+    );
+    client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
+    const { token: accessToken } = await client.getAccessToken();
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        type: 'OAuth2',
+        user: process.env.SMTP_USER,
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        refreshToken: process.env.GMAIL_REFRESH_TOKEN,
+        accessToken,
+      },
+    });
+    const info = await transporter.sendMail({
+      from: `"MedAssist AI" <${process.env.SMTP_USER}>`,
+      to, subject, html,
+    });
+    console.log(`[emailService] Sent via Gmail OAuth2 to ${to}: ${info.messageId}`);
+    return info;
+  }
+
+  // ── 2. Brevo HTTP API ───────────────────────────────────────────────────────
   if (process.env.BREVO_API_KEY) {
     const senderEmail = process.env.SMTP_USER || 'siddharthbhamare01@gmail.com';
     const res = await fetch('https://api.brevo.com/v3/smtp/email', {
@@ -31,7 +60,7 @@ async function sendEmail({ to, subject, html }) {
     return data;
   }
 
-  // ── 2. Resend (with optional override for test-mode restriction) ────────────
+  // ── 3. Resend (free tier: only delivers to account owner email) ─────────────
   if (process.env.RESEND_API_KEY) {
     const actualTo = process.env.RESEND_TO_OVERRIDE || to;
     const res = await fetch('https://api.resend.com/emails', {
@@ -53,7 +82,7 @@ async function sendEmail({ to, subject, html }) {
     return data;
   }
 
-  // ── 3. Gmail SMTP (local dev only — blocked on Render) ─────────────────────
+  // ── 4. Gmail SMTP (local dev only — blocked on Render) ─────────────────────
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
