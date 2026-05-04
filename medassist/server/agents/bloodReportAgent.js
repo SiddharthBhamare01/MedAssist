@@ -87,9 +87,11 @@ When all tool calls are done, respond with exactly: TOOLS_COMPLETE`;
 const PHASE2A_SYSTEM = `You are a medical report formatter. Output ONLY valid JSON — no markdown, no extra text.
 
 Output this exact structure:
-{"summary":{"overall_assessment":"2-3 sentences","root_cause":"string","complexity":"Low|Medium|High","doctor_referral_needed":false,"referral_reason":null},"abnormal_findings":[{"parameter":"","your_value":"","normal_range":"","status":"high|low|critical_high|critical_low","interpretation":"1 sentence"}]}
+{"summary":{"overall_assessment":"2-3 sentences","root_cause":null,"complexity":"Low|Medium|High","doctor_referral_needed":false,"referral_reason":null},"abnormal_findings":[{"parameter":"","your_value":"","normal_range":"","status":"high|low|critical_high|critical_low","interpretation":"1 sentence"}]}
 
-Rules: doctor_referral_needed true if 3+ critical values. Do NOT include treatment or medication fields.`;
+Rules:
+- doctor_referral_needed true if 3+ critical values. Do NOT include treatment or medication fields.
+- root_cause: set ONLY if a single clear cause is strongly supported by the data (e.g. definite iron-deficiency pattern). If speculative or multi-factorial, set to null and include the context in overall_assessment instead.`;
 
 // Phase 2b — lifestyle sections only (diet + recovery) ~1500 tokens output
 const PHASE2B_SYSTEM = `You are a medical nutrition advisor. Output ONLY valid JSON — no markdown, no extra text.

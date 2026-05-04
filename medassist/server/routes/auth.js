@@ -8,7 +8,7 @@ const { OAuth2Client } = require('google-auth-library');
 const { findByEmail, createUser } = require('../models/User');
 const pool = require('../db/pool');
 const verifyToken = require('../middleware/auth');
-const { sendEmail } = require('../services/emailService');
+const { sendEmail, sendWelcomeEmail } = require('../services/emailService');
 
 async function sendVerificationEmail(userId, email) {
   const token = crypto.randomBytes(32).toString('hex');
@@ -429,18 +429,25 @@ router.post('/google', async (req, res) => {
       });
     }
 
-    // Create account, send verification email
+    // New Google user — email already verified by Google, log in directly
     user = await createUser({ email, passwordHash: 'OAUTH_GOOGLE', role: 'patient', fullName: name });
     await pool.query(
       'INSERT INTO patient_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING',
       [user.id]
     );
+    await pool.query('UPDATE users SET email_verified = true WHERE id = $1', [user.id]);
 
-    const { devLink } = await sendVerificationEmail(user.id, email);
+    // Welcome email — fire-and-forget
+    sendWelcomeEmail(email, name).catch(e => console.warn('[auth] Welcome email failed:', e.message));
+
+    const token = jwt.sign(
+      { userId: user.id, role: user.role, name: user.full_name },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
     return res.json({
-      requiresVerification: true,
-      email,
-      ...(devLink && { devLink }),
+      token,
+      user: { id: user.id, email: user.email, role: user.role, name: user.full_name },
     });
   } catch (err) {
     console.error('Google auth error:', err);

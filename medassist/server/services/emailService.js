@@ -158,4 +158,19 @@ async function sendFollowUpReminder(email, patientName, message) {
   });
 }
 
-module.exports = { sendEmail, sendAnalysisComplete, sendReportShared, sendFollowUpReminder };
+async function sendWelcomeEmail(email, fullName) {
+  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  return sendEmail({
+    to: email,
+    subject: 'Welcome to MedAssist AI',
+    html: `
+      <h2>Welcome to MedAssist AI, ${fullName || 'there'}!</h2>
+      <p>Your account has been created successfully via Google Sign-In.</p>
+      <p>You can now upload blood reports, get AI-powered health insights, find doctors, and track your health over time.</p>
+      <p><a href="${clientUrl}/patient/intake" style="display:inline-block;padding:12px 24px;background:#0d9488;color:#fff;border-radius:6px;text-decoration:none;">Get Started</a></p>
+      <p style="color:#666;font-size:12px;">MedAssist AI &mdash; Your AI Health Assistant</p>
+    `,
+  });
+}
+
+module.exports = { sendEmail, sendAnalysisComplete, sendReportShared, sendFollowUpReminder, sendWelcomeEmail };

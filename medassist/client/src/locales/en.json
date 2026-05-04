@@ -77,7 +77,7 @@
     "bloodReportAnalysis": "Blood Report Analysis",
     "overallSummary": "Overall Summary",
     "abnormalFindings": "Abnormal Findings",
-    "rootCause": "Root cause",
+    "rootCause": "Likely cause",
     "complexity": "Complexity",
     "parameterCol": "Parameter",
     "valueCol": "Value",
