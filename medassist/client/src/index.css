@@ -118,6 +118,10 @@ body {
 .dark [class*="bg-gradient"][class*="from-teal"] {
   --tw-gradient-from: #0f766e !important;
 }
+.dark .bg-gradient-to-br.from-emerald-50,
+.dark [class*="from-emerald-50"][class*="to-teal-50"] {
+  background-image: linear-gradient(to bottom right, #1e293b, #0f172a) !important;
+}
 
 /* Teal accent backgrounds — plain and opacity-modifier variants */
 .dark .bg-teal-50,
@@ -181,6 +185,8 @@ body {
 .dark .text-blue-600     { color: #60a5fa !important; }
 .dark .text-emerald-700  { color: #34d399 !important; }
 .dark .text-emerald-600  { color: #34d399 !important; }
+.dark .text-teal-700     { color: #2dd4bf !important; }
+.dark .text-teal-600     { color: #14b8a6 !important; }
 
 /* --- Border overrides --- */
 .dark .border-slate-100  { border-color: #334155 !important; }
