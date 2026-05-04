@@ -12,13 +12,22 @@ const nodemailer = require('nodemailer');
 async function sendEmail({ to, subject, html }) {
   // ── 1. Gmail REST API via OAuth2 (pure HTTPS port 443 — Render never blocks this)
   if (process.env.GMAIL_REFRESH_TOKEN) {
-    const { OAuth2Client } = require('google-auth-library');
-    const client = new OAuth2Client(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET
-    );
-    client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
-    const { token: accessToken } = await client.getAccessToken();
+    // Direct fetch — no google-auth-library to avoid malformed-request issues
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        refresh_token: process.env.GMAIL_REFRESH_TOKEN,
+        grant_type: 'refresh_token',
+      }).toString(),
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenRes.ok) {
+      throw new Error(`Gmail token refresh failed: ${tokenData.error} — ${tokenData.error_description}`);
+    }
+    const accessToken = tokenData.access_token;
 
     const raw = Buffer.from(
       `From: MedAssist AI <${process.env.SMTP_USER}>\r\n` +
@@ -34,7 +43,7 @@ async function sendEmail({ to, subject, html }) {
       body: JSON.stringify({ raw }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || JSON.stringify(data));
+    if (!res.ok) throw new Error(`Gmail send failed: ${data.error?.message || JSON.stringify(data)}`);
     console.log(`[emailService] Sent via Gmail API to ${to}: ${data.id}`);
     return data;
   }
