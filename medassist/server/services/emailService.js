@@ -10,24 +10,33 @@ const nodemailer = require('nodemailer');
  *  4. Gmail SMTP      — local dev only (Render blocks outbound port 587)
  */
 async function sendEmail({ to, subject, html }) {
-  // ── 1. Gmail OAuth2 (works on Render — HTTPS, not SMTP port 587) ───────────
+  // ── 1. Gmail REST API via OAuth2 (pure HTTPS port 443 — Render never blocks this)
   if (process.env.GMAIL_REFRESH_TOKEN) {
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        type: 'OAuth2',
-        user: process.env.SMTP_USER,
-        clientId: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        refreshToken: process.env.GMAIL_REFRESH_TOKEN,
-      },
+    const { OAuth2Client } = require('google-auth-library');
+    const client = new OAuth2Client(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET
+    );
+    client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
+    const { token: accessToken } = await client.getAccessToken();
+
+    const raw = Buffer.from(
+      `From: MedAssist AI <${process.env.SMTP_USER}>\r\n` +
+      `To: ${to}\r\n` +
+      `Subject: ${subject}\r\n` +
+      `Content-Type: text/html; charset=utf-8\r\n\r\n` +
+      html
+    ).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+    const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw }),
     });
-    const info = await transporter.sendMail({
-      from: `"MedAssist AI" <${process.env.SMTP_USER}>`,
-      to, subject, html,
-    });
-    console.log(`[emailService] Sent via Gmail OAuth2 to ${to}: ${info.messageId}`);
-    return info;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || JSON.stringify(data));
+    console.log(`[emailService] Sent via Gmail API to ${to}: ${data.id}`);
+    return data;
   }
 
   // ── 2. Brevo HTTP API ───────────────────────────────────────────────────────
