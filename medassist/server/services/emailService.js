@@ -1,14 +1,38 @@
 const nodemailer = require('nodemailer');
 
 /**
- * Render blocks all outbound SMTP (ports 25/465/587) at the firewall — ETIMEDOUT at CONN.
- * Resend HTTP API bypasses this entirely (just HTTPS to api.resend.com).
- * Gmail SMTP fallback is kept for local development only.
+ * Send an email.
+ *
+ * Priority:
+ *  1. Brevo HTTP API  — works on Render, sends to ANY recipient, FROM = your Gmail
+ *  2. Resend HTTP API — fallback (requires RESEND_TO_OVERRIDE for non-account emails)
+ *  3. Gmail SMTP      — local dev only (Render blocks outbound port 587 to Gmail)
  */
 async function sendEmail({ to, subject, html }) {
+  // ── 1. Brevo (recommended for Render) ──────────────────────────────────────
+  if (process.env.BREVO_API_KEY) {
+    const senderEmail = process.env.SMTP_USER || 'siddharthbhamare01@gmail.com';
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': process.env.BREVO_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: 'MedAssist AI', email: senderEmail },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || JSON.stringify(data));
+    console.log(`[emailService] Sent via Brevo to ${to}: ${data.messageId}`);
+    return data;
+  }
+
+  // ── 2. Resend (with optional override for test-mode restriction) ────────────
   if (process.env.RESEND_API_KEY) {
-    // RESEND_TO_OVERRIDE redirects all mail to a single address (required while using
-    // onboarding@resend.dev which can only deliver to the Resend account owner's email)
     const actualTo = process.env.RESEND_TO_OVERRIDE || to;
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -29,7 +53,7 @@ async function sendEmail({ to, subject, html }) {
     return data;
   }
 
-  // Local dev only — Gmail SMTP (blocked on Render)
+  // ── 3. Gmail SMTP (local dev only — blocked on Render) ─────────────────────
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
