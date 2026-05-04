@@ -7,6 +7,7 @@ const {
   upsertPatientProfile,
   getPatientSessions,
 } = require('../models/patientQueries');
+const { getNearbyDoctors } = require('../services/osmService');
 
 // GET /api/patient/profile
 router.get('/profile', verifyToken, async (req, res) => {
@@ -442,6 +443,29 @@ router.post('/sessions/:id/share', verifyToken, async (req, res) => {
   } catch (err) {
     console.error('[share] Error:', err);
     return res.status(500).json({ error: 'Failed to create share link' });
+  }
+});
+
+// GET /api/patient/clinics?lat=<lat>&lng=<lng>&radius=<radius>
+router.get('/clinics', verifyToken, async (req, res) => {
+  const lat    = parseFloat(req.query.lat);
+  const lng    = parseFloat(req.query.lng);
+  const radius = parseInt(req.query.radius) || 10000;
+
+  if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return res.status(400).json({ error: 'Invalid lat/lng' });
+  }
+
+  try {
+    const places = await getNearbyDoctors(lat, lng, radius);
+    return res.json({ places });
+  } catch (err) {
+    console.error('[/clinics]', err.message);
+    const isCircuit = err.message.includes('circuit open');
+    return res.status(503).json({
+      error: isCircuit ? 'circuit_open' : 'overpass_failed',
+      message: err.message,
+    });
   }
 });
 

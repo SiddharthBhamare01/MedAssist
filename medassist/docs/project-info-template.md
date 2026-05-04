@@ -1,7 +1,7 @@
 # CS 595 — Medical Informatics & AI  
 # Project Information Template
 
-**Project Title:** MedAssist AI — Autonomous Medical Informatics Assistant  
+**Project Title:** MedAssist AI — Turning Clinical Data into Human Understanding  
 **Team Member:** Siddharth Bhamare  
 **Course:** CS 595 — Medical Informatics & AI  
 **Submission Date:** April 2026  

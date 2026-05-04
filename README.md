@@ -1,14 +1,14 @@
-# MedAssist AI — Intelligent Medical Assistant Platform
+# MedAssist AI — Turning Clinical Data into Human Understanding
 
 <div align="center">
 
-![MedAssist AI](https://img.shields.io/badge/MedAssist-AI%20Platform-0d9488?style=for-the-badge&logo=heart&logoColor=white)
+![MedAssist AI](https://img.shields.io/badge/MedAssist-Turning%20Clinical%20Data%20into%20Human%20Understanding-0d9488?style=for-the-badge&logo=heart&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)
 ![Node.js](https://img.shields.io/badge/Node.js-Express%205-339933?style=for-the-badge&logo=node.js&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Ensemble](https://img.shields.io/badge/Ensemble-4%20LLM%20Providers-8B5CF6?style=for-the-badge&logoColor=white)
 
-**A full-stack AI-powered medical assistant that transforms blood reports into actionable health insights.**
+**Turning Clinical Data into Human Understanding — a full-stack AI platform that transforms blood reports into actionable, patient-friendly health insights.**
 
 [Live Demo](https://medassist-phi.vercel.app/) · [Backend API](https://medassist-backend-1rne.onrender.com/health) · [System Architecture](#high-level-design-hld)
 
@@ -22,7 +22,7 @@
 
 MedAssist AI is a full-stack medical informatics platform built for **CS 595 — Medical Informatics & AI** at Illinois Institute of Technology. It allows patients to upload blood reports for deep AI analysis and track their health progress over time — all powered by a **multi-provider LLM ensemble**: OpenAI GPT-4o acts as the consensus judge while SambaNova, GitHub Models, and OpenRouter serve as free-tier parallel agents. Google Gemini and OpenRouter Vision handle blood report OCR.
 
-The system features three independent AI agents, real-time agent status tracking, multi-language support (English & Spanish), HIPAA-compliant audit logging, nearby clinics & labs discovery via OpenStreetMap, and a comprehensive suite of patient tools including a vitals tracker, medical ID card, report sharing, audio narration, and PDF export.
+The system features multi-agent LLM ensemble processing, real-time agent status tracking, multi-language support (English & Spanish), HIPAA-compliant audit logging, nearby clinics & labs discovery via OpenStreetMap, and a comprehensive suite of patient tools including a vitals tracker, medical ID card, report sharing, audio narration, and PDF export.
 
 ---
 
@@ -99,6 +99,60 @@ The system features three independent AI agents, real-time agent status tracking
 
 ---
 
+## Screenshots
+
+### Authentication & Onboarding
+
+| Login with Google OAuth | Welcome Email (New Account) |
+|---|---|
+| ![Login Page](medassist/img/login_page_with_google_Auth.png) | ![Welcome Email](medassist/img/Magic_link_new_login_acknowledgement.png) |
+
+### Patient Dashboard
+
+![Dashboard](medassist/img/Dashboard.png)
+
+### Blood Report Upload
+
+![Upload Report](medassist/img/Upload_Report.png)
+
+### AI Blood Report Analysis
+
+![Analysis — Overall Summary & Abnormal Findings](medassist/img/Report%20Analysis.png)
+
+![Analysis — Risk Score & Follow-Up Care](medassist/img/Report%20Analysis_1.png)
+
+![Analysis — Diet Plan & Recovery Ingredients](medassist/img/Report%20Analysis_2.png)
+
+### Report History & Side-by-Side Comparison
+
+| My Reports & Parameter Trends | Report Comparison (Delta Badges) |
+|---|---|
+| ![My Reports](medassist/img/My_Reports.png) | ![Report Comparison](medassist/img/Report%20comparison.png) |
+
+### Vitals Tracker
+
+![Vitals Tracker](medassist/img/vitals.png)
+
+### Multi-Language Support (Spanish)
+
+![Spanish Language UI](medassist/img/Bilanguage_support_to_analysis.png)
+
+### AI Report Chatbot Assistant
+
+![Chatbot Support](medassist/img/chatbot_support.png)
+
+### Follow-Up Email Reminder
+
+![Follow-Up Reminder Email](medassist/img/Followup_reminder_mail.png)
+
+### Live Agent API Tracking & Backend Logs
+
+| Agent API Calls (Langfuse) | Backend Server Logs (Render) |
+|---|---|
+| ![Agent Live Tracking](medassist/img/Agent_live_tracking.png) | ![Backend Render Logs](medassist/img/Backend_render_logs.png) |
+
+---
+
 ## Tech Stack
 
 ### Frontend
@@ -140,7 +194,7 @@ The system features three independent AI agents, real-time agent status tracking
 | **ElevenLabs** | Text-to-speech report narration |
 | **OpenFDA** | Drug information & adverse events |
 | **RxNorm (NIH)** | Drug name normalization & interaction checking |
-| **OpenStreetMap / Overpass API** | Nearby clinics, labs & hospitals search |
+| **OpenStreetMap / Overpass API** | Nearby clinics, labs & hospitals search (10 km radius) |
 | **Google OAuth** | Federated authentication |
 
 ---
@@ -409,23 +463,18 @@ Cache hits avoid redundant API calls and improve response latency across the sys
 
 | Table | Purpose |
 |-------|---------|
-| `users` | Patient / doctor / admin accounts |
+| `users` | Patient and admin accounts |
 | `patient_profiles` | Health data (age, gender, conditions, allergies, medications, insurance) |
-| `blood_reports` | Reports + full AI analysis, risk scores, follow-up, translations |
-| `vitals_logs` | Daily vital sign history |
+| `blood_reports` | Reports + full AI analysis, risk scores, follow-up, translations cache |
+| `vitals_logs` | Daily vital sign history (BP, glucose, weight, HR, SpO₂, temperature) |
 | `medication_logs` | Medication taken timestamps |
 | `supplement_logs` | Supplement adherence streaks |
 | `medical_id` | Emergency card (blood type, organ donor, PIN-protected) |
 | `email_verification_tokens` | 24-hour email verification links |
-| `password_reset_tokens` | 24-hour password reset tokens |
+| `password_reset_tokens` | 24-hour password reset tokens (one-time use) |
 | `report_shares` | Shareable links with 7-day expiry + access tracking |
 | `agent_logs` | AI agent execution audit (steps, turns, timing) |
 | `audit_trail` | HIPAA action log (user, action, resource, IP, user-agent) |
-| `doctor_profiles` | Doctor specialization and location |
-| `doctor_patients` | Doctor–patient panel relationships |
-| `patient_doctor_access` | Fine-grained doctor record access |
-| `appointments` | Appointment requests and scheduling |
-| `prescriptions` | Doctor-issued digital prescriptions |
 | `reminders` | Scheduled follow-up email reminders |
 
 ---
@@ -437,7 +486,7 @@ Cache hits avoid redundant API calls and improve response latency across the sys
 - **Password reset** via time-limited email token (one-time use)
 - **Google OAuth** for passwordless / federated login
 - **TOTP 2FA** compatible with Google Authenticator and Authy
-- **Role-based access control**: `patient` · `doctor` · `admin`
+- **Role-based access control**: `patient` · `admin`
 - **Rate limiting** — 4 independent layers:
   - Auth: 20 req / 15 min / IP
   - Email: 3 req / 60 sec / IP

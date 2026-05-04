@@ -23,6 +23,7 @@ import UploadReport from './pages/Patient/UploadReport';
 import Analysis from './pages/Patient/Analysis';
 import PatientProfile from './pages/Patient/Profile';
 import Vitals from './pages/Patient/Vitals';
+import NearbyClinics from './pages/Patient/NearbyClinics';
 
 // Admin pages
 import AdminDashboard from './pages/Admin/AdminDashboard';
@@ -92,6 +93,7 @@ export default function App() {
           <Route path="/patient/dashboard" element={<P><PatientDashboard /></P>} />
           <Route path="/patient/history" element={<P><ReportHistory /></P>} />
           <Route path="/patient/vitals" element={<P><Vitals /></P>} />
+          <Route path="/patient/clinics" element={<P><NearbyClinics /></P>} />
           <Route path="/patient/profile" element={<P><PatientProfile /></P>} />
           <Route path="/patient/upload-report" element={<P><UploadReport /></P>} />
           <Route path="/patient/upload-report/:sessionId" element={<P><UploadReport /></P>} />
