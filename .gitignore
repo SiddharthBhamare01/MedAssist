@@ -31,6 +31,12 @@ medassist/client/dist/
 medassist/server/uploads/
 uploads/
 
+# Large media files (exceed GitHub's 100 MB limit)
+*.mp4
+*.mov
+*.avi
+*.mkv
+
 # Logs
 *.log
 npm-debug.log*
