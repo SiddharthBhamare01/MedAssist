@@ -98,20 +98,27 @@ async function sendEmail({ to, subject, html }) {
     return data;
   }
 
-  // ── 4. Gmail SMTP (local dev only — blocked on Render) ─────────────────────
+  // ── 4. Gmail SMTP (works locally; Render free tier blocks port 587) ────────
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    });
-    const info = await transporter.sendMail({
-      from: `"MedAssist AI" <${process.env.SMTP_USER}>`,
-      to, subject, html,
-    });
-    console.log(`[emailService] Sent via Gmail to ${to}: ${info.messageId}`);
-    return info;
+    try {
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: parseInt(process.env.SMTP_PORT || '587'),
+        secure: process.env.SMTP_SECURE === 'true',
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 8000,
+      });
+      const info = await transporter.sendMail({
+        from: `"MedAssist AI" <${process.env.SMTP_USER}>`,
+        to, subject, html,
+      });
+      console.log(`[emailService] Sent via Gmail SMTP to ${to}: ${info.messageId}`);
+      return info;
+    } catch (smtpErr) {
+      console.warn(`[emailService] SMTP failed (port likely blocked on Render): ${smtpErr.message}`);
+    }
   }
 
   console.log(`[emailService] No provider configured. To: ${to} | Subject: ${subject}`);
