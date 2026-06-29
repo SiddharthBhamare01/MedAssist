@@ -12,42 +12,46 @@ const nodemailer = require('nodemailer');
 async function sendEmail({ to, subject, html }) {
   // ── 1. Gmail REST API via OAuth2 (pure HTTPS port 443 — Render never blocks this)
   if (process.env.GMAIL_REFRESH_TOKEN) {
-    // Direct fetch — no google-auth-library to avoid malformed-request issues
-    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: process.env.GOOGLE_CLIENT_ID,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET,
-        refresh_token: process.env.GMAIL_REFRESH_TOKEN,
-        grant_type: 'refresh_token',
-      }).toString(),
-    });
-    const tokenData = await tokenRes.json();
-    if (!tokenRes.ok) {
-      throw new Error(`Gmail token refresh failed: ${tokenData.error} — ${tokenData.error_description}`);
+    try {
+      // Direct fetch — no google-auth-library to avoid malformed-request issues
+      const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: process.env.GOOGLE_CLIENT_ID,
+          client_secret: process.env.GOOGLE_CLIENT_SECRET,
+          refresh_token: process.env.GMAIL_REFRESH_TOKEN,
+          grant_type: 'refresh_token',
+        }).toString(),
+      });
+      const tokenData = await tokenRes.json();
+      if (!tokenRes.ok) {
+        throw new Error(`Gmail token refresh failed: ${tokenData.error} — ${tokenData.error_description}`);
+      }
+      const accessToken = tokenData.access_token;
+
+      const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`;
+      const raw = Buffer.from(
+        `From: MedAssist AI <${process.env.SMTP_USER}>\r\n` +
+        `To: ${to}\r\n` +
+        `Subject: ${encodedSubject}\r\n` +
+        `MIME-Version: 1.0\r\n` +
+        `Content-Type: text/html; charset=utf-8\r\n\r\n` +
+        html
+      ).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+      const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(`Gmail send failed: ${data.error?.message || JSON.stringify(data)}`);
+      console.log(`[emailService] Sent via Gmail API to ${to}: ${data.id}`);
+      return data;
+    } catch (gmailErr) {
+      console.warn(`[emailService] Gmail failed, trying next provider: ${gmailErr.message}`);
     }
-    const accessToken = tokenData.access_token;
-
-    const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`;
-    const raw = Buffer.from(
-      `From: MedAssist AI <${process.env.SMTP_USER}>\r\n` +
-      `To: ${to}\r\n` +
-      `Subject: ${encodedSubject}\r\n` +
-      `MIME-Version: 1.0\r\n` +
-      `Content-Type: text/html; charset=utf-8\r\n\r\n` +
-      html
-    ).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-
-    const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ raw }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(`Gmail send failed: ${data.error?.message || JSON.stringify(data)}`);
-    console.log(`[emailService] Sent via Gmail API to ${to}: ${data.id}`);
-    return data;
   }
 
   // ── 2. Brevo HTTP API ───────────────────────────────────────────────────────
