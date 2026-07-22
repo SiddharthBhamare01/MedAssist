@@ -6,10 +6,11 @@
  *   Scanned PDF → pdftoppm converts first page to JPEG → OpenRouter vision OCR
  *   JPEG/PNG   → OpenRouter vision OCR directly
  *
- * Vision models (OpenRouter free tier):
- *   1. meta-llama/llama-3.2-11b-vision-instruct:free
- *   2. qwen/qwen-2-vl-7b-instruct:free
- *   Fallback: Gemini 1.5 Flash (if GEMINI_API_KEY is set)
+ * Vision models (OpenRouter, current 2026 slugs):
+ *   1. google/gemini-3.1-flash-lite
+ *   2. google/gemini-3.5-flash
+ *   3. qwen/qwen3.7-plus
+ *   Primary (if GEMINI_API_KEY has quota): Gemini 3.5 Flash direct API
  */
 
 const fs = require('fs');
@@ -59,13 +60,12 @@ Rules:
 - If a field is missing or unclear, use "" (empty string) for that field
 - Return ONLY the JSON array, nothing else`;
 
-// OpenRouter vision models in priority order (mix of free and low-cost)
+// OpenRouter vision models in priority order (current 2026 slugs, cheapest-reliable first).
+// Older free 2024-era slugs (llama-3.2-vision, qwen2-vl) were retired and now 404.
 const OPENROUTER_VISION_MODELS = [
-  'meta-llama/llama-3.2-11b-vision-instruct:free',
-  'meta-llama/llama-3.2-90b-vision-instruct:free',
-  'qwen/qwen2-vl-7b-instruct:free',
-  'google/gemini-2.0-flash-001',
-  'google/gemini-flash-1.5',
+  'google/gemini-3.1-flash-lite',
+  'google/gemini-3.5-flash',
+  'qwen/qwen3.7-plus',
 ];
 
 function getOpenRouterClient() {
@@ -159,7 +159,7 @@ async function extractWithGeminiVision(buffer, mimeType) {
   const { GoogleGenerativeAI } = require('@google/generative-ai');
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-  const geminiModels = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+  const geminiModels = ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
   let lastGeminiErr;
 
   for (const modelName of geminiModels) {
