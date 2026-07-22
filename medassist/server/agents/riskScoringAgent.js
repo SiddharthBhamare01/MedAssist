@@ -1,5 +1,49 @@
 const { getProviders, getAvailableProviders } = require('../utils/aiClients');
 
+// Deterministic overall risk derived by rule from the anemia severity, so a
+// moderate anemia can never render as "Low". Returns null when no hemoglobin
+// was present (non-CBC report) — then the LLM composite is kept as-is.
+const SEVERITY_RISK = {
+  severe:   { score: 85, level: 'Critical', visit: 'immediate' },
+  moderate: { score: 60, level: 'High',     visit: 'visit_within_2_weeks' },
+  mild:     { score: 35, level: 'Moderate', visit: 'recommended_soon' },
+};
+function anemiaToRisk(anemia) {
+  if (!anemia || anemia.hemoglobin?.value == null) return null;
+  if (!anemia.anemia_present) return { score: 5, level: 'Low', visit: 'not_needed' };
+  if (anemia.severity && SEVERITY_RISK[anemia.severity]) return SEVERITY_RISK[anemia.severity];
+  // Anemic but severity unknown (e.g. inconclusive) — conservative High.
+  return { score: 55, level: 'High', visit: 'visit_within_2_weeks' };
+}
+
+const NO_DATA_RE = /no\s+[\w-]*\s*data|not provided|cannot assess|unavailable|no relevant/i;
+
+/**
+ * Apply the deterministic anemia risk over the LLM's breakdown: override the
+ * composite, drop no-data dimensions, and pin the Hematological tile to the rule.
+ */
+function applyDeterministicRisk(parsed, anemia) {
+  const det = anemiaToRisk(anemia);
+  if (!det) return parsed;
+
+  parsed.composite_score = det.score;
+  parsed.risk_level = det.level;
+  parsed.hospital_visit = det.visit;
+
+  let bd = Array.isArray(parsed.breakdown) ? parsed.breakdown : [];
+  bd = bd.filter((b) => !NO_DATA_RE.test(b?.note || ''));
+
+  const hemNote = anemia.anemia_present
+    ? `${anemia.severity ? anemia.severity[0].toUpperCase() + anemia.severity.slice(1) + ' ' : ''}${anemia.type_label || 'anemia'} (Hb ${anemia.hemoglobin.value} g/dL) — scored by the rule engine.`
+    : `No anemia (Hb ${anemia.hemoglobin.value} g/dL ≥ WHO cutoff ${anemia.hemoglobin.cutoff}).`;
+  const hemEntry = { area: 'Hematological', score: det.score, note: hemNote };
+  const i = bd.findIndex((b) => /hematolog/i.test(b?.area || ''));
+  if (i >= 0) bd[i] = hemEntry; else bd.unshift(hemEntry);
+
+  parsed.breakdown = bd;
+  return parsed;
+}
+
 const SYSTEM_PROMPT = `You are a clinical risk scoring calculator. Given a patient's blood report values and profile, compute a single composite health risk score.
 
 Evaluate ALL of the following clinical dimensions that are relevant to the available data:
@@ -16,7 +60,7 @@ Composite score rules:
 - Thyroid: TSH >10 mIU/L or florid antibody elevation (TPO >500 IU/mL or TgAb >200 IU/mL) = score 60–80 for that area.
 - Hematological: Hemoglobin <11 g/dL = score 50–70; <9 g/dL = score 70–90.
 - Autoimmune: ANA positive + elevated thyroid antibodies = score 50–70 for that area.
-- The composite score is the weighted average across all applicable dimensions, not just the ones with data. Missing dimensions should be scored 0 (no risk), not ignored.
+- Include in "breakdown" ONLY dimensions that have supporting data in this report. Omit any dimension with no relevant data — do not emit zero-score placeholder tiles.
 
 Then produce ONE composite score from 0–100 where:
 - 0–25: Low risk (routine checkup sufficient)
@@ -41,7 +85,7 @@ Output ONLY valid JSON with this structure:
   ]
 }
 
-Be conservative — when in doubt, score higher (safer for patient). Include ALL 7 areas in the breakdown every time, even if data is missing for some (score 0 with a note explaining missing data).`;
+Be conservative — when in doubt, score higher (safer for patient). Only include areas that have data in this report; do not pad the breakdown with empty dimensions.`;
 
 /**
  * Run the risk scoring agent (single-turn AI call).
@@ -86,7 +130,8 @@ Calculate all applicable clinical risk scores.`;
 
       try {
         const parsed = JSON.parse(jsonStr);
-        console.log(`[riskScoringAgent] Success via ${provider.name}`);
+        applyDeterministicRisk(parsed, anemia);
+        console.log(`[riskScoringAgent] Success via ${provider.name} (composite ${parsed.composite_score}/${parsed.risk_level})`);
         return parsed;
       } catch {
         console.error(`[riskScoringAgent] ${provider.name} returned non-JSON:`, content.slice(0, 200));
@@ -104,18 +149,23 @@ Calculate all applicable clinical risk scores.`;
   }
 
   console.error('[riskScoringAgent] All providers failed:', lastErr?.message);
+
+  // Even with every LLM down, the deterministic anemia risk still stands.
+  const det = anemiaToRisk(anemia);
+  if (det) {
+    const fallback = { composite_score: null, risk_level: null, hospital_visit: null, summary: '', breakdown: [] };
+    applyDeterministicRisk(fallback, anemia);
+    fallback.summary = anemia.explanation_seed || 'Anemia risk computed by the rule engine.';
+    return fallback;
+  }
+
   return {
     composite_score: null,
     risk_level: 'Unknown',
     hospital_visit: 'recommended_soon',
     summary: 'Unable to calculate risk score — please consult a doctor.',
-    breakdown: [
-      { area: 'Cardiovascular', score: null, note: 'Service temporarily unavailable' },
-      { area: 'Diabetes', score: null, note: 'Service temporarily unavailable' },
-      { area: 'Kidney', score: null, note: 'Service temporarily unavailable' },
-      { area: 'Liver', score: null, note: 'Service temporarily unavailable' },
-    ],
+    breakdown: [],
   };
 }
 
-module.exports = { runRiskScoringAgent };
+module.exports = { runRiskScoringAgent, anemiaToRisk, applyDeterministicRisk };

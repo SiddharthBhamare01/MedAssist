@@ -9,6 +9,8 @@
  * spurious "inconclusive" anemia card.
  */
 
+import { ANEMIA_VALIDATION } from '../data/anemiaValidation';
+
 const STATUS_STYLE = {
   CONFIRMED:    { badge: 'bg-emerald-100 text-emerald-800 border-emerald-200', outer: 'border-emerald-200', hdr: 'bg-emerald-50', label: 'Confirmed' },
   SUSPECTED:    { badge: 'bg-amber-100 text-amber-800 border-amber-200',       outer: 'border-amber-200',   hdr: 'bg-amber-50',   label: 'Suspected' },
@@ -117,17 +119,38 @@ export default function AnemiaCard({ anemia }) {
           </div>
         )}
 
-        {/* Sources */}
-        {Array.isArray(anemia.sources) && anemia.sources.length > 0 && (
-          <div className="pt-2 border-t border-slate-100">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Sources</p>
+        {/* Trust / validation — collapsible */}
+        <details className="pt-2 border-t border-slate-100 group">
+          <summary className="flex items-center gap-1.5 cursor-pointer list-none text-xs font-semibold text-slate-500 hover:text-slate-700 select-none">
+            <span className="transition-transform group-open:rotate-90">▸</span>
+            How reliable is this?
+          </summary>
+          <div className="mt-2 space-y-2">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-emerald-50 border border-emerald-100 rounded-lg px-2 py-1.5 text-center">
+                <p className="text-sm font-bold text-emerald-700">{ANEMIA_VALIDATION.sensitivity}%</p>
+                <p className="text-[9px] text-slate-500 uppercase tracking-wide">Sensitivity</p>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-100 rounded-lg px-2 py-1.5 text-center">
+                <p className="text-sm font-bold text-emerald-700">{ANEMIA_VALIDATION.specificity}%</p>
+                <p className="text-[9px] text-slate-500 uppercase tracking-wide">Specificity</p>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-center">
+                <p className="text-sm font-bold text-slate-700">{ANEMIA_VALIDATION.falseNegatives}</p>
+                <p className="text-[9px] text-slate-500 uppercase tracking-wide">Missed cases</p>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Validated on {ANEMIA_VALIDATION.cases} labeled synthetic CBC cases — {ANEMIA_VALIDATION.falseNegatives} false negatives.
+              Ranges and thresholds are rule-based (no AI guessing) and tied to:
+            </p>
             <ul className="text-[11px] text-slate-400 space-y-0.5">
-              {anemia.sources.map((s, i) => (
-                <li key={i}>• {s.source}</li>
+              {(anemia.sources?.map((s) => s.source) || ANEMIA_VALIDATION.sources).map((src, i) => (
+                <li key={i}>• {src}</li>
               ))}
             </ul>
           </div>
-        )}
+        </details>
       </div>
     </div>
   );
