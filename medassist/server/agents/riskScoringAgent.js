@@ -29,6 +29,7 @@ function applyDeterministicRisk(parsed, anemia) {
   parsed.composite_score = det.score;
   parsed.risk_level = det.level;
   parsed.hospital_visit = det.visit;
+  parsed.rule_based = true; // overall risk derived deterministically from anemia severity
 
   let bd = Array.isArray(parsed.breakdown) ? parsed.breakdown : [];
   bd = bd.filter((b) => !NO_DATA_RE.test(b?.note || ''));
