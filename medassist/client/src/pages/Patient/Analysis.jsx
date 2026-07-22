@@ -8,6 +8,7 @@ import AgentStatusPanel from '../../components/AgentStatus/AgentStatusPanel';
 import ShareModal from '../../components/ShareModal';
 import ReportChatbot from '../../components/ReportChatbot';
 import ParameterProgress from '../../components/ParameterProgress';
+import AnemiaCard from '../../components/AnemiaCard';
 import { playAudio, stopAudio as stopGlobalAudio } from '../../utils/audioManager';
 
 const STATUS_STYLE = {
@@ -729,6 +730,11 @@ export default function Analysis() {
       {/* Results */}
       {!loading && result && (
         <>
+          {/* Anemia Mode — deterministic CBC engine (only when a hemoglobin value was present) */}
+          {analysis?.anemia && analysis.anemia.hemoglobin?.value != null && (
+            <AnemiaCard anemia={analysis.anemia} />
+          )}
+
           {/* Row 1: Overall Summary + Abnormal Findings */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Summary — personalized */}

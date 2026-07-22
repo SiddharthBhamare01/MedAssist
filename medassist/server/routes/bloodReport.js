@@ -6,6 +6,7 @@ const upload = require('../middleware/upload');
 const { extractBloodValuesFromImage } = require('../services/geminiService');
 const { runBloodReportAgent } = require('../agents/bloodReportAgent');
 const { getPatientProfile, updateSessionStatus } = require('../models/patientQueries');
+const { recomputeStatuses, classifyAnemia } = require('../services/anemiaClassifier');
 const pool = require('../db/pool');
 
 // POST /api/blood-report/upload
@@ -22,10 +23,16 @@ router.post('/upload', verifyToken, upload.single('report'), async (req, res) =>
   const relativePath = req.file.originalname;
 
   try {
-    const extractedValues = await extractBloodValuesFromImage(filePath, mimeType);
+    let extractedValues = await extractBloodValuesFromImage(filePath, mimeType);
 
     // Delete the file immediately after OCR — Render's disk is ephemeral anyway
     fs.unlink(filePath, () => {});
+
+    // Deterministic rule layer: override CBC statuses computed by the OCR LLM
+    // with rule-based statuses (gender-aware) so the upload view and the later
+    // analysis agree. Non-CBC params keep their extracted status.
+    const profile = await getPatientProfile(patientId).catch(() => null);
+    extractedValues = recomputeStatuses(extractedValues, { gender: profile?.gender });
 
     const { rows } = await pool.query(
       `INSERT INTO blood_reports
@@ -176,9 +183,14 @@ router.post('/risk-scores', verifyToken, async (req, res) => {
 
     const { runRiskScoringAgent } = require('../agents/riskScoringAgent');
 
+    // Reuse the anemia determination from analysis if present, else compute it.
+    const anemia = report.analysis?.anemia
+      || classifyAnemia(report.extracted_values || [], patientProfile || null);
+
     runRiskScoringAgent({
       extractedValues: report.extracted_values || [],
       patientProfile: patientProfile || null,
+      anemia,
     })
       .then(async (riskScores) => {
         await pool.query(

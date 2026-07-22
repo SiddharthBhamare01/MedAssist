@@ -12,8 +12,13 @@ async function upsertPatientProfile(userId, data) {
   const {
     age, gender, weightKg, heightCm, bloodGroup,
     existingConditions, allergies, currentMedications,
-    smokingStatus, alcoholUse,
+    smokingStatus, alcoholUse, pregnant,
   } = data;
+
+  // Only meaningful for female profiles; null otherwise.
+  const pregnantVal = String(gender || '').toLowerCase().startsWith('f')
+    ? (pregnant ?? null)
+    : null;
 
   const existing = await getPatientProfile(userId);
 
@@ -22,13 +27,13 @@ async function upsertPatientProfile(userId, data) {
       `UPDATE patient_profiles SET
          age=$2, gender=$3, weight_kg=$4, height_cm=$5, blood_group=$6,
          existing_conditions=$7, allergies=$8, current_medications=$9,
-         smoking_status=$10, alcohol_use=$11, updated_at=NOW()
+         smoking_status=$10, alcohol_use=$11, pregnant=$12, updated_at=NOW()
        WHERE user_id=$1
        RETURNING *`,
       [
         userId, age, gender, weightKg, heightCm, bloodGroup,
         existingConditions, allergies, currentMedications,
-        smokingStatus, alcoholUse,
+        smokingStatus, alcoholUse, pregnantVal,
       ]
     );
     return rows[0];
@@ -37,13 +42,13 @@ async function upsertPatientProfile(userId, data) {
       `INSERT INTO patient_profiles
          (user_id, age, gender, weight_kg, height_cm, blood_group,
           existing_conditions, allergies, current_medications,
-          smoking_status, alcohol_use)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+          smoking_status, alcohol_use, pregnant)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING *`,
       [
         userId, age, gender, weightKg, heightCm, bloodGroup,
         existingConditions, allergies, currentMedications,
-        smokingStatus, alcoholUse,
+        smokingStatus, alcoholUse, pregnantVal,
       ]
     );
     return rows[0];

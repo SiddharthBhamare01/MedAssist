@@ -98,7 +98,8 @@ export default function PatientProfile() {
   const [allergies, setAllergies] = useState([]);
   const [medications, setMedications] = useState([]);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm();
+  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm();
+  const genderValue = watch('gender');
 
   useEffect(() => {
     api.get('/patient/profile')
@@ -113,6 +114,7 @@ export default function PatientProfile() {
             bloodGroup: p.bloodGroup || p.blood_group || '',
             smokingStatus: p.smokingStatus || p.smoking_status || '',
             alcoholUse: p.alcoholUse || p.alcohol_use || '',
+            pregnant: p.pregnant ?? false,
           });
           setConditions(p.existingConditions || p.existing_conditions || []);
           setAllergies(p.allergies || []);
@@ -206,6 +208,19 @@ export default function PatientProfile() {
                 </select>
                 {errors.gender && <p className="text-red-500 text-[10px] mt-1">{errors.gender.message}</p>}
               </div>
+              {genderValue === 'female' && (
+                <div className="flex items-center gap-2 self-end pb-2">
+                  <input
+                    id="pregnant"
+                    type="checkbox"
+                    {...register('pregnant')}
+                    className="w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                  />
+                  <label htmlFor="pregnant" className="text-xs font-medium text-slate-600">
+                    Currently pregnant
+                  </label>
+                </div>
+              )}
               <div>
                 <label className={labelClass}>Weight (kg)</label>
                 <input type="number" {...register('weightKg')} placeholder="72" className={inputClass} />
@@ -275,6 +290,9 @@ export default function PatientProfile() {
             <h2 className="text-sm font-bold text-slate-700 pb-3 mb-1 border-b border-slate-200">Basic Information</h2>
             <InfoRow icon="🎂" label="Age" value={profile?.age ? `${profile.age} years` : null} />
             <InfoRow icon="👤" label="Gender" value={profile?.gender ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1) : null} />
+            {profile?.gender === 'female' && (
+              <InfoRow icon="🤰" label="Pregnant" value={profile?.pregnant ? 'Yes' : 'No'} />
+            )}
             <InfoRow icon="⚖️" label="Weight" value={profile?.weightKg || profile?.weight_kg ? `${profile.weightKg || profile.weight_kg} kg` : null} />
             <InfoRow icon="📏" label="Height" value={profile?.heightCm || profile?.height_cm ? `${profile.heightCm || profile.height_cm} cm` : null} />
             <InfoRow icon="🩸" label="Blood Group" value={profile?.bloodGroup || profile?.blood_group} />
