@@ -9,6 +9,7 @@ import ShareModal from '../../components/ShareModal';
 import ReportChatbot from '../../components/ReportChatbot';
 import ParameterProgress from '../../components/ParameterProgress';
 import AnemiaCard from '../../components/AnemiaCard';
+import SymptomLogger from '../../components/SymptomLogger';
 import { playAudio, stopAudio as stopGlobalAudio } from '../../utils/audioManager';
 
 const STATUS_STYLE = {
@@ -745,6 +746,11 @@ export default function Analysis() {
           {/* Anemia Mode — deterministic CBC engine (only when a hemoglobin value was present) */}
           {analysis?.anemia && analysis.anemia.hemoglobin?.value != null && (
             <AnemiaCard anemia={analysis.anemia} />
+          )}
+
+          {/* Symptom logging — activates on a positive anemia classification */}
+          {analysis?.anemia?.anemia_present && reportId && (
+            <SymptomLogger reportId={reportId} />
           )}
 
           {/* Row 1: Overall Summary + Abnormal Findings */}

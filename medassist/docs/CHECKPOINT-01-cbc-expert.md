@@ -33,23 +33,22 @@ Persisted in `blood_reports.analysis` (JSONB — no schema change). Key fields:
 - `client/src/components/AnemiaCard.jsx` + `pages/Patient/Analysis.jsx` — Anemia Mode UI.
 
 ## Validation harness result
-`node medassist/server/tests/anemia/runClassifier.js` — 25 labeled synthetic CBC cases.
+`node medassist/server/tests/anemia/runClassifier.js` — 28 labeled synthetic CBC cases (incl. 3 pediatric).
 
 ```
 Binary confusion matrix (anemia present vs absent):
-  TP=20  FP=0  TN=5  FN=0
+  TP=22  FP=0  TN=6  FN=0
   Sensitivity (recall) : 100.0%
   Specificity          : 100.0%
   False negatives      : 0
   False positives      : 0
 
-Severity accuracy:   mild 3/3 · moderate 14/14 · severe 3/3 · (n/a 5/5)
-Morphology accuracy: microcytic 14/14 · normocytic 3/3 · macrocytic 2/2 · (n/a 6/6)
-Status accuracy:     NOT_ANEMIC 4/4 · SUSPECTED 17/17 · CONFIRMED 2/2 · INCONCLUSIVE 2/2
-
-Overall field accuracy: 125/125 (100.0%)
+Overall field accuracy: 140/140 (100.0%)
 RESULT: PASS  (0 false negatives, field accuracy 100.0%)
 ```
+
+Age adjustment is covered by pediatric fixtures (child normal / child anemic / toddler anemic),
+verifying WHO age-banded cutoffs and the age-adjusted microcytosis threshold.
 
 The harness exits non-zero on **any** false negative (the safety-critical failure) — false negatives, not bare accuracy, are the primary metric, per the professor's feedback.
 

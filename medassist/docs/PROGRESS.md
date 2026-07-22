@@ -11,12 +11,14 @@ Last updated: 2026-07-22.
 - Blood-report OCR restored — refreshed to current 2026 vision model IDs (Gemini 3.x / Qwen 3.7 via OpenRouter).
 - AI provider failover hardened — 402/404 handling, Cerebras promoted to `gpt-oss-120b`.
 
-### Stage 1 — CBC Expert Module (Month 1, "Detect") — **backend + harness complete**
+### Stage 1 — CBC Expert Module (Month 1, "Detect") — **✅ COMPLETE**
 - **Deterministic anemia engine** (`server/services/anemiaClassifier.js`): rule-based status, WHO 2024 cutoffs, WHO 2011 severity bands, MCV/MCH/RDW morphology, AGA 2020 iron-deficiency confirmation, conservative deferral. *The AI only explains; the rule engine decides.*
 - **Shared reference-range table** (`server/data/referenceRanges.js`) — single source of truth; added MCH & RDW.
 - **Deterministic status recompute** wired into upload (`routes/bloodReport.js`) — CBC statuses computed by rule, not the OCR LLM.
 - **Agent integration** — `bloodReportAgent` injects the authoritative determination into the LLM prompts and persists `analysis.anemia`; `riskScoringAgent` Hematological dimension anchored to rule-based severity.
+- **Age- & sex-adjusted ranges** — WHO 2024 pediatric/adult hemoglobin bands (infant → adolescent → adult), age-adjusted microcytosis threshold, pregnancy-aware severity scale.
 - **Pregnancy flag** — migration + profile field (drives the correct WHO cutoff/scale).
+- **Symptom logging** — patients log anemia symptoms per report over time (Anemia Mode dashboard, `anemia_symptom_logs` table + API + `SymptomLogger` UI).
 - **Frontend "Anemia Mode"** — `client/src/components/AnemiaCard.jsx` renders status/severity/morphology/confidence, Hb-vs-cutoff, recommendation, deferral banner, and source citations.
 - **Validation harness** — 25 synthetic CBCs + confusion matrix (see [CHECKPOINT-01](./CHECKPOINT-01-cbc-expert.md)). Result: 100% sensitivity/specificity, 0 false negatives.
 - **Risk score made trustworthy** — overall risk now derived by RULE from anemia severity (moderate → 60/High, never diluted to "Low"); empty organ dimensions hidden; in-app "How reliable is this?" validation panel (sensitivity/specificity + WHO/AGA sources) on the Anemia card.

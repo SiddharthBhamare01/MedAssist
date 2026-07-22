@@ -29,6 +29,10 @@ const BASIS_LABEL = {
   non_pregnant_female: 'non-pregnant female',
   pregnant_female: 'pregnant',
   unknown_gender_male_default: 'adult (male cutoff assumed)',
+  child_6_23mo: 'infant (6–23 mo)',
+  child_2_4y: 'child (2–4 y)',
+  child_5_11y: 'child (5–11 y)',
+  adolescent_12_14y: 'adolescent (12–14 y)',
 };
 
 function Chip({ children, className = 'bg-slate-50 text-slate-600 border-slate-200' }) {

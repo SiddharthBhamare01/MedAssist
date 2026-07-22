@@ -5,7 +5,8 @@
  * expected fields are the ground-truth labels the classifier must reproduce.
  * Coverage: normal (M/F/preg), severity × sex, pregnancy-shifted bands,
  * morphology, iron-studies CONFIRMED/SUSPECTED/INCONCLUSIVE, B12/folate,
- * chronic-disease, garbage-Hb, and out-of-pattern deferral. (25 cases.)
+ * chronic-disease, garbage-Hb, out-of-pattern deferral, and pediatric
+ * (age-adjusted) cases. (28 cases.)
  */
 
 // helper: build an extracted-value object
@@ -125,6 +126,20 @@ const FIXTURES = [
     values: [v('Hemoglobin', 9.0, 'g/dL')],
     profile: { gender: 'male' },
     expected: { anemia_present: true, status: 'SUSPECTED', severity: 'moderate', morphology: null, type: 'unspecified', defer_to_physician: true } },
+
+  // ── Age-adjusted (pediatric) ──────────────────────────────────────────────
+  { id: 'CHILD-normal', description: 'Child 8y, Hb 13.0 ≥ 11.5 pediatric cutoff → not anemic',
+    values: [v('Hemoglobin', 13.0, 'g/dL'), v('MCV', 82, 'fL')],
+    profile: { gender: 'male', age: 8 },
+    expected: { anemia_present: false, status: 'NOT_ANEMIC', severity: null, morphology: null, type: null } },
+  { id: 'CHILD-anemic', description: 'Child 8y, Hb 10.5 < 11.5 cutoff, MCV 74 (<77 pediatric micro) → mild microcytic',
+    values: [v('Hemoglobin', 10.5, 'g/dL'), v('MCV', 74, 'fL')],
+    profile: { gender: 'male', age: 8 },
+    expected: { anemia_present: true, status: 'SUSPECTED', severity: 'mild', morphology: 'microcytic', type: 'iron_deficiency' } },
+  { id: 'TODDLER-anemic', description: 'Toddler 3y, Hb 9.5 < 11.0 cutoff, MCV 73 (<75 micro) → moderate microcytic',
+    values: [v('Hemoglobin', 9.5, 'g/dL'), v('MCV', 73, 'fL')],
+    profile: { gender: 'female', age: 3 },
+    expected: { anemia_present: true, status: 'SUSPECTED', severity: 'moderate', morphology: 'microcytic', type: 'iron_deficiency' } },
 ];
 
 module.exports = { FIXTURES };

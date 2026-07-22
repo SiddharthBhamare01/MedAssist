@@ -689,4 +689,55 @@ router.get('/:id', verifyToken, async (req, res) => {
   }
 });
 
+// ── Anemia symptom logging ────────────────────────────────────────────────────
+
+// GET /api/blood-report/:id/symptoms — list a report's symptom logs (newest first)
+router.get('/:id/symptoms', verifyToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT sl.id, sl.symptoms, sl.note, sl.logged_at
+         FROM anemia_symptom_logs sl
+         JOIN blood_reports br ON br.id = sl.report_id
+        WHERE sl.report_id = $1 AND br.patient_id = $2
+        ORDER BY sl.logged_at DESC
+        LIMIT 30`,
+      [req.params.id, req.user.userId]
+    );
+    return res.json({ logs: rows });
+  } catch (err) {
+    console.error('[bloodReport] Fetch symptom logs error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch symptom logs' });
+  }
+});
+
+// POST /api/blood-report/:id/symptoms — log today's symptoms (upsert per day)
+router.post('/:id/symptoms', verifyToken, async (req, res) => {
+  const reportId = req.params.id;
+  const { symptoms, note } = req.body;
+  if (!Array.isArray(symptoms)) {
+    return res.status(400).json({ error: 'symptoms must be an array' });
+  }
+  try {
+    // Ownership check
+    const owns = await pool.query(
+      'SELECT 1 FROM blood_reports WHERE id = $1 AND patient_id = $2',
+      [reportId, req.user.userId]
+    );
+    if (!owns.rows.length) return res.status(404).json({ error: 'Report not found' });
+
+    const { rows } = await pool.query(
+      `INSERT INTO anemia_symptom_logs (patient_id, report_id, symptoms, note, logged_at)
+       VALUES ($1, $2, $3, $4, CURRENT_DATE)
+       ON CONFLICT (patient_id, report_id, logged_at)
+       DO UPDATE SET symptoms = EXCLUDED.symptoms, note = EXCLUDED.note
+       RETURNING id, symptoms, note, logged_at`,
+      [req.user.userId, reportId, JSON.stringify(symptoms), note || null]
+    );
+    return res.json({ log: rows[0] });
+  } catch (err) {
+    console.error('[bloodReport] Save symptom log error:', err.message);
+    return res.status(500).json({ error: 'Failed to save symptom log' });
+  }
+});
+
 module.exports = router;

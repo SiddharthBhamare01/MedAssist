@@ -45,7 +45,21 @@ async function migrate() {
       ADD COLUMN IF NOT EXISTS pregnant BOOLEAN DEFAULT NULL
   `);
 
-  console.log('[migrate] Tables ensured: supplement_logs, reminders, doctor_profiles; patient_profiles.pregnant');
+  // Migration 006 — anemia symptom logging (CBC Expert Module, Sprint 2)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS anemia_symptom_logs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      patient_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      report_id UUID REFERENCES blood_reports(id) ON DELETE CASCADE,
+      symptoms JSONB NOT NULL DEFAULT '[]'::jsonb,
+      note TEXT,
+      logged_at DATE NOT NULL DEFAULT CURRENT_DATE,
+      created_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(patient_id, report_id, logged_at)
+    )
+  `);
+
+  console.log('[migrate] Tables ensured: supplement_logs, reminders, doctor_profiles, anemia_symptom_logs; patient_profiles.pregnant');
 }
 
 module.exports = migrate;

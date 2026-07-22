@@ -129,8 +129,26 @@ function recomputeStatuses(values, { gender } = {}) {
 
 function isFemale(gender) { return String(gender || '').toLowerCase().startsWith('f'); }
 
-/** Resolve WHO 2024 anemia cutoff + a label describing the basis. */
-function resolveCutoff({ gender, pregnant }) {
+/** Coerce a profile age to a finite number of years, or null (guards Number(null)===0). */
+function toAge(x) {
+  if (x == null || x === '') return null;
+  const n = Number(x);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/**
+ * Resolve the WHO 2024 anemia cutoff, age- and sex-adjusted, plus a basis label.
+ * Age bands (WHO 2024 haemoglobin cutoffs): 6–23mo <10.5, 2–4y <11.0,
+ * 5–11y <11.5, 12–14y <12.0; then adult sex/pregnancy cutoffs.
+ */
+function resolveCutoff({ gender, pregnant, age }) {
+  const a = toAge(age);
+  if (a != null && a < 15) {
+    if (a < 2)  return { cutoff: 10.5, basis: 'child_6_23mo' };
+    if (a < 5)  return { cutoff: 11.0, basis: 'child_2_4y' };
+    if (a < 12) return { cutoff: 11.5, basis: 'child_5_11y' };
+    return { cutoff: 12.0, basis: 'adolescent_12_14y' };
+  }
   if (isFemale(gender)) {
     if (pregnant === true) return { cutoff: 11.0, basis: 'pregnant_female' };
     // pregnant null/unknown → non-pregnant (more sensitive = conservative)
@@ -140,16 +158,28 @@ function resolveCutoff({ gender, pregnant }) {
   return { cutoff: 13.0, basis: gender ? 'male' : 'unknown_gender_male_default' };
 }
 
-/** WHO 2011 VMNIS severity band for a given Hb + pregnancy. */
-function severityBand(hb, pregnant) {
-  if (pregnant === true) {
+/**
+ * WHO 2011 VMNIS severity band. `lowerScale` (pregnant or child <15y) uses the
+ * ~1 g/dL-lower scale (severe <7, moderate 7–9.9, mild 10–cutoff).
+ */
+function severityBand(hb, lowerScale) {
+  if (lowerScale) {
     if (hb < 7.0) return 'severe';
     if (hb < 10.0) return 'moderate';
-    return 'mild'; // 10.0–10.9 (caller guarantees hb < cutoff 11.0)
+    return 'mild';
   }
   if (hb < 8.0) return 'severe';
   if (hb < 11.0) return 'moderate';
   return 'mild'; // 11.0 – cutoff
+}
+
+/** Age-adjusted upper bound for microcytosis (children have lower normal MCV). */
+function microcyticThreshold(age) {
+  const a = toAge(age);
+  if (a == null || a >= 12) return 80;
+  if (a < 2) return 72;
+  if (a < 6) return 75;
+  return 77; // 6–11y
 }
 
 const TYPE_LABELS = {
@@ -169,7 +199,9 @@ const TYPE_LABELS = {
 function classifyAnemia(extractedValues, patientProfile) {
   const gender = patientProfile?.gender ?? null;
   const pregnant = patientProfile?.pregnant ?? null;
-  const { cutoff, basis } = resolveCutoff({ gender, pregnant });
+  const age = toAge(patientProfile?.age);
+  const { cutoff, basis } = resolveCutoff({ gender, pregnant, age });
+  const lowerScale = pregnant === true || (age != null && age < 15);
 
   const hb = readNumeric(extractedValues, 'hemoglobin');
   const mcv = readNumeric(extractedValues, 'mcv');
@@ -222,11 +254,12 @@ function classifyAnemia(extractedValues, patientProfile) {
     };
   }
 
-  // 3. Anemic — severity + morphology.
-  const severity = severityBand(hb.value, pregnant === true);
+  // 3. Anemic — severity + (age-adjusted) morphology.
+  const severity = severityBand(hb.value, lowerScale);
+  const microMax = microcyticThreshold(age);
   let morphology = null;
   if (mcv.value != null) {
-    if (mcv.value < 80) morphology = 'microcytic';
+    if (mcv.value < microMax) morphology = 'microcytic';
     else if (mcv.value > 100) morphology = 'macrocytic';
     else morphology = 'normocytic';
   }
