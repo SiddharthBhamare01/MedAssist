@@ -25,7 +25,7 @@ router.put('/profile', verifyToken, async (req, res) => {
   const {
     age, gender, weightKg, heightCm, bloodGroup,
     existingConditions, allergies, currentMedications,
-    smokingStatus, alcoholUse,
+    smokingStatus, alcoholUse, pregnant,
   } = req.body;
 
   if (!age || !gender) {
@@ -44,6 +44,7 @@ router.put('/profile', verifyToken, async (req, res) => {
       currentMedications: currentMedications || [],
       smokingStatus: smokingStatus || null,
       alcoholUse: alcoholUse || null,
+      pregnant: typeof pregnant === 'boolean' ? pregnant : null,
     });
     res.json({ profile });
   } catch (err) {

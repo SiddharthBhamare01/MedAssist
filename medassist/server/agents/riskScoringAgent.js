@@ -50,15 +50,19 @@ Be conservative — when in doubt, score higher (safer for patient). Include ALL
  * @param {Object|null} params.patientProfile - patient profile data
  * @returns {Object} risk scores JSON
  */
-async function runRiskScoringAgent({ extractedValues, patientProfile }) {
+async function runRiskScoringAgent({ extractedValues, patientProfile, anemia }) {
   const providers = getProviders();
   const available = getAvailableProviders();
+
+  const anemiaAnchor = anemia && anemia.anemia_present
+    ? `\nAUTHORITATIVE anemia severity from the rule engine: ${anemia.severity} (${anemia.type_label || anemia.type}). Anchor the Hematological dimension to it — mild≈30-45, moderate≈50-70, severe≈75-90 — do not deviate from this band.`
+    : '';
 
   const userMessage = `Patient Profile:
 ${patientProfile ? JSON.stringify(patientProfile, null, 2) : 'No profile available'}
 
 Blood Report Values:
-${JSON.stringify(extractedValues, null, 2)}
+${JSON.stringify(extractedValues, null, 2)}${anemiaAnchor}
 
 Calculate all applicable clinical risk scores.`;
 

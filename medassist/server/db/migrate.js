@@ -39,7 +39,13 @@ async function migrate() {
     )
   `);
 
-  console.log('[migrate] Tables ensured: supplement_logs, reminders, doctor_profiles');
+  // Migration 005 — pregnancy flag for anemia cutoff selection (WHO 2024)
+  await pool.query(`
+    ALTER TABLE patient_profiles
+      ADD COLUMN IF NOT EXISTS pregnant BOOLEAN DEFAULT NULL
+  `);
+
+  console.log('[migrate] Tables ensured: supplement_logs, reminders, doctor_profiles; patient_profiles.pregnant');
 }
 
 module.exports = migrate;

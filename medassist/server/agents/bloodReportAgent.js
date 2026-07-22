@@ -2,6 +2,7 @@ const { runAgent, MAX_TURNS } = require('./agentRunner');
 const { runEnsembleWithConsensus } = require('./ensembleRunner');
 
 const { definitions: allDefinitions, handlers } = require('./tools/medicalTools');
+const { classifyAnemia, statusByRule, canonicalKey } = require('../services/anemiaClassifier');
 const pool = require('../db/pool');
 const { getEmitter } = require('../utils/eventEmitter');
 
@@ -91,7 +92,8 @@ Output this exact structure:
 
 Rules:
 - doctor_referral_needed true if 3+ critical values. Do NOT include treatment or medication fields.
-- root_cause: set ONLY if a single clear cause is strongly supported by the data (e.g. definite iron-deficiency pattern). If speculative or multi-factorial, set to null and include the context in overall_assessment instead.`;
+- root_cause: set ONLY if a single clear cause is strongly supported by the data (e.g. definite iron-deficiency pattern). If speculative or multi-factorial, set to null and include the context in overall_assessment instead.
+- An AUTHORITATIVE ANEMIA DETERMINATION may be provided in the context. Treat it as fixed clinical truth: never contradict or re-derive its anemia status/type/severity — only explain it in plain language.`;
 
 // Phase 2b — lifestyle sections only (diet + recovery) ~1500 tokens output
 const PHASE2B_SYSTEM = `You are a medical nutrition advisor. Output ONLY valid JSON — no markdown, no extra text.
@@ -99,13 +101,17 @@ const PHASE2B_SYSTEM = `You are a medical nutrition advisor. Output ONLY valid J
 Output this exact structure:
 {"diet_plan":{"overview":"1 sentence","foods_to_eat":[{"food":"","reason":"","frequency":""}],"foods_to_avoid":[{"food":"","reason":""}],"meal_schedule":[{"meal":"Breakfast","suggestion":""},{"meal":"Lunch","suggestion":""},{"meal":"Dinner","suggestion":""},{"meal":"Snacks","suggestion":""}]},"recovery_ingredients":[{"ingredient":"","benefit":"","how_to_use":"","targets":[""]}]}
 
-Rules: min 4 foods_to_eat, 3 foods_to_avoid, all 4 meal_schedule entries, min 3 recovery_ingredients. Target the specific abnormal parameters listed.`;
+Rules: min 4 foods_to_eat, 3 foods_to_avoid, all 4 meal_schedule entries, min 3 recovery_ingredients. Target the specific abnormal parameters listed. If an AUTHORITATIVE ANEMIA DETERMINATION is provided in the context, build the diet/recovery around it (e.g. iron-rich foods for an iron-deficiency pattern) but never restate or change its clinical status.`;
 
 /**
  * Run the Blood Report Agent (multi-phase: tool calls → medical → lifestyle → treatment).
  */
 async function runBloodReportAgent({ reportId, extractedValues, patientProfile }) {
   const emitter = getEmitter(reportId);
+
+  // Deterministic anemia determination — the rule engine decides, the LLM only explains.
+  const anemia = classifyAnemia(extractedValues, patientProfile);
+  anemia.computed_at = new Date().toISOString();
 
   const abnormal = extractedValues.filter((v) => v.status && v.status !== 'normal');
   const abnormalText = abnormal.length > 0
@@ -152,9 +158,15 @@ Call the tools now to gather reference ranges and drug data.`;
     `${s.tool}(${JSON.stringify(s.args).slice(0, 80)}): ${JSON.stringify(s.result).slice(0, 200)}`
   ).join('\n');
 
+  const anemiaBlock = anemia.anemia_present || anemia.status === 'INCONCLUSIVE'
+    ? `\nAUTHORITATIVE ANEMIA DETERMINATION (computed by a validated rule engine — do NOT change it, only explain it):
+Status: ${anemia.status} | Severity: ${anemia.severity || 'n/a'} | Morphology: ${anemia.morphology || 'n/a'} | ${anemia.type_label || ''}
+Basis: ${anemia.explanation_seed}${anemia.defer_to_physician ? `\nDefer to physician: ${anemia.deferral_reason}` : ''}`
+    : '';
+
   const sharedContext = `Patient: ${profileText}
 Abnormal results: ${abnormalText}
-Tool data: ${toolSummary || 'none'}`;
+Tool data: ${toolSummary || 'none'}${anemiaBlock}`;
 
   emitter.emit('step', {
     tool: '_ensemble',
@@ -204,7 +216,23 @@ Tool data: ${toolSummary || 'none'}`;
     console.error('[bloodReportAgent] Phase 2b ensemble failed:', err.message);
   }
 
-  console.log(`[bloodReportAgent] Final — diet:${!!lifestyle?.diet_plan} recovery:${lifestyle?.recovery_ingredients?.length ?? 0}`);
+  // Rule engine wins: override any CBC abnormal-finding status the LLM assigned
+  // with the deterministic status already computed on extractedValues.
+  if (Array.isArray(medical?.abnormal_findings)) {
+    const gender = patientProfile?.gender;
+    for (const f of medical.abnormal_findings) {
+      const key = canonicalKey(f.parameter);
+      if (!key) continue;
+      const src = extractedValues.find(
+        (v) => (canonicalKey(v.parameter) || canonicalKey(v.abbreviation)) === key
+      );
+      const num = src ? parseFloat(String(src.value).replace(/,/g, '')) : NaN;
+      const ruleStatus = Number.isFinite(num) ? statusByRule(key, num, { gender }) : null;
+      if (ruleStatus) f.status = ruleStatus;
+    }
+  }
+
+  console.log(`[bloodReportAgent] Final — anemia:${anemia.status} diet:${!!lifestyle?.diet_plan} recovery:${lifestyle?.recovery_ingredients?.length ?? 0}`);
 
   // ── Merge results with fallbacks ─────────────────────────────────────────
   const doctorReferralNeeded = medical?.summary?.doctor_referral_needed || false;
@@ -225,6 +253,7 @@ Tool data: ${toolSummary || 'none'}`;
     })),
     diet_plan: lifestyle?.diet_plan || null,
     recovery_ingredients: lifestyle?.recovery_ingredients || [],
+    anemia,
   };
 
   // Save to DB
