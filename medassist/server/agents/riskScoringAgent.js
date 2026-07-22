@@ -90,7 +90,7 @@ Calculate all applicable clinical risk scores.`;
         continue;
       }
     } catch (err) {
-      if (err.status === 429 || err.status === 503 || err.status === 400 || err.status === 402) {
+      if (err.status === 429 || err.status === 503 || err.status === 400 || err.status === 402 || err.status === 404) {
         console.warn(`[riskScoringAgent] ${provider.name} unavailable (${err.status}), trying next`);
         lastErr = err;
         continue;

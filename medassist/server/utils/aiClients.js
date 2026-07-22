@@ -55,11 +55,13 @@ function getProviders() {
       client: makeClient(process.env.OPENAI_API_KEY, 'https://api.openai.com/v1'),
       model: 'gpt-4o',
     },
-    // Cerebras Qwen 235B — last-resort fallback, free but RPM-limited
+    // Cerebras GPT-OSS 120B — fast free inference, RPM-limited.
+    // (Old qwen-3-235b-a22b-instruct-2507 was retired → 404; gpt-oss-120b is the
+    //  current production model, free-trial + PAYG, supports tool calling.)
     cerebras: {
-      name: 'Cerebras Qwen-235B',
+      name: 'Cerebras GPT-OSS-120B',
       client: cerebrasClient,
-      model: 'qwen-3-235b-a22b-instruct-2507',
+      model: 'gpt-oss-120b',
     },
     // SambaNova — free, OpenAI-compatible, no monthly cap
     sambanova: {

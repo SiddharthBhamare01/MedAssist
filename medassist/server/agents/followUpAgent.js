@@ -69,7 +69,7 @@ Generate a follow-up testing schedule.`;
         continue;
       }
     } catch (err) {
-      if (err.status === 429 || err.status === 503 || err.status === 400 || err.status === 402) {
+      if (err.status === 429 || err.status === 503 || err.status === 400 || err.status === 402 || err.status === 404) {
         console.warn(`[followUpAgent] ${provider.name} unavailable (${err.status}), trying next`);
         lastErr = err;
         continue;
