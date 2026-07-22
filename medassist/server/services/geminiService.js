@@ -270,7 +270,8 @@ async function parseTextWithAI(rawText) {
       console.log(`[geminiService] Text PDF parsed by ${provider.name}`);
       return parsed;
     } catch (err) {
-      if (err.status === 429 || err.status === 503 || err.status === 400) { lastErr = err; continue; }
+      // 402 = free tier/credits exhausted, 404 = model retired — fail over to next provider
+      if ([429, 503, 400, 402, 404].includes(err.status)) { lastErr = err; continue; }
       throw err;
     }
   }
