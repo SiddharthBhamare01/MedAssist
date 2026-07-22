@@ -30,6 +30,8 @@ Last updated: 2026-07-22.
 - **Live integration test** — upload real anemic CBCs end-to-end on the deployed app; confirm `analysis.anemia` renders and risk score is anchored.
 - **Spanish parity** — add AnemiaCard strings to the translation batch.
 
-## ⏭ Next stages (not started)
-- **Month 2 — Confirm & Track**: iron-studies confirmation UI, recovery trajectory (Hb ≈1 g/dL/week forecast, non-responder flag).
-- **Month 3 — Prove & Position**: expand validation set, clinician-review workflow, positioning brief.
+## ⏭ Next stages (roadmap in [CHECKPOINT-02](./CHECKPOINT-02-roadmap.md))
+- **Phase 2 — Confirm & Track**: Hb recovery-trajectory chart, deterministic recovery forecast + non-responder flag, unified journey timeline page, optional reminders/nudges.
+- **Phase 3 — Prove & Position**: expand validation set + in-app methodology dashboard, clinician-review workflow, positioning brief, demo polish.
+
+> **Resume point:** see [CHECKPOINT-02-roadmap.md](./CHECKPOINT-02-roadmap.md) for the full Phase 1 recap + Phase 2/3 build order.
