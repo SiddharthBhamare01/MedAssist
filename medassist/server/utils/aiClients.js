@@ -117,17 +117,18 @@ function getProviders() {
   return _providers;
 }
 
-// Ensemble agents — free models run in parallel (OpenAI excluded: it's the dedicated judge)
-const PRIORITY_ORDER = ['sambanova', 'github', 'openrouter', 'cerebras'];
+// Ensemble agents — free models run in parallel (OpenAI excluded: it's the dedicated judge).
+// Cerebras first: fastest free inference, no monthly cap. SambaNova demoted (free tier now 402s).
+const PRIORITY_ORDER = ['cerebras', 'sambanova', 'github', 'openrouter'];
 
-// Tool-calling — OpenAI first (paid, most reliable function calling), then free fallbacks
-const TOOL_PROVIDERS_ORDER = ['openai', 'sambanova', 'github', 'cerebras'];
+// Tool-calling — OpenAI first (paid, most reliable function calling), then Cerebras, then free fallbacks
+const TOOL_PROVIDERS_ORDER = ['openai', 'cerebras', 'sambanova', 'github'];
 
 // Judge — OpenAI gpt-4o first (paid, independent from ensemble agents → best accuracy)
 const JUDGE_PRIORITY_ORDER = ['openai', 'sambanova', 'github'];
 
 // Voice/lightweight order — GitHub gpt-4o-mini first (generous rate limits, fast JSON extraction)
-const VOICE_PRIORITY_ORDER = ['github', 'sambanova', 'openrouter', 'cerebras'];
+const VOICE_PRIORITY_ORDER = ['github', 'cerebras', 'sambanova', 'openrouter'];
 
 // Providers to exclude (set via EXCLUDED_AI_PROVIDERS env var, comma-separated)
 const EXCLUDED_PROVIDERS = new Set(

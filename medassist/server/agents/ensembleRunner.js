@@ -51,8 +51,8 @@ async function callProvider(provider, systemPrompt, userMessage, maxTokens = 200
       }
       return text.trim();
     } catch (err) {
-      // 429 = overloaded, 503 = service down, 404 = model unavailable, 400 = provider error — try next model
-      if (err.status === 429 || err.status === 503 || err.status === 404 || err.status === 400) {
+      // 429 = overloaded, 503 = down, 404 = model gone, 400 = provider error, 402 = free tier/credits exhausted — try next model
+      if (err.status === 429 || err.status === 503 || err.status === 404 || err.status === 400 || err.status === 402) {
         lastErr = err;
         continue;
       }
@@ -141,7 +141,8 @@ async function runParallel(systemPrompt, userMessage, maxTokens = 2000) {
         const output = await callProvider(provider, systemPrompt, userMessage, maxTokens);
         return { provider: name, providerName: provider.name, output };
       } catch (err) {
-        if (err.status === 429) markProviderLimited(name);
+        // 429 = rate cap, 402 = free tier/credits exhausted — bench the provider so we stop hammering it
+        if (err.status === 429 || err.status === 402) markProviderLimited(name);
         throw err;
       }
     })
@@ -189,8 +190,8 @@ ${agentOutputs.map((a, i) => `=== Agent ${i + 1} (${a.providerName}) ===\n${a.ou
       const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
       return clean;
     } catch (err) {
-      if (err.status === 429 || err.status === 503) {
-        if (err.status === 429) markProviderLimited(name);
+      if (err.status === 429 || err.status === 503 || err.status === 402) {
+        if (err.status === 429 || err.status === 402) markProviderLimited(name);
         lastErr = err;
         continue;
       }

@@ -69,8 +69,8 @@ Generate a follow-up testing schedule.`;
         continue;
       }
     } catch (err) {
-      if (err.status === 429 || err.status === 503 || err.status === 400) {
-        console.warn(`[followUpAgent] ${provider.name} rate-limited (${err.status}), trying next`);
+      if (err.status === 429 || err.status === 503 || err.status === 400 || err.status === 402) {
+        console.warn(`[followUpAgent] ${provider.name} unavailable (${err.status}), trying next`);
         lastErr = err;
         continue;
       }
