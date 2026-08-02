@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS blood_reports (
   tablet_recommendations JSONB,
   complexity_flag BOOLEAN DEFAULT FALSE,
   translations JSONB DEFAULT '{}'::jsonb,
+  -- Cached per-finding plain-English explanations: { "<lang>": { "<parameter>": "<text>" } }
+  finding_explanations JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMP DEFAULT NOW()
 );
 

@@ -59,7 +59,14 @@ async function migrate() {
     )
   `);
 
-  console.log('[migrate] Tables ensured: supplement_logs, reminders, doctor_profiles, anemia_symptom_logs; patient_profiles.pregnant');
+  // Migration 007 — cached per-finding plain-English explanations
+  // Shape: { "<lang>": { "<parameter>": "<text>" } }
+  await pool.query(`
+    ALTER TABLE blood_reports
+      ADD COLUMN IF NOT EXISTS finding_explanations JSONB DEFAULT '{}'::jsonb
+  `);
+
+  console.log('[migrate] Tables ensured: supplement_logs, reminders, doctor_profiles, anemia_symptom_logs; patient_profiles.pregnant; blood_reports.finding_explanations');
 }
 
 module.exports = migrate;

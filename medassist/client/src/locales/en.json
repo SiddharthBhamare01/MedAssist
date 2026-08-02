@@ -90,6 +90,8 @@
     "plainEnglish": "Plain English Explanation",
     "gettingExplanation": "Getting explanation...",
     "aiDisclaimer": "AI-generated — always consult your doctor for medical advice.",
+    "explainFailed": "Couldn't load the explanation right now.",
+    "retry": "Try again",
     "agentRunning": "Blood Report Agent is running...",
     "agentChecking": "Checking reference ranges, searching FDA drug database, verifying interactions",
     "calculatingRisk": "Calculating Clinical Risk Score…",

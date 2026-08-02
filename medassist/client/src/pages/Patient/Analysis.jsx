@@ -77,7 +77,10 @@ export default function Analysis() {
   const [isNarrating, setIsNarrating] = useState(false);
   const [isLoadingNarration, setIsLoadingNarration] = useState(false);
 
-  const [explainModal, setExplainModal] = useState({ open: false, loading: false, text: '', parameter: '' });
+  const [explainModal, setExplainModal] = useState({ open: false, loading: false, text: '', parameter: '', error: false });
+  const explainReqIdRef = useRef(0);            // discards responses from superseded clicks
+  const explainCacheRef = useRef(new Map());    // session memo: `${reportId}|${parameter}|${lang}` → text
+  const lastFindingRef = useRef(null);          // so the retry button can re-run the last request
   const [translatedData, setTranslatedData] = useState(null);
   const [translating, setTranslating] = useState(false);
   const translatedLangRef = useRef('');
@@ -354,20 +357,38 @@ export default function Analysis() {
     }
   };
 
-  const handleExplainFinding = async (finding) => {
-    setExplainModal({ open: true, loading: true, text: '', parameter: finding.parameter });
+  const handleExplainFinding = async (finding, { force = false } = {}) => {
+    if (!finding) return;
+    lastFindingRef.current = finding;
+
+    // Key on the raw English parameter — the table may render a translated label,
+    // but the cache must stay keyed on the untranslated name (lang is separate).
+    const key = `${reportId}|${finding.parameter}|${lang}`;
+    const memo = explainCacheRef.current.get(key);
+    if (memo && !force) {
+      setExplainModal({ open: true, loading: false, text: memo, parameter: finding.parameter, error: false });
+      return;
+    }
+
+    const reqId = ++explainReqIdRef.current;
+    setExplainModal({ open: true, loading: true, text: '', parameter: finding.parameter, error: false });
     try {
-      const { data } = await api.post('/voice/explain-finding', {
+      const { data } = await api.post(`/voice/explain-finding${force ? '?force=true' : ''}`, {
+        reportId,
         parameter: finding.parameter,
+        lang,
+        // Fallback values — the server ignores these whenever reportId resolves.
         your_value: finding.your_value,
         normal_range: finding.normal_range,
         status: finding.status,
         interpretation: finding.interpretation,
-        lang,
       });
-      setExplainModal((m) => ({ ...m, loading: false, text: data.explanation }));
+      if (reqId !== explainReqIdRef.current) return;   // a newer row was clicked
+      explainCacheRef.current.set(key, data.explanation);
+      setExplainModal((m) => ({ ...m, loading: false, text: data.explanation, error: false }));
     } catch {
-      setExplainModal((m) => ({ ...m, loading: false, text: t('analysis.aiDisclaimer') }));
+      if (reqId !== explainReqIdRef.current) return;
+      setExplainModal((m) => ({ ...m, loading: false, text: '', error: true }));
     }
   };
 
@@ -650,19 +671,19 @@ export default function Analysis() {
       {explainModal.open && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-          onClick={() => setExplainModal({ open: false, loading: false, text: '', parameter: '' })}
+          onClick={() => setExplainModal({ open: false, loading: false, text: '', parameter: '', error: false })}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4 animate-slide-up"
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[85vh] flex flex-col p-6 gap-4 animate-slide-up"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start justify-between gap-3 shrink-0">
               <div>
                 <h3 className="font-bold text-slate-800">{explainModal.parameter}</h3>
                 <p className="text-xs text-teal-600 mt-0.5">{t('analysis.plainEnglish')}</p>
               </div>
               <button
-                onClick={() => setExplainModal({ open: false, loading: false, text: '', parameter: '' })}
+                onClick={() => setExplainModal({ open: false, loading: false, text: '', parameter: '', error: false })}
                 className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 shrink-0"
               >
                 ✕
@@ -674,11 +695,23 @@ export default function Analysis() {
                 <div className="w-5 h-5 border-2 border-teal-400 border-t-transparent rounded-full animate-spin shrink-0" />
                 <p className="text-sm text-slate-500">{t('analysis.gettingExplanation')}</p>
               </div>
+            ) : explainModal.error ? (
+              <div className="space-y-3">
+                <p className="text-sm text-slate-600">{t('analysis.explainFailed')}</p>
+                <button
+                  onClick={() => handleExplainFinding(lastFindingRef.current, { force: true })}
+                  className="px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors"
+                >
+                  {t('analysis.retry')}
+                </button>
+              </div>
             ) : (
-              <p className="text-slate-700 leading-relaxed">{explainModal.text}</p>
+              <p className="flex-1 min-h-0 overflow-y-auto text-slate-700 leading-relaxed whitespace-pre-line">
+                {explainModal.text}
+              </p>
             )}
 
-            <div className="pt-2 border-t border-slate-100">
+            <div className="pt-2 border-t border-slate-100 shrink-0">
               <p className="text-xs text-slate-400">{t('analysis.aiDisclaimer')}</p>
             </div>
           </div>

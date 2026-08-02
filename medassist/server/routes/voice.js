@@ -1,7 +1,10 @@
 const router  = require('express').Router();
 const https   = require('https');
 const verifyToken = require('../middleware/auth');
-const { getProviders, getAvailableProviders, getAvailableVoiceProviders } = require('../utils/aiClients');
+const {
+  getProviders, getAvailableProviders, getAvailableVoiceProviders,
+  isProviderLimited, markProviderLimitedRPM,
+} = require('../utils/aiClients');
 
 const ELEVENLABS_VOICE_ID = 'W1TKxm4MpGXSlpN7iVQy';
 const ELEVENLABS_MODEL    = 'eleven_turbo_v2';
@@ -179,30 +182,96 @@ ${abnormalLines}`;
 });
 
 
+// Strip reasoning-model artifacts (same regex as translateSegment below).
+function cleanExplanation(raw) {
+  return (raw || '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')  // qwen-3 / gpt-oss style think tokens
+    .replace(/^```(?:\w+)?\s*/i, '')
+    .replace(/\s*```\s*$/i, '')
+    .trim();
+}
+
+// Last resort for a max_tokens-truncated answer: cut back to the last complete
+// sentence so the patient never sees a mid-word fragment.
+function trimToLastSentence(text) {
+  const i = Math.max(text.lastIndexOf('.'), text.lastIndexOf('!'), text.lastIndexOf('?'));
+  return i > 40 ? text.slice(0, i + 1) : text;
+}
+
 // ─── POST /api/voice/explain-finding ───────────────────────────────────────
 // Returns a plain-English explanation of a single abnormal blood finding.
-// Returns: { explanation: string }
+// Body: { reportId?, parameter, lang?, your_value?, normal_range?, status?, interpretation? }
+//   reportId enables the persistent cache (and is the trusted source of the finding's
+//   values). The your_value/normal_range/status/interpretation fields are only a
+//   fallback for callers that have no reportId.
+// Query: ?force=true regenerates and overwrites the cached text.
+// Returns: { explanation: string, cached?: boolean }
 router.post('/explain-finding', verifyToken, async (req, res) => {
-  const { parameter, your_value, normal_range, status, lang = 'en' } = req.body;
+  const pool = require('../db/pool');
+  const { reportId, parameter, lang = 'en' } = req.body;
   if (!parameter) return res.status(400).json({ error: 'parameter is required' });
 
+  // ── 1. Load the report (cache + trusted finding values) ──────────────────
+  let report = null;
+  if (reportId) {
+    try {
+      const { rows } = await pool.query(
+        'SELECT analysis, finding_explanations FROM blood_reports WHERE id = $1 AND patient_id = $2',
+        [reportId, req.user.userId]
+      );
+      if (!rows.length) return res.status(404).json({ error: 'Report not found' });
+      report = rows[0];
+    } catch (err) {
+      // DB trouble shouldn't kill the feature — degrade to uncached generation.
+      console.warn('[explain-finding] Cache lookup failed:', err.message);
+    }
+  }
+
+  // ── 2. Cache hit ─────────────────────────────────────────────────────────
+  const cached = report?.finding_explanations?.[lang]?.[parameter];
+  if (cached && req.query.force !== 'true') {
+    return res.json({ explanation: cached, cached: true });
+  }
+
+  // ── 3. Resolve the finding — server-side when we have the report ─────────
+  let finding;
+  if (report) {
+    finding = (report.analysis?.abnormal_findings || []).find((f) => f.parameter === parameter);
+    if (!finding) return res.status(404).json({ error: 'Finding not found in this report' });
+  } else {
+    // No reportId (or the lookup failed): fall back to the client-supplied values.
+    const { your_value, normal_range, status, interpretation } = req.body;
+    finding = { parameter, your_value, normal_range, status, interpretation };
+  }
+
+  const fStatus = finding.status || 'abnormal';
   const langNote = lang === 'es'
     ? '\n\nIMPORTANT: Write the entire explanation in Spanish (Español) only. Use simple, clear medical Spanish that a patient can understand.'
     : '';
+  const interpNote = finding.interpretation
+    ? `\n\nLab interpretation note (stay consistent with this): ${finding.interpretation}`
+    : '';
 
-  const prompt = `A patient's blood test shows: ${parameter} = ${your_value} (normal range: ${normal_range || 'not specified'}, status: ${status || 'abnormal'}).
+  const prompt = `A patient's blood test shows: ${parameter} = ${finding.your_value} (normal range: ${finding.normal_range || 'not specified'}, status: ${fStatus}).
 
 Write a 2-3 sentence plain-English explanation for the patient (no medical jargon) that covers:
 1. What this parameter does in the body
-2. What it means that it is ${status || 'abnormal'}
+2. What it means that it is ${fStatus}
 3. One practical implication for daily life
 
-Be warm, clear, and reassuring. Do not recommend specific treatments or drugs.${langNote}`;
+Be warm, clear, and reassuring. Do not recommend specific treatments or drugs.
+Keep the whole answer under 70 words and always finish your final sentence.${interpNote}${langNote}`;
 
+  // ── 4. Generate — lightweight provider order, skipping benched providers ──
   const providers = getProviders();
-  const available = getAvailableProviders();
+  const voiceProviders = getAvailableVoiceProviders();
+  const unlimited = voiceProviders.filter((n) => !isProviderLimited(n));
+  // If everything is currently benched, try anyway rather than failing outright.
+  const available = unlimited.length ? unlimited : voiceProviders;
 
   let explanation = null;
+  let truncatedFallback = null;
+
   for (const name of available) {
     const provider = providers[name];
     try {
@@ -214,23 +283,64 @@ Be warm, clear, and reassuring. Do not recommend specific treatments or drugs.${
             : 'You explain blood test results in plain English to patients. Be concise (2-3 sentences), warm, and avoid jargon.' },
           { role: 'user', content: prompt },
         ],
-        temperature: 0.5,
-        max_tokens: 150,
+        temperature: 0,
+        // Generous cap: reasoning models (Cerebras gpt-oss-120b) charge their internal
+        // reasoning tokens against max_tokens, so a tight cap leaves nothing for the
+        // visible answer — that is what produced the truncated/stub explanations.
+        // The prompt, not the cap, keeps the answer short.
+        max_tokens: 1200,
       });
-      explanation = response.choices[0]?.message?.content?.trim();
-      if (explanation) break;
+
+      const choice = response.choices[0];
+      const text = cleanExplanation(choice?.message?.content);
+      if (!text) {
+        console.warn(`[explain-finding] ${name} returned empty content for "${parameter}" (finish_reason: ${choice?.finish_reason}) — trying next provider`);
+        continue;
+      }
+
+      // Hit the cap — keep a trimmed copy but prefer a clean answer from the next provider.
+      if (choice.finish_reason === 'length') {
+        truncatedFallback = truncatedFallback || trimToLastSentence(text);
+        console.warn(`[explain-finding] ${name} hit max_tokens for "${parameter}" — trying next provider`);
+        continue;
+      }
+
+      explanation = text;
+      break;
     } catch (err) {
-      const status = err?.status || err?.response?.status;
-      if (status === 429 || status === 503) continue;
-      throw err;
+      const httpStatus = err?.status || err?.response?.status;
+      if (httpStatus === 429) markProviderLimitedRPM(name);
+      // Always log — a silent failover makes a 503 impossible to diagnose.
+      console.warn(`[explain-finding] ${name} failed (${httpStatus || 'no status'}): ${err.message}`);
+      continue;  // 402/404/429/503 etc — fail over, never 500 the route
     }
   }
 
-  if (!explanation) {
-    return res.status(503).json({ error: 'Could not generate explanation. Try again.' });
+  // ── 5. Persist clean output only (a cached stub could never be invalidated) ──
+  if (explanation && reportId && report) {
+    pool.query(
+      `UPDATE blood_reports
+          SET finding_explanations =
+              COALESCE(finding_explanations, '{}'::jsonb)
+              || jsonb_build_object(
+                   $1::text,
+                   COALESCE(finding_explanations -> $1::text, '{}'::jsonb)
+                   || jsonb_build_object($2::text, to_jsonb($3::text))
+                 )
+        WHERE id = $4 AND patient_id = $5`,
+      [lang, parameter, explanation, reportId, req.user.userId]
+    ).catch((e) => console.warn('[explain-finding] Could not cache explanation:', e.message));
   }
 
-  return res.json({ explanation });
+  if (explanation) return res.json({ explanation });
+
+  if (truncatedFallback) {
+    console.warn(`[explain-finding] Returning sentence-trimmed fallback for "${parameter}" (uncached)`);
+    return res.json({ explanation: truncatedFallback });
+  }
+
+  console.error(`[explain-finding] All providers failed for "${parameter}" — tried: ${available.join(', ') || '(none configured)'}`);
+  return res.status(503).json({ error: 'Could not generate explanation. Try again.' });
 });
 
 

@@ -90,6 +90,8 @@
     "plainEnglish": "Explicación en Lenguaje Simple",
     "gettingExplanation": "Obteniendo explicación...",
     "aiDisclaimer": "Generado por IA — siempre consulte a su médico para consejo médico.",
+    "explainFailed": "No se pudo cargar la explicación en este momento.",
+    "retry": "Intentar de nuevo",
     "agentRunning": "El Agente de Reporte de Sangre está ejecutándose...",
     "agentChecking": "Verificando rangos de referencia, buscando en la base de datos FDA, verificando interacciones",
     "calculatingRisk": "Calculando Puntaje de Riesgo Clínico…",
