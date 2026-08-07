@@ -23,9 +23,10 @@ Last updated: 2026-08-06.
 - **Validation harness** — 28 synthetic CBCs + confusion matrix (see [CHECKPOINT-01](./CHECKPOINT-01-cbc-expert.md)). Result: 100% sensitivity/specificity, 0 false negatives.
 - **Risk score made trustworthy** — overall risk now derived by RULE from anemia severity (moderate → 60/High, never diluted to "Low"); empty organ dimensions hidden; in-app "How reliable is this?" validation panel (sensitivity/specificity + WHO/AGA sources) on the Anemia card.
 
-### Stage 2 — Confirm & Track (Month 2) — **🔄 IN PROGRESS**
+### Stage 2 — Confirm & Track (Month 2) — **🔄 IN PROGRESS** · Sprint 4 ✅ COMPLETE
 
-*Work-plan Sprint 4 (Weeks 7–8, Aug 4–15) — Recovery Trajectory + Forecast.*
+*Work-plan Sprint 4 (Weeks 7–8, Aug 4–15) — Recovery Trajectory + Forecast. Full write-up:
+[CHECKPOINT-03](./CHECKPOINT-03-recovery-journey.md).*
 
 - **Pillar 1 — Hb recovery trajectory — ✅ DONE.**
   - `GET /api/blood-report/trajectory` (`routes/bloodReport.js`) — hemoglobin-vs-date series from
@@ -56,7 +57,7 @@ Last updated: 2026-08-06.
     the oldest anemic reading on file. Anchoring to the latter makes a relapse read backwards: on
     real dev data (Jul 27 Hb 15.0 → Aug 2 Hb 10.2) a naive baseline turns a 4.8 g/dL fall in six
     days into a "+2.0 g/dL rise, normal in ~3 weeks." The live endpoint now returns
-    `INSUFFICIENT_DATA` + physician review on that patient.
+    `NEW_EPISODE` + physician review on that patient.
   - **The forecast is withheld far more than it is offered** (21 of 30 fixtures). Hard preconditions:
     iron-deficiency type, hemoglobin not falling, cutoff not moved (`mixed_basis`), still below
     target, and a responder status of `RESPONDING`/`TOO_EARLY`.
@@ -68,19 +69,41 @@ Last updated: 2026-08-06.
     non-responders, 0 unsupportable forecasts, 97/97 field accuracy**. Reports refusal discipline,
     not sensitivity/specificity (this is not a binary classifier). Both safety gates were
     negative-control tested: disabling the falling-hemoglobin guard makes it fail and exit 1.
-  - Frontend: `RecoveryCard` on the journey page (status, trend, conditional non-responder alert
-    reusing the deferral-banner pattern) + a dashed projection line on the chart, shown only when
-    the engine offered one. `client/src/data/recoveryValidation.js` mirrors the harness output.
+  - Frontend: a recovery verdict card (status, trend, conditional non-responder alert reusing the
+    deferral-banner pattern) + a dashed projection line on the chart, shown only when the engine
+    offered one. `client/src/data/recoveryValidation.js` mirrors the harness output.
+- **UI pass — ✅ DONE** (same day, from review of the rendered page).
+  - Trajectory moved **inline** on the analysis page at full width — a click-through buried the
+    point of the feature. Extracted to `components/RecoveryJourneyCard.jsx`; `/patient/journey` is
+    now a thin wrapper over the same component.
+  - Sections **reordered by clinical importance**: Anemia Assessment → Risk Score → Abnormal
+    Findings → Recovery Assessment + chart → Parameter Progress → Follow-up ‖ Symptom Logger →
+    Diet Plan ▸ ‖ Recovery Ingredients ▸.
+  - Diet Plan and Recovery Ingredients **collapse** (native `<details>` via a `collapsible` prop on
+    `Section`, closed by default); Follow-up and Symptom Logger paired in one row.
+  - **Overall Summary merged into the Anemia card** — the two restated the same conclusion on a
+    CBC. The standalone summary card still renders when the anemia card is absent (non-CBC
+    reports), so the summary appears exactly once.
+  - **`NEW_EPISODE` status added** — a relapse previously read as `INSUFFICIENT_DATA`, which looks
+    like missing data when 27 reports are on file.
+  - **"Educational use only" banner removed** from the analysis header (requested). It was the only
+    in-app disclaimer; the exported PDF still carries it. See the ⚠️ note in CHECKPOINT-03.
 
 ---
 
 ## 🔧 In progress / next
 
+- **⚠️ Visual verification of the whole recovery journey UI** — chart, cutoff line, recovery card,
+  collapse behavior, section order, merged anemia card. All verified by harness/build/live API, none
+  seen rendered. The `RESPONDING`/`RECOVERED` states and the dashed projection line need a patient
+  with two iron-deficiency CBCs 2–4 weeks apart to exercise at all.
 - **Live integration test** — upload real anemic CBCs end-to-end on the deployed app; confirm `analysis.anemia` renders and risk score is anchored.
-- **Spanish parity** — add AnemiaCard strings to the translation batch.
+- **Spanish parity** — `AnemiaCard` still has hard-coded English strings (the `journey.*` namespace is at full en/es parity, 45 keys each).
 
 ## ⏭ Next stages (roadmap in [CHECKPOINT-02](./CHECKPOINT-02-roadmap.md))
-- **Phase 2 — Confirm & Track**: Hb recovery-trajectory chart, deterministic recovery forecast + non-responder flag, unified journey timeline page, optional reminders/nudges.
-- **Phase 3 — Prove & Position**: expand validation set + in-app methodology dashboard, clinician-review workflow, positioning brief, demo polish.
+- **Phase 2 remainder** (optional, beyond Sprint 4): unified journey timeline (Pillar 3), reminders/nudges (Pillar 4).
+- **Phase 3 — Prove & Position** (Month 3, Sprints 5–6): safety/critical-value net, in-app validation dashboard, clinician-review workflow, positioning brief, capstone walkthrough.
 
-> **Resume point:** see [CHECKPOINT-02-roadmap.md](./CHECKPOINT-02-roadmap.md) for the full Phase 1 recap + Phase 2/3 build order.
+> **Resume point:** [CHECKPOINT-03-recovery-journey.md](./CHECKPOINT-03-recovery-journey.md) — most recent.
+> [CHECKPOINT-02](./CHECKPOINT-02-roadmap.md) has the Phase 1 recap + Phase 2/3 build order;
+> [CHECKPOINT-01](./CHECKPOINT-01-cbc-expert.md) the anemia classifier.

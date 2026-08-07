@@ -47,7 +47,12 @@ OCR model fix → `dcfb270`; provider 402 failover + Cerebras → `8fded1f`/`601
 > episode**, and the responder check is bounded to a **14–90 day** interval — details and rationale
 > in [PROGRESS.md](./PROGRESS.md). This completes work-plan **Sprint 4**.
 >
-> **Resume at Pillar 3** (unified journey timeline) or Pillar 4 (reminders).
+> **Sprint 4 is complete** — see **[CHECKPOINT-03](./CHECKPOINT-03-recovery-journey.md)** for the
+> full write-up (clinical constants, the `recovery` contract, the three decisions that shaped it,
+> harness results, the UI pass, and the open visual-verification gap).
+>
+> **Resume at Pillar 3** (unified journey timeline) or Pillar 4 (reminders) — both optional and
+> beyond the work plan's Sprint 4 scope — or move to Phase 3.
 
 
 **Goal:** turn single-report analysis into a longitudinal recovery story. Reuse existing infra —
@@ -86,10 +91,12 @@ Recharts is installed; `/blood-report/history` already returns per-report `extra
 ---
 
 ## How to resume
+*Pillars 1 and 2 are done — see [CHECKPOINT-03](./CHECKPOINT-03-recovery-journey.md).*
 1. `node medassist/server/tests/anemia/runClassifier.js` → confirm 28/28, 0 FN (baseline still green).
-2. Confirm `main` is deployed (Render log shows `patient_profiles.pregnant` + `anemia_symptom_logs`).
-3. Start Phase 2, Pillar 1 (trajectory endpoint + chart) — smallest, unlocks the visual.
-4. Then Pillar 2 (forecast + harness), Pillar 3 (journey page), Pillar 4 (reminders) if desired.
+2. `node medassist/server/tests/recovery/runForecast.js` → confirm 30 journeys, 0 missed non-responders, 0 unsupportable forecasts.
+3. Confirm `main` is deployed (Render log shows `patient_profiles.pregnant` + `anemia_symptom_logs`).
+4. **Close the visual-verification gap first** — none of the recovery-journey UI has been seen rendered. See the ⚠️ note in CHECKPOINT-03.
+5. Then Pillar 3 (unified journey timeline) or Pillar 4 (reminders) if desired, or move to Phase 3.
 
 ## Critical files (Phase 2)
 - New: `server/services/recoveryForecast.js`, `server/tests/recovery/*`, `client/src/pages/Patient/AnemiaJourney.jsx`.
