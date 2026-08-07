@@ -40,3 +40,23 @@ export const STATUS_DOT_COLOR = {
 };
 
 export const UNKNOWN_DOT_COLOR = '#cbd5e1'; // slate-300 — uploaded but never analyzed
+
+/**
+ * Recovery responder-status styling (server/services/recoveryForecast.js).
+ * `tone` drives the card; `key` is the i18n suffix under journey.status.*
+ */
+export const RECOVERY_STYLE = {
+  RECOVERED:         { badge: 'bg-emerald-100 text-emerald-800 border-emerald-200', outer: 'border-emerald-200', hdr: 'bg-emerald-50', icon: '✅' },
+  RESPONDING:        { badge: 'bg-teal-100 text-teal-800 border-teal-200',          outer: 'border-teal-200',    hdr: 'bg-teal-50',    icon: '📈' },
+  NOT_RESPONDING:    { badge: 'bg-red-100 text-red-800 border-red-200',             outer: 'border-red-200',     hdr: 'bg-red-50',     icon: '⚠️' },
+  TOO_EARLY:         { badge: 'bg-slate-100 text-slate-700 border-slate-200',       outer: 'border-slate-200',   hdr: 'bg-slate-50',   icon: '⏳' },
+  INTERVAL_TOO_LONG: { badge: 'bg-slate-100 text-slate-700 border-slate-200',       outer: 'border-slate-200',   hdr: 'bg-slate-50',   icon: '📅' },
+  NOT_APPLICABLE:    { badge: 'bg-slate-100 text-slate-700 border-slate-200',       outer: 'border-slate-200',   hdr: 'bg-slate-50',   icon: 'ℹ️' },
+  INSUFFICIENT_DATA: { badge: 'bg-slate-100 text-slate-700 border-slate-200',       outer: 'border-slate-200',   hdr: 'bg-slate-50',   icon: '🔍' },
+};
+
+export const TREND_STYLE = {
+  improving: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  stable:    'bg-slate-50 text-slate-600 border-slate-200',
+  worsening: 'bg-red-50 text-red-700 border-red-200',
+};

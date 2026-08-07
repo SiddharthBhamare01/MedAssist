@@ -17,7 +17,10 @@ import {
 } from 'recharts';
 import api from '../../services/api';
 import { ANEMIA_VALIDATION } from '../../data/anemiaValidation';
-import { BASIS_LABEL, STATUS_STYLE, STATUS_DOT_COLOR, UNKNOWN_DOT_COLOR } from '../../data/anemiaLabels';
+import { RECOVERY_VALIDATION } from '../../data/recoveryValidation';
+import {
+  BASIS_LABEL, STATUS_STYLE, STATUS_DOT_COLOR, UNKNOWN_DOT_COLOR, RECOVERY_STYLE, TREND_STYLE,
+} from '../../data/anemiaLabels';
 
 const TEAL = '#0D9488';
 const CUTOFF_RED = '#ef4444';
@@ -60,6 +63,101 @@ function SummaryStrip({ data, t }) {
           <p className="text-[10px] text-slate-500 uppercase tracking-wide mt-0.5">{c.label}</p>
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Recovery determination — trend, responder status, and (only when the engine
+ * was willing to offer one) an expected time-to-normal. Display-only: the
+ * decision to show or withhold a forecast is made server-side by rule.
+ */
+function RecoveryCard({ recovery, t }) {
+  const S = RECOVERY_STYLE[recovery.responder_status] || RECOVERY_STYLE.INSUFFICIENT_DATA;
+  const f = recovery.forecast;
+
+  return (
+    <div className={`rounded-2xl border ${S.outer} shadow animate-slide-up overflow-hidden`}>
+      <div className={`${S.hdr} px-5 py-3.5 flex items-center justify-between gap-3`}>
+        <div className="flex items-center gap-2.5">
+          <span className="text-xl">{S.icon}</span>
+          <div>
+            <p className="text-sm font-bold text-slate-800">{t('journey.recoveryTitle')}</p>
+            <p className="text-[11px] text-slate-400">{t('journey.recoverySubtitle')}</p>
+          </div>
+        </div>
+        <span className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 border ${S.badge}`}>
+          {t(`journey.status.${recovery.responder_status}`, { defaultValue: recovery.responder_status })}
+        </span>
+      </div>
+
+      <div className="p-5 space-y-3">
+        {(recovery.trend || recovery.observed_rise != null) && (
+          <div className="flex flex-wrap gap-2">
+            {recovery.trend && (
+              <Chip className={TREND_STYLE[recovery.trend]}>
+                {t(`journey.trend.${recovery.trend}`, { defaultValue: recovery.trend })}
+              </Chip>
+            )}
+            {recovery.observed_rise != null && recovery.days_elapsed != null && (
+              <Chip>
+                {recovery.observed_rise > 0 ? '+' : ''}{recovery.observed_rise} g/dL · {recovery.days_elapsed} {t('journey.days')}
+              </Chip>
+            )}
+          </div>
+        )}
+
+        {recovery.explanation_seed && (
+          <p className="text-sm text-slate-600 leading-relaxed">{recovery.explanation_seed}</p>
+        )}
+
+        {/* Forecast — shown only when the engine offered one */}
+        {f && (
+          <div className="bg-teal-50/70 border border-teal-100 rounded-xl px-3 py-2.5 text-sm text-teal-800">
+            <span className="font-semibold">{t('journey.forecastLabel')} </span>
+            {t('journey.forecastBody', { weeks: f.weeks_to_target, target: f.target })}
+            <span className="block text-[11px] text-teal-600/80 mt-1">{t('journey.forecastCaveat')}</span>
+          </div>
+        )}
+
+        {recovery.recommendation && !f && (
+          <div className="bg-teal-50/70 border border-teal-100 rounded-xl px-3 py-2 text-sm text-teal-800">
+            <span className="font-semibold">{t('journey.nextStep')} </span>{recovery.recommendation}
+          </div>
+        )}
+
+        {/* Non-responder / declining alert — reuses AnemiaCard's deferral banner */}
+        {recovery.defer_to_physician && (
+          <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 flex items-start gap-2">
+            <span className="text-red-500 text-base leading-none mt-0.5">⚠️</span>
+            <p className="text-sm text-red-700">
+              <span className="font-bold">{t('journey.physicianReview')} </span>
+              {recovery.deferral_reason}
+            </p>
+          </div>
+        )}
+
+        {recovery.sources?.length > 0 && (
+          <details className="pt-2 border-t border-slate-100 group">
+            <summary className="flex items-center gap-1.5 cursor-pointer list-none text-xs font-semibold text-slate-500 hover:text-slate-700 select-none">
+              <span className="transition-transform group-open:rotate-90">▸</span>
+              {t('journey.recoverySourcesTitle')}
+            </summary>
+            <div className="mt-2 space-y-2">
+              <p className="text-[11px] text-slate-400">
+                {t('journey.recoveryValidation', {
+                  journeys: RECOVERY_VALIDATION.journeys,
+                  missed: RECOVERY_VALIDATION.missedNonResponders,
+                  withheld: RECOVERY_VALIDATION.forecastsWithheld,
+                })}
+              </p>
+              <ul className="text-[11px] text-slate-400 space-y-0.5">
+                {recovery.sources.map((s, i) => <li key={i}>• {s.source}</li>)}
+              </ul>
+            </div>
+          </details>
+        )}
+      </div>
     </div>
   );
 }
@@ -108,8 +206,24 @@ export default function AnemiaJourney() {
   const cutoff = data?.cutoff ?? null;
   const basisText = data?.cutoff_basis ? (BASIS_LABEL[data.cutoff_basis] || data.cutoff_basis) : null;
 
-  // Pad the domain so the cutoff line is never clipped off-canvas.
-  const values = points.map((p) => p.hb).concat(cutoff != null ? [cutoff] : []);
+  const recovery = data?.recovery || null;
+  const projection = recovery?.forecast?.projection || [];
+
+  // Merge the dashed projection into the same series. The first projection point
+  // shares the latest reading's timestamp, so it lands on the existing row and the
+  // dashed line starts where the solid one ends instead of floating detached.
+  const chartData = points.map((p) => ({ ...p }));
+  for (const q of projection) {
+    const existing = chartData.find((p) => p.ts === q.ts);
+    if (existing) existing.projected = q.hb;
+    else chartData.push({ ts: q.ts, projected: q.hb });
+  }
+  chartData.sort((a, b) => a.ts - b.ts);
+
+  // Pad the domain so neither the cutoff line nor the projection is clipped.
+  const values = points.map((p) => p.hb)
+    .concat(projection.map((q) => q.hb))
+    .concat(cutoff != null ? [cutoff] : []);
   const domain = values.length
     ? [Math.floor(Math.min(...values) - 1), Math.ceil(Math.max(...values) + 1)]
     : ['auto', 'auto'];
@@ -165,6 +279,13 @@ export default function AnemiaJourney() {
         </div>
       )}
 
+      {/* Recovery determination — verdict before evidence, and it must surface even
+          on a single-reading relapse, where `applicable` is false but the drop back
+          below the cutoff still warrants physician review. */}
+      {recovery && (recovery.applicable || recovery.defer_to_physician) && (
+        <RecoveryCard recovery={recovery} t={t} />
+      )}
+
       {/* 2+ reports — the trajectory */}
       {points.length >= 2 && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 space-y-4 animate-slide-up">
@@ -180,7 +301,7 @@ export default function AnemiaJourney() {
           </div>
 
           <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={points} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+            <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis
                 dataKey="ts"
@@ -219,6 +340,21 @@ export default function AnemiaJourney() {
                 activeDot={{ r: 7 }}
                 name="Hemoglobin"
               />
+              {/* Expected-response projection — dashed, and only present when the
+                  rule engine was willing to offer a forecast at all. */}
+              {projection.length > 0 && (
+                <Line
+                  type="monotone"
+                  dataKey="projected"
+                  stroke={TEAL}
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={false}
+                  activeDot={false}
+                  connectNulls
+                  name="Expected"
+                />
+              )}
             </LineChart>
           </ResponsiveContainer>
 
@@ -234,6 +370,12 @@ export default function AnemiaJourney() {
                 {label}
               </span>
             ))}
+            {projection.length > 0 && (
+              <span className="flex items-center gap-1.5">
+                <span className="w-4 border-t-2 border-dashed inline-block" style={{ borderColor: TEAL }} />
+                {t('journey.legendExpected')}
+              </span>
+            )}
           </div>
 
           {/* The cutoff moved between reports — say so rather than flattening it */}

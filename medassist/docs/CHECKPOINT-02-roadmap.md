@@ -39,7 +39,15 @@ OCR model fix → `dcfb270`; provider 402 failover + Cerebras → `8fded1f`/`601
 > both deliberate: the reference line is anchored to the **latest** cutoff with a `mixed_basis` flag
 > (the WHO cutoff is not constant across a patient's history), and points with Hb but no
 > `analysis.anemia` are kept and greyed rather than dropped (13 of 27 rows on the test account are
-> pre-classifier uploads). **Resume at Pillar 2.**
+> pre-classifier uploads).
+>
+> **Pillar 2 is ✅ DONE (2026-08-06).** `services/recoveryForecast.js` + `tests/recovery/`
+> (28 journeys, 0 missed non-responders, 0 unsupportable forecasts) + `RecoveryCard` and the dashed
+> projection line. Deviation from the sketch below: the baseline anchors to the **current anemic
+> episode**, and the responder check is bounded to a **14–90 day** interval — details and rationale
+> in [PROGRESS.md](./PROGRESS.md). This completes work-plan **Sprint 4**.
+>
+> **Resume at Pillar 3** (unified journey timeline) or Pillar 4 (reminders).
 
 
 **Goal:** turn single-report analysis into a longitudinal recovery story. Reuse existing infra —

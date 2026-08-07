@@ -7,6 +7,7 @@ const { extractBloodValuesFromImage } = require('../services/geminiService');
 const { runBloodReportAgent } = require('../agents/bloodReportAgent');
 const { getPatientProfile, updateSessionStatus } = require('../models/patientQueries');
 const { recomputeStatuses, classifyAnemia, readNumeric } = require('../services/anemiaClassifier');
+const { forecastRecovery } = require('../services/recoveryForecast');
 const pool = require('../db/pool');
 
 // POST /api/blood-report/upload
@@ -385,6 +386,7 @@ router.get('/trajectory', verifyToken, async (req, res) => {
         cutoff_basis: hbNode.applied_cutoff_basis ?? null,
         status: a?.status ?? null,
         severity: a?.severity ?? null,
+        type: a?.type ?? null,
         type_label: a?.type_label ?? null,
         analyzed: !!a,
       });
@@ -400,16 +402,30 @@ router.get('/trajectory', verifyToken, async (req, res) => {
 
     const first = points[0] || null;
     const last = points.length ? points[points.length - 1] : null;
+    const mixedBasis = distinctBases.size > 1;
+
+    // Deterministic recovery assessment — trend, responder status, and (only when
+    // every precondition holds) an expected time-to-normal. Same contract as the
+    // anemia engine: rules decide, the LLM is not involved, `computed_at` is
+    // stamped here because the service is pure.
+    const typed = points.filter((p) => p.type != null);
+    const recovery = forecastRecovery(points, {
+      type: typed.length ? typed[typed.length - 1].type : null,
+      cutoff: anchor ? anchor.cutoff : null,
+      mixedBasis,
+    });
+    recovery.computed_at = new Date().toISOString();
 
     return res.json({
       points,
+      recovery,
       baseline: first ? first.hb : null,
       latest: last ? last.hb : null,
       delta: first && last ? Math.round((last.hb - first.hb) * 10) / 10 : null,
       days_elapsed: first && last ? Math.round((last.ts - first.ts) / 86400000) : null,
       cutoff: anchor ? anchor.cutoff : null,
       cutoff_basis: anchor ? anchor.cutoff_basis : null,
-      mixed_basis: distinctBases.size > 1,
+      mixed_basis: mixedBasis,
     });
   } catch (err) {
     console.error('Trajectory error:', err);

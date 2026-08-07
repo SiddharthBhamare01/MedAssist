@@ -47,8 +47,30 @@ Last updated: 2026-08-06.
     and a discovery link on `Analysis.jsx` gated on `anemia.anemia_present`.
   - *Display-only by design: it plots values the validated rule engine already computed. No forecast,
     no trend verdict, no causation claim.*
-- **Pillar 2 — recovery forecast + non-responder flag — ⏭ NEXT** (`services/recoveryForecast.js`,
-  `tests/recovery/`): ≈1 g/dL/week iron response, day-14 responder threshold, dashed projection line.
+- **Pillar 2 — recovery forecast + non-responder flag — ✅ DONE.**
+  - `server/services/recoveryForecast.js` — pure, source-cited, no LLM. Produces `trend`
+    (improving/stable/worsening, ±0.5 g/dL dead band for assay noise) and `responder_status`:
+    `RECOVERED` · `RESPONDING` · `NOT_RESPONDING` · `TOO_EARLY` · `INTERVAL_TOO_LONG` ·
+    `NOT_APPLICABLE` · `INSUFFICIENT_DATA`. Forecast = ≈1 g/dL/week to the WHO target.
+  - **Episode anchoring.** The baseline is the first anemic reading of the *current* episode, not
+    the oldest anemic reading on file. Anchoring to the latter makes a relapse read backwards: on
+    real dev data (Jul 27 Hb 15.0 → Aug 2 Hb 10.2) a naive baseline turns a 4.8 g/dL fall in six
+    days into a "+2.0 g/dL rise, normal in ~3 weeks." The live endpoint now returns
+    `INSUFFICIENT_DATA` + physician review on that patient.
+  - **The forecast is withheld far more than it is offered** (20 of 28 fixtures). Hard preconditions:
+    iron-deficiency type, hemoglobin not falling, cutoff not moved (`mixed_basis`), still below
+    target, and a responder status of `RESPONDING`/`TOO_EARLY`.
+  - **The responder check is bounded to a 14–90 day interval.** Day 14 is a specific clinical
+    checkpoint; at 6 months the 1 g/dL bar tests nothing, and the app cannot observe whether iron
+    was ever taken — so outside the window it reports trend only, and inside it the flag is worded
+    conditionally ("if you have been taking iron…") rather than asserting a failed response.
+  - Harness `server/tests/recovery/runForecast.js` — **28 synthetic journeys, 0 missed
+    non-responders, 0 unsupportable forecasts, 91/91 field accuracy**. Reports refusal discipline,
+    not sensitivity/specificity (this is not a binary classifier). Both safety gates were
+    negative-control tested: disabling the falling-hemoglobin guard makes it fail and exit 1.
+  - Frontend: `RecoveryCard` on the journey page (status, trend, conditional non-responder alert
+    reusing the deferral-banner pattern) + a dashed projection line on the chart, shown only when
+    the engine offered one. `client/src/data/recoveryValidation.js` mirrors the harness output.
 
 ---
 
