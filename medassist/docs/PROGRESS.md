@@ -57,15 +57,15 @@ Last updated: 2026-08-06.
     real dev data (Jul 27 Hb 15.0 → Aug 2 Hb 10.2) a naive baseline turns a 4.8 g/dL fall in six
     days into a "+2.0 g/dL rise, normal in ~3 weeks." The live endpoint now returns
     `INSUFFICIENT_DATA` + physician review on that patient.
-  - **The forecast is withheld far more than it is offered** (20 of 28 fixtures). Hard preconditions:
+  - **The forecast is withheld far more than it is offered** (20 of 29 fixtures). Hard preconditions:
     iron-deficiency type, hemoglobin not falling, cutoff not moved (`mixed_basis`), still below
     target, and a responder status of `RESPONDING`/`TOO_EARLY`.
   - **The responder check is bounded to a 14–90 day interval.** Day 14 is a specific clinical
     checkpoint; at 6 months the 1 g/dL bar tests nothing, and the app cannot observe whether iron
     was ever taken — so outside the window it reports trend only, and inside it the flag is worded
     conditionally ("if you have been taking iron…") rather than asserting a failed response.
-  - Harness `server/tests/recovery/runForecast.js` — **28 synthetic journeys, 0 missed
-    non-responders, 0 unsupportable forecasts, 91/91 field accuracy**. Reports refusal discipline,
+  - Harness `server/tests/recovery/runForecast.js` — **29 synthetic journeys, 0 missed
+    non-responders, 0 unsupportable forecasts, 94/94 field accuracy**. Reports refusal discipline,
     not sensitivity/specificity (this is not a binary classifier). Both safety gates were
     negative-control tested: disabling the falling-hemoglobin guard makes it fail and exit 1.
   - Frontend: `RecoveryCard` on the journey page (status, trend, conditional non-responder alert

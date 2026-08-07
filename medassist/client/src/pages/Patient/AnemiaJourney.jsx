@@ -120,7 +120,9 @@ function RecoveryCard({ recovery, t }) {
           </div>
         )}
 
-        {recovery.recommendation && !f && (
+        {/* The deferral banner below states the FINDING; this states the ACTION.
+            The engine keeps the two non-overlapping, so both can show together. */}
+        {recovery.recommendation && (
           <div className="bg-teal-50/70 border border-teal-100 rounded-xl px-3 py-2 text-sm text-teal-800">
             <span className="font-semibold">{t('journey.nextStep')} </span>{recovery.recommendation}
           </div>

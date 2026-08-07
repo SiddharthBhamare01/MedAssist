@@ -65,6 +65,7 @@ for (const fx of FIXTURES) {
     if (fx.mixedBasis) reasons.push('cutoff moved across the series');
     if (fx.type !== 'iron_deficiency') reasons.push(`type is ${fx.type}`);
     if (got.responder_status === 'NOT_RESPONDING') reasons.push('declared non-responder');
+    if (!(got.forecast.weeks_to_target > 0)) reasons.push(`weeks_to_target is ${got.forecast.weeks_to_target}`);
     if (reasons.length) unsafeForecasts.push(`${fx.id}: ${reasons.join('; ')}`);
   } else {
     forecastsWithheld += 1;

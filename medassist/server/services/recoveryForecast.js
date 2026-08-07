@@ -212,7 +212,9 @@ function forecastRecovery(points, { type = null, cutoff = null, mixedBasis = fal
     result.sources.push(SOURCES.workup);
     result.defer_to_physician = true;
     result.deferral_reason = `Hemoglobin rose only ${observedRise} g/dL over ${days} days. If iron treatment has been taken since the first reading, that is less than the ≈1 g/dL typically seen by two weeks.`;
-    result.recommendation = 'Discuss this with your physician — if you have been taking iron, a smaller-than-expected rise can point to absorption problems or ongoing blood loss, which may warrant further evaluation.';
+    // Deliberately does NOT repeat the "if you have been taking iron" conditional
+    // from deferral_reason — the banner states the finding, this states the action.
+    result.recommendation = 'Discuss this with your physician — a smaller-than-expected rise can point to absorption problems or ongoing blood loss, which may warrant further evaluation.';
     result.explanation_seed = `Hemoglobin rose ${observedRise} g/dL over ${days} days, less than the ≈1 g/dL expected by two weeks if iron is being taken; physician review is recommended.`;
   }
 
@@ -225,7 +227,9 @@ function forecastRecovery(points, { type = null, cutoff = null, mixedBasis = fal
     latest.hb < cutoff;
 
   if (canForecast) {
-    const weeks = r1((cutoff - latest.hb) / WEEKLY_RISE);
+    // Floored at half a week: a patient sitting just under the cutoff would
+    // otherwise be told they reach their target "in about 0 weeks".
+    const weeks = Math.max(0.5, r1((cutoff - latest.hb) / WEEKLY_RISE));
     const projection = [{ ts: latest.ts, hb: latest.hb }];
     for (let w = 1; w <= Math.ceil(weeks); w += 1) {
       projection.push({

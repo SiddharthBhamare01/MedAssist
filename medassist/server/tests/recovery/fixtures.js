@@ -49,6 +49,13 @@ const FIXTURES = [
     expected: { responder_status: 'RESPONDING', trend: 'improving', has_forecast: true },
   },
   {
+    id: 'R-near-target',
+    description: 'Responding and almost at the cutoff — weeks-to-target must not round to zero',
+    days: j([0, 10.5], [14, 11.9]),
+    type: 'iron_deficiency', cutoff: 12,
+    expected: { responder_status: 'RESPONDING', trend: 'improving', has_forecast: true },
+  },
+  {
     id: 'R-pregnant',
     description: 'Pregnancy cutoff 11.0, +1.4 at day 21 → responding',
     days: j([0, 8.4], [21, 9.8]),
