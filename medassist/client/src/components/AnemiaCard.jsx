@@ -7,6 +7,15 @@
  * Render guard (in the parent): only mount when analysis.anemia exists AND a
  * hemoglobin value was present — otherwise a non-CBC report would surface a
  * spurious "inconclusive" anemia card.
+ *
+ * The overall summary is folded in here rather than living in its own card: on a
+ * CBC it restated the same finding one card lower down, so the reader met the
+ * conclusion twice. The parent still renders a standalone summary card when this
+ * card is not mounted (non-CBC reports), so the summary is never lost.
+ *
+ * @param {Object} [summary]  pre-resolved strings from the parent — this stays a
+ *   display-only component with no i18n of its own:
+ *   { assessment, rootCause, rootCauseLabel, complexityLabel, complexityStyle }
  */
 
 import { ANEMIA_VALIDATION } from '../data/anemiaValidation';
@@ -20,7 +29,7 @@ function Chip({ children, className = 'bg-slate-50 text-slate-600 border-slate-2
   );
 }
 
-export default function AnemiaCard({ anemia }) {
+export default function AnemiaCard({ anemia, summary = null }) {
   if (!anemia) return null;
   const S = STATUS_STYLE[anemia.status] || STATUS_STYLE.INCONCLUSIVE;
   const hb = anemia.hemoglobin || {};
@@ -38,9 +47,16 @@ export default function AnemiaCard({ anemia }) {
             <p className="text-[11px] text-slate-400">Computed by a rule engine from WHO / AGA criteria</p>
           </div>
         </div>
-        <span className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 border ${S.badge}`}>
-          {S.label}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          {summary?.complexityLabel && (
+            <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border ${summary.complexityStyle || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+              {summary.complexityLabel}
+            </span>
+          )}
+          <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border ${S.badge}`}>
+            {S.label}
+          </span>
+        </div>
       </div>
 
       <div className="p-5 space-y-3">
@@ -80,6 +96,25 @@ export default function AnemiaCard({ anemia }) {
         {/* Explanation */}
         {anemia.explanation_seed && (
           <p className="text-sm text-slate-600 leading-relaxed">{anemia.explanation_seed}</p>
+        )}
+
+        {/* Overall summary — merged in from what used to be its own card. Divider
+            keeps the rule-computed anemia block visually distinct from the
+            LLM-written narrative above it. */}
+        {(summary?.assessment || summary?.rootCause) && (
+          <div className="pt-3 border-t border-slate-100 space-y-2">
+            {summary.assessment && (
+              <p className="text-sm text-slate-700 leading-relaxed">{summary.assessment}</p>
+            )}
+            {summary.rootCause && (
+              <div className="rounded-lg px-3.5 py-2.5 border bg-slate-50 border-slate-200">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">
+                  {summary.rootCauseLabel}
+                </p>
+                <p className="text-sm text-slate-700">{summary.rootCause}</p>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Recommendation */}

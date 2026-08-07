@@ -565,6 +565,10 @@ export default function Analysis() {
 
   const { analysis, doctorReferralNeeded } = result || {};
   const summary = analysis?.summary;
+  // Drives both the anemia card and where the overall summary is rendered — the
+  // summary is merged into this card when it exists, standalone when it doesn't,
+  // so a non-CBC report never loses its summary.
+  const showAnemiaCard = !!analysis?.anemia && analysis.anemia.hemoglobin?.value != null;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -690,9 +694,6 @@ export default function Analysis() {
             </div>
           )}
         </div>
-        <div className="mt-3 p-3 bg-amber-50/80 border border-amber-200/60 rounded-xl text-xs text-amber-700">
-          {t('analysis.educationalDisclaimer')}
-        </div>
       </div>
 
       {/* Share Modal */}
@@ -809,9 +810,23 @@ export default function Analysis() {
       {/* Results */}
       {!loading && result && (
         <>
-          {/* Anemia Mode — deterministic CBC engine (only when a hemoglobin value was present) */}
-          {analysis?.anemia && analysis.anemia.hemoglobin?.value != null && (
-            <AnemiaCard anemia={analysis.anemia} />
+          {/* Anemia Mode — deterministic CBC engine (only when a hemoglobin value
+              was present). The overall summary is folded into this card rather
+              than repeated below it; strings are resolved here so AnemiaCard
+              stays display-only with no i18n of its own. */}
+          {showAnemiaCard && (
+            <AnemiaCard
+              anemia={analysis.anemia}
+              summary={{
+                assessment: translatedData?.overall_assessment ?? summary?.overall_assessment,
+                rootCause: translatedData?.root_cause ?? summary?.root_cause,
+                rootCauseLabel: t('analysis.rootCause'),
+                complexityLabel: summary?.complexity
+                  ? `${translatedData?.complexity_level ?? summary.complexity} ${t('analysis.complexity')}`
+                  : null,
+                complexityStyle: COMPLEXITY_STYLE[summary?.complexity],
+              }}
+            />
           )}
 
           {/* Row 1 — how serious it is, and what is actually out of range */}
@@ -934,8 +949,9 @@ export default function Analysis() {
           )}
           </div>
 
-          {/* Summary — personalized */}
-          {(() => {
+          {/* Summary — personalized. Only as a standalone card when the anemia
+              card is absent (non-CBC reports); otherwise it is merged into it. */}
+          {!showAnemiaCard && (() => {
             const cmplx = summary?.complexity;
             const S = {
               High:   { outer: 'border-red-200',    hdr: 'bg-red-50',    bar: 'bg-red-400',    rootBg: 'bg-red-50/80 border-red-200',    rootTxt: 'text-red-700' },
