@@ -42,7 +42,7 @@ OCR model fix → `dcfb270`; provider 402 failover + Cerebras → `8fded1f`/`601
 > pre-classifier uploads).
 >
 > **Pillar 2 is ✅ DONE (2026-08-06).** `services/recoveryForecast.js` + `tests/recovery/`
-> (29 journeys, 0 missed non-responders, 0 unsupportable forecasts) + `RecoveryCard` and the dashed
+> (30 journeys, 0 missed non-responders, 0 unsupportable forecasts) + `RecoveryCard` and the dashed
 > projection line. Deviation from the sketch below: the baseline anchors to the **current anemic
 > episode**, and the responder check is bounded to a **14–90 day** interval — details and rationale
 > in [PROGRESS.md](./PROGRESS.md). This completes work-plan **Sprint 4**.

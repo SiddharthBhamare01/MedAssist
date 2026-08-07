@@ -26,13 +26,43 @@ const COMPLEXITY_STYLE = {
   High:   'bg-red-50 text-red-700 border-red-200',
 };
 
-function Section({ title, icon, children, badge = null, className = '' }) {
+const SECTION_SHELL = 'bg-white rounded-2xl border border-slate-200 shadow p-6 animate-slide-up flex flex-col';
+
+/**
+ * @param {boolean} collapsible  render as a native <details> the user clicks to
+ *   open, closed by default. Used for the long reference sections (diet plan,
+ *   recovery ingredients) so they don't dominate the page above the findings.
+ *   Native <details> keeps it keyboard- and screen-reader-accessible with no JS
+ *   state, matching the "How reliable is this?" panels elsewhere.
+ */
+function Section({ title, icon, children, badge = null, className = '', collapsible = false }) {
+  const heading = (
+    <>
+      {icon && <span className="text-lg">{icon}</span>}
+      {title}
+      {badge && <span className="ml-auto">{badge}</span>}
+    </>
+  );
+
+  if (collapsible) {
+    // Block layout, not flex: a <details> needs its default block flow to
+    // show/hide reliably, and an expanded section should grow to its content
+    // rather than becoming a nested scroll area the user has to fight.
+    return (
+      <details className={`bg-white rounded-2xl border border-slate-200 shadow p-6 animate-slide-up group ${className}`}>
+        <summary className="text-base font-bold font-display text-slate-800 border-b border-slate-200 pb-3 flex items-center gap-2 cursor-pointer list-none select-none hover:text-teal-700 transition-colors">
+          {heading}
+          <span className="ml-auto text-slate-300 transition-transform group-open:rotate-90 text-sm">▸</span>
+        </summary>
+        <div className="pt-4">{children}</div>
+      </details>
+    );
+  }
+
   return (
-    <div className={`bg-white rounded-2xl border border-slate-200 shadow p-6 space-y-4 animate-slide-up flex flex-col ${className}`}>
+    <div className={`${SECTION_SHELL} space-y-4 ${className}`}>
       <h2 className="text-base font-bold font-display text-slate-800 border-b border-slate-200 pb-3 flex items-center gap-2 shrink-0">
-        {icon && <span className="text-lg">{icon}</span>}
-        {title}
-        {badge && <span className="ml-auto">{badge}</span>}
+        {heading}
       </h2>
       <div className="flex-1 min-h-0 flex flex-col">{children}</div>
     </div>
@@ -782,116 +812,7 @@ export default function Analysis() {
             <AnemiaCard anemia={analysis.anemia} />
           )}
 
-          {/* Symptom logging — activates on a positive anemia classification */}
-          {analysis?.anemia?.anemia_present && reportId && (
-            <SymptomLogger reportId={reportId} />
-          )}
-
-          {/* Recovery journey — rendered inline at full width, not behind a link.
-              Gated on a hemoglobin reading rather than on anemia_present, so a
-              patient whose latest CBC came back normal still sees the trajectory
-              that got them there. The card returns null when there is nothing
-              worth showing. */}
-          {analysis?.anemia?.hemoglobin?.value != null && (
-            <RecoveryJourneyCard showEmptyState={false} />
-          )}
-
-          {/* Row 1: Overall Summary + Abnormal Findings */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Summary — personalized */}
-          {(() => {
-            const cmplx = summary?.complexity;
-            const S = {
-              High:   { outer: 'border-red-200',    hdr: 'bg-red-50',    bar: 'bg-red-400',    rootBg: 'bg-red-50/80 border-red-200',    rootTxt: 'text-red-700' },
-              Medium: { outer: 'border-amber-200',  hdr: 'bg-amber-50',  bar: 'bg-amber-400',  rootBg: 'bg-amber-50/80 border-amber-200', rootTxt: 'text-amber-700' },
-              Low:    { outer: 'border-teal-200',   hdr: 'bg-teal-50',   bar: 'bg-teal-400',   rootBg: 'bg-teal-50/80 border-teal-200',   rootTxt: 'text-teal-700' },
-            }[cmplx] || { outer: 'border-slate-200', hdr: 'bg-slate-50', bar: 'bg-slate-300', rootBg: 'bg-slate-50 border-slate-200', rootTxt: 'text-slate-600' };
-            return (
-              <div className={`rounded-2xl border ${S.outer} shadow animate-slide-up overflow-hidden`}>
-                {/* Colored header */}
-                <div className={`${S.hdr} px-5 py-3.5 flex items-center justify-between gap-3`}>
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-xl">🩺</span>
-                    <div>
-                      <p className="text-sm font-bold text-slate-800">{t('analysis.overallSummary')}</p>
-                      <p className="text-[11px] text-slate-400">{translatedData?.summary_subtitle ?? 'Your personalized health snapshot'}</p>
-                    </div>
-                  </div>
-                  {cmplx && (
-                    <span className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 border ${COMPLEXITY_STYLE[cmplx] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                      {(translatedData?.complexity_level ?? cmplx)} {t('analysis.complexity')}
-                    </span>
-                  )}
-                </div>
-                {/* Body with left accent stripe */}
-                <div className="flex bg-white">
-                  <div className={`w-[3px] shrink-0 ${S.bar}`} />
-                  <div className="flex-1 px-5 py-4 space-y-3">
-                    <p className="text-slate-700 leading-relaxed text-sm">
-                      {translatedData?.overall_assessment ?? summary?.overall_assessment}
-                    </p>
-                    {summary?.root_cause && (
-                      <div className={`rounded-lg px-3.5 py-2.5 border ${S.rootBg}`}>
-                        <p className={`text-[10px] font-bold uppercase tracking-widest ${S.rootTxt} mb-1`}>
-                          {t('analysis.rootCause')}
-                        </p>
-                        <p className="text-sm text-slate-700">
-                          {translatedData?.root_cause ?? summary.root_cause}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Abnormal Findings */}
-          {analysis?.abnormal_findings?.length > 0 && (
-            <Section title={`${t('analysis.abnormalFindings')} (${analysis.abnormal_findings.length})`} icon="🔬" className="max-h-[665px]">
-              <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto -mx-2 rounded-lg">
-                <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-white z-10">
-                    <tr className="text-left text-[11px] text-slate-400 border-b border-slate-200">
-                      <th className="py-1.5 px-1.5 font-medium">{t('analysis.parameterCol')}</th>
-                      <th className="py-1.5 px-1.5 font-medium">{t('analysis.valueCol')}</th>
-                      <th className="py-1.5 px-1.5 font-medium">{t('analysis.normalCol')}</th>
-                      <th className="py-1.5 px-1.5 font-medium">{t('analysis.statusCol')}</th>
-                      <th className="py-1.5 px-1.5 font-medium">{t('analysis.interpretationCol')}</th>
-                      <th className="py-1.5 px-1.5 font-medium w-8"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {analysis.abnormal_findings.map((f, i) => (
-                      <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-1.5 px-1.5 font-medium text-slate-800 whitespace-nowrap">{translatedData?.[`finding_${i}_param`] ?? f.parameter}</td>
-                        <td className="py-1.5 px-1.5 font-mono font-semibold whitespace-nowrap">{f.your_value}</td>
-                        <td className="py-1.5 px-1.5 text-slate-500 font-mono whitespace-nowrap">{f.normal_range}</td>
-                        <td className="py-1.5 px-1.5 whitespace-nowrap">
-                          <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${STATUS_STYLE[f.status] || 'bg-slate-100 text-slate-600'}`}>
-                            {f.status ? t(`analysis.statusLabels.${f.status}`, { defaultValue: f.status }) : f.status}
-                          </span>
-                        </td>
-                        <td className="py-1.5 px-1.5 text-slate-600 max-w-[180px] truncate" title={translatedData?.[`finding_${i}_interp`] ?? f.interpretation}>{translatedData?.[`finding_${i}_interp`] ?? f.interpretation}</td>
-                        <td className="py-1.5 px-1.5">
-                          <button
-                            onClick={() => handleExplainFinding(f)}
-                            className="w-6 h-6 rounded-full bg-teal-50 hover:bg-teal-100 text-teal-600 text-xs font-bold flex items-center justify-center transition-colors"
-                            title={t('analysis.plainEnglish')}
-                          >
-                            ?
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Section>
-          )}
-          </div>
-
-          {/* Row 2: Clinical Risk Score + Follow-up Schedule */}
+          {/* Row 1 — how serious it is, and what is actually out of range */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {loadingRisk && !riskScores && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 flex items-center gap-4">
@@ -899,15 +820,6 @@ export default function Analysis() {
               <div>
                 <p className="font-semibold text-slate-700 text-sm">{t('analysis.calculatingRisk')}</p>
                 <p className="text-xs text-slate-400 mt-0.5">{t('analysis.riskModels')}</p>
-              </div>
-            </div>
-          )}
-          {loadingFollowUp && !followUp && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 flex items-center gap-4">
-              <div className="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin shrink-0" />
-              <div>
-                <p className="font-semibold text-slate-700 text-sm">{t('analysis.generatingFollowUp')}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{t('analysis.personalizedRecs')}</p>
               </div>
             </div>
           )}
@@ -975,7 +887,128 @@ export default function Analysis() {
               </Section>
             );
           })()}
+          {/* Abnormal Findings */}
+          {analysis?.abnormal_findings?.length > 0 && (
+            <Section title={`${t('analysis.abnormalFindings')} (${analysis.abnormal_findings.length})`} icon="🔬" className="max-h-[665px]">
+              <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto -mx-2 rounded-lg">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-white z-10">
+                    <tr className="text-left text-[11px] text-slate-400 border-b border-slate-200">
+                      <th className="py-1.5 px-1.5 font-medium">{t('analysis.parameterCol')}</th>
+                      <th className="py-1.5 px-1.5 font-medium">{t('analysis.valueCol')}</th>
+                      <th className="py-1.5 px-1.5 font-medium">{t('analysis.normalCol')}</th>
+                      <th className="py-1.5 px-1.5 font-medium">{t('analysis.statusCol')}</th>
+                      <th className="py-1.5 px-1.5 font-medium">{t('analysis.interpretationCol')}</th>
+                      <th className="py-1.5 px-1.5 font-medium w-8"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {analysis.abnormal_findings.map((f, i) => (
+                      <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="py-1.5 px-1.5 font-medium text-slate-800 whitespace-nowrap">{translatedData?.[`finding_${i}_param`] ?? f.parameter}</td>
+                        <td className="py-1.5 px-1.5 font-mono font-semibold whitespace-nowrap">{f.your_value}</td>
+                        <td className="py-1.5 px-1.5 text-slate-500 font-mono whitespace-nowrap">{f.normal_range}</td>
+                        <td className="py-1.5 px-1.5 whitespace-nowrap">
+                          <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${STATUS_STYLE[f.status] || 'bg-slate-100 text-slate-600'}`}>
+                            {f.status ? t(`analysis.statusLabels.${f.status}`, { defaultValue: f.status }) : f.status}
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-1.5 text-slate-600 max-w-[180px] truncate" title={translatedData?.[`finding_${i}_interp`] ?? f.interpretation}>{translatedData?.[`finding_${i}_interp`] ?? f.interpretation}</td>
+                        <td className="py-1.5 px-1.5">
+                          <button
+                            onClick={() => handleExplainFinding(f)}
+                            className="w-6 h-6 rounded-full bg-teal-50 hover:bg-teal-100 text-teal-600 text-xs font-bold flex items-center justify-center transition-colors"
+                            title={t('analysis.plainEnglish')}
+                          >
+                            ?
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+          )}
+          </div>
 
+          {/* Summary — personalized */}
+          {(() => {
+            const cmplx = summary?.complexity;
+            const S = {
+              High:   { outer: 'border-red-200',    hdr: 'bg-red-50',    bar: 'bg-red-400',    rootBg: 'bg-red-50/80 border-red-200',    rootTxt: 'text-red-700' },
+              Medium: { outer: 'border-amber-200',  hdr: 'bg-amber-50',  bar: 'bg-amber-400',  rootBg: 'bg-amber-50/80 border-amber-200', rootTxt: 'text-amber-700' },
+              Low:    { outer: 'border-teal-200',   hdr: 'bg-teal-50',   bar: 'bg-teal-400',   rootBg: 'bg-teal-50/80 border-teal-200',   rootTxt: 'text-teal-700' },
+            }[cmplx] || { outer: 'border-slate-200', hdr: 'bg-slate-50', bar: 'bg-slate-300', rootBg: 'bg-slate-50 border-slate-200', rootTxt: 'text-slate-600' };
+            return (
+              <div className={`rounded-2xl border ${S.outer} shadow animate-slide-up overflow-hidden`}>
+                {/* Colored header */}
+                <div className={`${S.hdr} px-5 py-3.5 flex items-center justify-between gap-3`}>
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xl">🩺</span>
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">{t('analysis.overallSummary')}</p>
+                      <p className="text-[11px] text-slate-400">{translatedData?.summary_subtitle ?? 'Your personalized health snapshot'}</p>
+                    </div>
+                  </div>
+                  {cmplx && (
+                    <span className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 border ${COMPLEXITY_STYLE[cmplx] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                      {(translatedData?.complexity_level ?? cmplx)} {t('analysis.complexity')}
+                    </span>
+                  )}
+                </div>
+                {/* Body with left accent stripe */}
+                <div className="flex bg-white">
+                  <div className={`w-[3px] shrink-0 ${S.bar}`} />
+                  <div className="flex-1 px-5 py-4 space-y-3">
+                    <p className="text-slate-700 leading-relaxed text-sm">
+                      {translatedData?.overall_assessment ?? summary?.overall_assessment}
+                    </p>
+                    {summary?.root_cause && (
+                      <div className={`rounded-lg px-3.5 py-2.5 border ${S.rootBg}`}>
+                        <p className={`text-[10px] font-bold uppercase tracking-widest ${S.rootTxt} mb-1`}>
+                          {t('analysis.rootCause')}
+                        </p>
+                        <p className="text-sm text-slate-700">
+                          {translatedData?.root_cause ?? summary.root_cause}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Recovery journey — rendered inline at full width, not behind a link.
+              Gated on a hemoglobin reading rather than on anemia_present, so a
+              patient whose latest CBC came back normal still sees the trajectory
+              that got them there. The card returns null when there is nothing
+              worth showing. */}
+          {analysis?.anemia?.hemoglobin?.value != null && (
+            <RecoveryJourneyCard showEmptyState={false} />
+          )}
+
+          {/* Parameter Progress gauges */}
+          {result?.analysis?.abnormal_findings?.length > 0 && (
+            <ParameterProgress extractedValues={result.analysis.abnormal_findings.map((f) => ({
+              parameter: f.parameter,
+              your_value: f.your_value,
+              normal_range: f.normal_range,
+              status: f.status,
+              unit: f.unit,
+            }))} />
+          )}
+
+          {loadingFollowUp && !followUp && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 flex items-center gap-4">
+              <div className="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin shrink-0" />
+              <div>
+                <p className="font-semibold text-slate-700 text-sm">{t('analysis.generatingFollowUp')}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{t('analysis.personalizedRecs')}</p>
+              </div>
+            </div>
+          )}
           {/* Follow-up Schedule */}
           {followUp && (
             <Section title={t('analysis.followUp')} icon="📅">
@@ -997,23 +1030,18 @@ export default function Analysis() {
               </div>
             </Section>
           )}
-          </div>
 
-          {/* Parameter Progress gauges */}
-          {result?.analysis?.abnormal_findings?.length > 0 && (
-            <ParameterProgress extractedValues={result.analysis.abnormal_findings.map((f) => ({
-              parameter: f.parameter,
-              your_value: f.your_value,
-              normal_range: f.normal_range,
-              status: f.status,
-              unit: f.unit,
-            }))} />
+          {/* Symptom logging — activates on a positive anemia classification */}
+          {analysis?.anemia?.anemia_present && reportId && (
+            <SymptomLogger reportId={reportId} />
           )}
 
-          {/* Row 3: Personalized Diet Plan + Recovery Ingredients */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Reference material — the longest sections and the least urgent, so they
+              sit last and start collapsed behind a click. `items-start` so opening
+              one does not stretch the other's collapsed header to match it. */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           {analysis?.diet_plan && (
-            <Section title={t('analysis.dietPlan')} icon="🥗" className="max-h-[600px]">
+            <Section title={t('analysis.dietPlan')} icon="🥗" collapsible>
               <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
                 {analysis.diet_plan.overview && (
                   <p className="text-slate-600 text-sm">{translatedData?.diet_overview ?? analysis.diet_plan.overview}</p>
@@ -1065,9 +1093,8 @@ export default function Analysis() {
               </div>
             </Section>
           )}
-
           {analysis?.recovery_ingredients?.length > 0 && (
-            <Section title={t('analysis.recoveryIngredients')} icon="🧬" className="max-h-[600px]">
+            <Section title={t('analysis.recoveryIngredients')} icon="🧬" collapsible>
               <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
                 {analysis.recovery_ingredients.map((item, i) => {
                   const taken = supplementLogs.has(item.ingredient);

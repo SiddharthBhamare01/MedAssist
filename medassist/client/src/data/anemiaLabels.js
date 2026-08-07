@@ -49,6 +49,7 @@ export const RECOVERY_STYLE = {
   RECOVERED:         { badge: 'bg-emerald-100 text-emerald-800 border-emerald-200', outer: 'border-emerald-200', hdr: 'bg-emerald-50', icon: '✅' },
   RESPONDING:        { badge: 'bg-teal-100 text-teal-800 border-teal-200',          outer: 'border-teal-200',    hdr: 'bg-teal-50',    icon: '📈' },
   NOT_RESPONDING:    { badge: 'bg-red-100 text-red-800 border-red-200',             outer: 'border-red-200',     hdr: 'bg-red-50',     icon: '⚠️' },
+  NEW_EPISODE:       { badge: 'bg-amber-100 text-amber-800 border-amber-200',       outer: 'border-amber-200',   hdr: 'bg-amber-50',   icon: '🔄' },
   TOO_EARLY:         { badge: 'bg-slate-100 text-slate-700 border-slate-200',       outer: 'border-slate-200',   hdr: 'bg-slate-50',   icon: '⏳' },
   INTERVAL_TOO_LONG: { badge: 'bg-slate-100 text-slate-700 border-slate-200',       outer: 'border-slate-200',   hdr: 'bg-slate-50',   icon: '📅' },
   NOT_APPLICABLE:    { badge: 'bg-slate-100 text-slate-700 border-slate-200',       outer: 'border-slate-200',   hdr: 'bg-slate-50',   icon: 'ℹ️' },

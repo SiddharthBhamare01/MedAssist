@@ -12,11 +12,11 @@
  */
 
 export const RECOVERY_VALIDATION = {
-  journeys: 29,
+  journeys: 30,
   missedNonResponders: 0,     // the safety-critical metric — someone wrongly told they are on track
   unsupportableForecasts: 0,  // a projection offered where the data cannot support one
   fieldAccuracy: 100,         // responder_status / trend / forecast-offered exact-match
-  forecastsWithheld: 20,      // of 29 journeys — the engine declines far more often than it projects
+  forecastsWithheld: 21,      // of 30 journeys — the engine declines far more often than it projects
   sources: [
     'Am J Medicine 5-trial analysis — ≈1 g/dL per week; responder ≥1 g/dL at day 14',
     'WHO 2024 — haemoglobin cutoffs to define anaemia (recovery target)',

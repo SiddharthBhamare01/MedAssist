@@ -182,7 +182,14 @@ const FIXTURES = [
     description: 'Recovered then dropped hard 6 days later. A baseline from the OLD episode would read this 4.8 g/dL fall as a +2.0 rise and forecast recovery. Modeled on real dev data.',
     days: j([0, 8.2], [20, 15.0], [26, 10.2]),
     type: 'iron_deficiency', cutoff: 13,
-    expected: { responder_status: 'INSUFFICIENT_DATA', has_forecast: false, defer_to_physician: true },
+    expected: { responder_status: 'NEW_EPISODE', has_forecast: false, defer_to_physician: true },
+  },
+  {
+    id: 'REL-vs-first-episode',
+    description: 'A relapse must NOT read as INSUFFICIENT_DATA — the patient has ample history, it just belongs to a resolved episode',
+    days: j([0, 7.5], [30, 13.2], [60, 11.0]),
+    type: 'iron_deficiency', cutoff: 12,
+    expected: { responder_status: 'NEW_EPISODE', has_forecast: false, defer_to_physician: true },
   },
   {
     id: 'REL-with-followup',

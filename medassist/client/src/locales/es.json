@@ -193,6 +193,7 @@
       "TOO_EARLY": "Aún es pronto",
       "INTERVAL_TOO_LONG": "Intervalo demasiado largo",
       "NOT_APPLICABLE": "Sin estimación disponible",
+      "NEW_EPISODE": "Nuevo episodio",
       "INSUFFICIENT_DATA": "Aún no hay datos suficientes"
     },
     "trend": {

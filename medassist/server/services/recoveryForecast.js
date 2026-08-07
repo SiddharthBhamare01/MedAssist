@@ -145,20 +145,30 @@ function forecastRecovery(points, { type = null, cutoff = null, mixedBasis = fal
 
   // Only one reading since hemoglobin fell below the cutoff → no interval to judge.
   if (start >= series.length - 1) {
+    // A RELAPSE is not missing data — the patient has plenty of history, it simply
+    // belongs to a resolved episode. Reporting it as INSUFFICIENT_DATA reads as
+    // "the app is missing information" when the real finding is "hemoglobin has
+    // dropped below the cutoff again", so it gets its own status.
+    if (start > 0) {
+      return {
+        ...base,
+        responder_status: 'NEW_EPISODE',
+        latest,
+        baseline,
+        trend: null,
+        defer_to_physician: true,
+        deferral_reason: 'Hemoglobin has dropped back below the anemia cutoff after a previous normal reading — physician review is recommended.',
+        recommendation: 'Upload a follow-up CBC once you and your physician have decided on next steps, so this new episode can be tracked.',
+        explanation_seed: `Hemoglobin has fallen below the ${cutoff} g/dL cutoff again after a previous normal reading. This is the first reading of a new episode, so earlier readings are not used to judge recovery.`,
+      };
+    }
     return {
       ...base,
       latest,
       baseline,
       trend: null,
-      explanation_seed: start > 0
-        ? `Hemoglobin has fallen below the ${cutoff} g/dL cutoff again and there is only one reading since. A follow-up CBC is needed before recovery can be assessed.`
-        : `Only one hemoglobin reading is below the ${cutoff} g/dL cutoff, so there is no interval over which to assess recovery yet.`,
+      explanation_seed: `Only one hemoglobin reading is below the ${cutoff} g/dL cutoff, so there is no interval over which to assess recovery yet.`,
       recommendation: 'Upload a follow-up CBC to see whether your hemoglobin is rising.',
-      // A fresh drop back below the cutoff after a normal reading is worth surfacing.
-      defer_to_physician: start > 0,
-      deferral_reason: start > 0
-        ? 'Hemoglobin has dropped back below the anemia cutoff after a previous normal reading — physician review is recommended.'
-        : null,
     };
   }
 
