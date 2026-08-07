@@ -10,6 +10,7 @@ import ReportChatbot from '../../components/ReportChatbot';
 import ParameterProgress from '../../components/ParameterProgress';
 import AnemiaCard from '../../components/AnemiaCard';
 import SymptomLogger from '../../components/SymptomLogger';
+import RecoveryJourneyCard from '../../components/RecoveryJourneyCard';
 import { playAudio, stopAudio as stopGlobalAudio } from '../../utils/audioManager';
 
 const STATUS_STYLE = {
@@ -786,21 +787,13 @@ export default function Analysis() {
             <SymptomLogger reportId={reportId} />
           )}
 
-          {/* Recovery journey — same gate as symptom logging: this patient is being tracked */}
-          {analysis?.anemia?.anemia_present && (
-            <button
-              onClick={() => navigate('/patient/journey')}
-              className="w-full bg-white rounded-2xl border border-slate-200 shadow px-5 py-3.5 flex items-center justify-between gap-3 hover:border-teal-300 transition-colors animate-slide-up text-left"
-            >
-              <span className="flex items-center gap-2.5">
-                <span className="text-lg">📈</span>
-                <span>
-                  <span className="block text-sm font-bold text-slate-800">{t('journey.title')}</span>
-                  <span className="block text-[11px] text-slate-400">{t('journey.subtitle')}</span>
-                </span>
-              </span>
-              <span className="text-slate-300 text-lg shrink-0">›</span>
-            </button>
+          {/* Recovery journey — rendered inline at full width, not behind a link.
+              Gated on a hemoglobin reading rather than on anemia_present, so a
+              patient whose latest CBC came back normal still sees the trajectory
+              that got them there. The card returns null when there is nothing
+              worth showing. */}
+          {analysis?.anemia?.hemoglobin?.value != null && (
+            <RecoveryJourneyCard showEmptyState={false} />
           )}
 
           {/* Row 1: Overall Summary + Abnormal Findings */}
