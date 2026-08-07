@@ -1018,6 +1018,10 @@ export default function Analysis() {
             }))} />
           )}
 
+          {/* Row: Follow-up Schedule + Symptom Logger, side by side like the
+              risk/findings row above. Both are "what happens next" cards, so they
+              pair naturally. */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {loadingFollowUp && !followUp && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 flex items-center gap-4">
               <div className="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin shrink-0" />
@@ -1053,6 +1057,7 @@ export default function Analysis() {
           {analysis?.anemia?.anemia_present && reportId && (
             <SymptomLogger reportId={reportId} />
           )}
+          </div>
 
           {/* Reference material — the longest sections and the least urgent, so they
               sit last and start collapsed behind a click. `items-start` so opening
