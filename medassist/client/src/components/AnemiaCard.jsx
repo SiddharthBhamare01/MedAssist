@@ -10,30 +10,7 @@
  */
 
 import { ANEMIA_VALIDATION } from '../data/anemiaValidation';
-
-const STATUS_STYLE = {
-  CONFIRMED:    { badge: 'bg-emerald-100 text-emerald-800 border-emerald-200', outer: 'border-emerald-200', hdr: 'bg-emerald-50', label: 'Confirmed' },
-  SUSPECTED:    { badge: 'bg-amber-100 text-amber-800 border-amber-200',       outer: 'border-amber-200',   hdr: 'bg-amber-50',   label: 'Suspected' },
-  INCONCLUSIVE: { badge: 'bg-slate-100 text-slate-700 border-slate-200',       outer: 'border-slate-200',   hdr: 'bg-slate-50',   label: 'Inconclusive' },
-  NOT_ANEMIC:   { badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',  outer: 'border-emerald-200', hdr: 'bg-emerald-50', label: 'No anemia' },
-};
-
-const SEVERITY_STYLE = {
-  mild:     'bg-yellow-50 text-yellow-700 border-yellow-200',
-  moderate: 'bg-orange-50 text-orange-700 border-orange-200',
-  severe:   'bg-red-50 text-red-700 border-red-200',
-};
-
-const BASIS_LABEL = {
-  male: 'adult male',
-  non_pregnant_female: 'non-pregnant female',
-  pregnant_female: 'pregnant',
-  unknown_gender_male_default: 'adult (male cutoff assumed)',
-  child_6_23mo: 'infant (6–23 mo)',
-  child_2_4y: 'child (2–4 y)',
-  child_5_11y: 'child (5–11 y)',
-  adolescent_12_14y: 'adolescent (12–14 y)',
-};
+import { STATUS_STYLE, SEVERITY_STYLE, BASIS_LABEL } from '../data/anemiaLabels';
 
 function Chip({ children, className = 'bg-slate-50 text-slate-600 border-slate-200' }) {
   return (

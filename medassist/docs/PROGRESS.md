@@ -1,7 +1,7 @@
 # MedAssist — Progress Tracker
 
 Mapped to the v3 work plan (*The Anemia Intelligence Module · Detect → Confirm & Track → Prove & Position*).
-Last updated: 2026-07-22.
+Last updated: 2026-08-06.
 
 ---
 
@@ -22,6 +22,33 @@ Last updated: 2026-07-22.
 - **Frontend "Anemia Mode"** — `client/src/components/AnemiaCard.jsx` renders status/severity/morphology/confidence, Hb-vs-cutoff, recommendation, deferral banner, and source citations.
 - **Validation harness** — 25 synthetic CBCs + confusion matrix (see [CHECKPOINT-01](./CHECKPOINT-01-cbc-expert.md)). Result: 100% sensitivity/specificity, 0 false negatives.
 - **Risk score made trustworthy** — overall risk now derived by RULE from anemia severity (moderate → 60/High, never diluted to "Low"); empty organ dimensions hidden; in-app "How reliable is this?" validation panel (sensitivity/specificity + WHO/AGA sources) on the Anemia card.
+
+### Stage 2 — Confirm & Track (Month 2) — **🔄 IN PROGRESS**
+
+*Work-plan Sprint 4 (Weeks 7–8, Aug 4–15) — Recovery Trajectory + Forecast.*
+
+- **Pillar 1 — Hb recovery trajectory — ✅ DONE.**
+  - `GET /api/blood-report/trajectory` (`routes/bloodReport.js`) — hemoglobin-vs-date series from
+    `analysis.anemia.hemoglobin.{value,cutoff,applied_cutoff_basis}` + `status`/`severity`, ordered by
+    `created_at`. Falls back to `readNumeric(extracted_values, 'hemoglobin')` so pre-classifier reports
+    still plot (13 of 27 rows on the test account). Deliberately does **not** filter `session_id IS NULL`
+    — a recovery journey spans every CBC the patient uploaded. Read-only; no migration.
+  - Returns `baseline` / `latest` / `delta` / `days_elapsed` plus a `cutoff` anchored to the most recent
+    known cutoff and a `mixed_basis` flag — the WHO cutoff is **not** constant across a patient's history
+    (pregnancy toggled, age crossing a band), so the chart never draws one line over points measured
+    against another.
+  - `client/src/pages/Patient/AnemiaJourney.jsx` at `/patient/journey` — Recharts `LineChart` with a
+    dashed `ReferenceLine` at the personalized cutoff, dots colored by rule-computed status, a
+    baseline→latest strip, a mixed-cutoff notice, and a "Where do these numbers come from?" panel.
+    Three deliberate states: 0 reports, 1 report (single reading + CTA — the common case), 2+ (chart).
+  - `client/src/data/anemiaLabels.js` — `STATUS_STYLE` / `SEVERITY_STYLE` / `BASIS_LABEL` extracted from
+    `AnemiaCard` so both surfaces label and color a status identically.
+  - Nav entry (`nav.journey`, `Icons.beaker`), route in `App.jsx`, `journey.*` strings in **en + es**,
+    and a discovery link on `Analysis.jsx` gated on `anemia.anemia_present`.
+  - *Display-only by design: it plots values the validated rule engine already computed. No forecast,
+    no trend verdict, no causation claim.*
+- **Pillar 2 — recovery forecast + non-responder flag — ⏭ NEXT** (`services/recoveryForecast.js`,
+  `tests/recovery/`): ≈1 g/dL/week iron response, day-14 responder threshold, dashed projection line.
 
 ---
 

@@ -137,6 +137,7 @@ const PATIENT_LINKS = [
   { to: '/patient/dashboard',      key: 'nav.dashboard',    icon: Icons.clipboard },
   { to: '/patient/upload-report',  key: 'nav.uploadReport', icon: Icons.plusCircle },
   { to: '/patient/history',        key: 'nav.myReports',    icon: Icons.chartBar },
+  { to: '/patient/journey',        key: 'nav.journey',      icon: Icons.beaker },
   { to: '/patient/vitals',         key: 'nav.vitals',       icon: Icons.heart },
   { to: '/patient/clinics',        key: 'nav.findLab',      icon: Icons.mapPin },
   { to: '/patient/profile',        key: 'nav.myProfile',    icon: Icons.idCard },

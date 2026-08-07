@@ -786,6 +786,23 @@ export default function Analysis() {
             <SymptomLogger reportId={reportId} />
           )}
 
+          {/* Recovery journey — same gate as symptom logging: this patient is being tracked */}
+          {analysis?.anemia?.anemia_present && (
+            <button
+              onClick={() => navigate('/patient/journey')}
+              className="w-full bg-white rounded-2xl border border-slate-200 shadow px-5 py-3.5 flex items-center justify-between gap-3 hover:border-teal-300 transition-colors animate-slide-up text-left"
+            >
+              <span className="flex items-center gap-2.5">
+                <span className="text-lg">📈</span>
+                <span>
+                  <span className="block text-sm font-bold text-slate-800">{t('journey.title')}</span>
+                  <span className="block text-[11px] text-slate-400">{t('journey.subtitle')}</span>
+                </span>
+              </span>
+              <span className="text-slate-300 text-lg shrink-0">›</span>
+            </button>
+          )}
+
           {/* Row 1: Overall Summary + Abnormal Findings */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Summary — personalized */}

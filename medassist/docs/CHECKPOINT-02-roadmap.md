@@ -32,7 +32,15 @@ OCR model fix → `dcfb270`; provider 402 failover + Cerebras → `8fded1f`/`601
 
 ---
 
-## 🔜 PHASE 2 — "Confirm & Track" (the recovery journey) — NEXT
+## 🔄 PHASE 2 — "Confirm & Track" (the recovery journey) — IN PROGRESS
+
+> **Pillar 1 is ✅ DONE (2026-08-06).** `GET /blood-report/trajectory` + `AnemiaJourney.jsx` at
+> `/patient/journey`. Details in [PROGRESS.md](./PROGRESS.md). Two deviations from the sketch below,
+> both deliberate: the reference line is anchored to the **latest** cutoff with a `mixed_basis` flag
+> (the WHO cutoff is not constant across a patient's history), and points with Hb but no
+> `analysis.anemia` are kept and greyed rather than dropped (13 of 27 rows on the test account are
+> pre-classifier uploads). **Resume at Pillar 2.**
+
 
 **Goal:** turn single-report analysis into a longitudinal recovery story. Reuse existing infra —
 Recharts is installed; `/blood-report/history` already returns per-report `extracted_values` + `created_at`;

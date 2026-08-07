@@ -6,7 +6,7 @@ const upload = require('../middleware/upload');
 const { extractBloodValuesFromImage } = require('../services/geminiService');
 const { runBloodReportAgent } = require('../agents/bloodReportAgent');
 const { getPatientProfile, updateSessionStatus } = require('../models/patientQueries');
-const { recomputeStatuses, classifyAnemia } = require('../services/anemiaClassifier');
+const { recomputeStatuses, classifyAnemia, readNumeric } = require('../services/anemiaClassifier');
 const pool = require('../db/pool');
 
 // POST /api/blood-report/upload
@@ -339,6 +339,81 @@ router.get('/history', verifyToken, async (req, res) => {
   } catch (err) {
     console.error('History error:', err);
     return res.status(500).json({ error: 'Failed to fetch report history' });
+  }
+});
+
+// GET /api/blood-report/trajectory — hemoglobin-over-time series for the recovery journey.
+//
+// Display-only: every value here was already computed by the deterministic anemia
+// engine at analysis time. This route re-serves them ordered by date; it never
+// re-classifies anything.
+//
+// NOTE: must stay ABOVE `router.get('/:id')` — that route swallows any literal
+// single-segment path declared after it.
+router.get('/trajectory', verifyToken, async (req, res) => {
+  try {
+    // Unlike /history, /standalone and /latest-score, this deliberately does NOT
+    // filter `session_id IS NULL`. A recovery journey spans every CBC the patient
+    // uploaded, including those attached to a symptom session — it's the same blood.
+    const { rows } = await pool.query(
+      `SELECT id, created_at, extracted_values, analysis
+         FROM blood_reports
+        WHERE patient_id = $1
+        ORDER BY created_at ASC
+        LIMIT 50`,
+      [req.user.userId]
+    );
+
+    const points = [];
+    for (const r of rows) {
+      const a = r.analysis?.anemia || null;
+      const hbNode = a?.hemoglobin || {};
+      // Prefer the classifier's parsed value; fall back to the raw extraction so a
+      // report that was uploaded but never analyzed still appears on the timeline.
+      const hb = hbNode.value ?? readNumeric(r.extracted_values, 'hemoglobin').value;
+      if (hb == null) continue; // no hemoglobin — not part of this trajectory
+
+      points.push({
+        id: r.id,
+        created_at: r.created_at,
+        // Epoch ms, not a formatted date: two CBCs can land on the same day and a
+        // pre-formatted string key collides in the chart (see Vitals.jsx).
+        ts: new Date(r.created_at).getTime(),
+        hb,
+        unit: hbNode.unit || 'g/dL',
+        cutoff: hbNode.cutoff ?? null,
+        cutoff_basis: hbNode.applied_cutoff_basis ?? null,
+        status: a?.status ?? null,
+        severity: a?.severity ?? null,
+        type_label: a?.type_label ?? null,
+        analyzed: !!a,
+      });
+    }
+
+    // The cutoff is NOT a constant across a patient's history — pregnancy can be
+    // flagged, an age can cross a WHO band, a gender can go unknown → known. Anchor
+    // the reference line to the most recent known cutoff and flag when it moved, so
+    // the chart never draws one line over points measured against another.
+    const withCutoff = points.filter((p) => p.cutoff != null);
+    const anchor = withCutoff.length ? withCutoff[withCutoff.length - 1] : null;
+    const distinctBases = new Set(withCutoff.map((p) => p.cutoff_basis));
+
+    const first = points[0] || null;
+    const last = points.length ? points[points.length - 1] : null;
+
+    return res.json({
+      points,
+      baseline: first ? first.hb : null,
+      latest: last ? last.hb : null,
+      delta: first && last ? Math.round((last.hb - first.hb) * 10) / 10 : null,
+      days_elapsed: first && last ? Math.round((last.ts - first.ts) / 86400000) : null,
+      cutoff: anchor ? anchor.cutoff : null,
+      cutoff_basis: anchor ? anchor.cutoff_basis : null,
+      mixed_basis: distinctBases.size > 1,
+    });
+  } catch (err) {
+    console.error('Trajectory error:', err);
+    return res.status(500).json({ error: 'Failed to build recovery trajectory' });
   }
 });
 
