@@ -11,6 +11,7 @@ import ParameterProgress from '../../components/ParameterProgress';
 import AnemiaCard from '../../components/AnemiaCard';
 import SymptomLogger from '../../components/SymptomLogger';
 import RecoveryJourneyCard from '../../components/RecoveryJourneyCard';
+import { ANEMIA_VALIDATION } from '../../data/anemiaValidation';
 import { playAudio, stopAudio as stopGlobalAudio } from '../../utils/audioManager';
 
 const STATUS_STYLE = {
@@ -69,10 +70,11 @@ function Section({ title, icon, children, badge = null, className = '', collapsi
   );
 }
 
+/** Figures come from ANEMIA_VALIDATION — never hard-code them, they drift. */
 function ValidatedBadge() {
   return (
     <span
-      title="Overall risk is computed by a rule engine from WHO/AGA anemia criteria, validated at 100% sensitivity across 25 cases."
+      title={`Overall risk is computed by a rule engine from WHO/AGA anemia criteria, validated at ${ANEMIA_VALIDATION.sensitivity}% sensitivity across ${ANEMIA_VALIDATION.cases} cases.`}
       className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"
     >
       ✓ Validated
