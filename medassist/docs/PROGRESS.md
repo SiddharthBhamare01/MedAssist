@@ -111,7 +111,7 @@ Per `LOF_LABS_Participant_Guide.docx`, **Gate 3 (feature-complete beta) is due e
 this before scheduling Sprint 5/6 work. Full detail in
 [CHECKPOINT-04](./CHECKPOINT-04-voice-safety-compliance.md) §7.
 
-> **Resume point:** [CHECKPOINT-04-voice-safety-compliance.md](./CHECKPOINT-04-voice-safety-compliance.md) — most recent.
+> **Resume point:** [CHECKPOINT-04-voice-safety-compliance.md](./CHECKPOINT-04-voice-safety-compliance.md) — **2026-08-11**, most recent.
 > Carries the voice pipeline rebuild, the chatbot treatment guardrail, licensing compliance,
 > the Gate 2 self-assessment, and the open credential/compliance checklist.
 > [CHECKPOINT-03](./CHECKPOINT-03-recovery-journey.md) has the recovery journey;

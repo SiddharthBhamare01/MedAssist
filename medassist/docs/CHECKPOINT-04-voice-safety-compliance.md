@@ -1,9 +1,8 @@
-# Checkpoint 04 — Voice Pipeline, Chatbot Safety, and Program Compliance
+# Checkpoint 04 — Voice Pipeline, Chatbot Safety, and Program Compliance (2026-08-11)
 
+**Date:** 2026-08-11 (Tuesday) — **program Week 7**, between Gate 2 (submitted 8 Aug) and Gate 3 (due ~6 Sep).
 **Stage:** v3 Month 2 ("Confirm & Track"), post-Gate-2 hardening. **Status:** complete, deployed on `main` at `2cd4839`.
 **Architecture:** unchanged — the deterministic engine decides, the LLM only explains. This checkpoint adds a *third* deterministic gate (chatbot scope) and rebuilds the voice delivery path.
-
-**Date:** 2026-08-11.
 
 > Read this first in a new session. It carries the open items, the credentials
 > that still need setting, and one **schedule correction that changes the plan**
