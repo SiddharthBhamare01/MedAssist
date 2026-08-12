@@ -4,7 +4,13 @@
 let _audio = null;
 let _onStop = null; // called when audio is interrupted by a new clip
 
-export function playAudio(blobUrl, { onEnd, onStop } = {}) {
+/**
+ * @param {function} onError  called if the clip cannot be decoded or played.
+ *   Without it, a failed play() is indistinguishable from silence: onEnd never
+ *   fires, so any caller awaiting playback hangs forever with no sound and no
+ *   error. Callers that chain clips must handle this.
+ */
+export function playAudio(blobUrl, { onEnd, onStop, onError } = {}) {
   // Always stop whatever is currently playing first
   if (_audio) {
     _audio.pause();
@@ -23,7 +29,13 @@ export function playAudio(blobUrl, { onEnd, onStop } = {}) {
     if (onEnd) onEnd();
   };
 
-  audio.play().catch(() => {});
+  const fail = (err) => {
+    if (_audio === audio) { _audio = null; _onStop = null; }
+    if (onError) onError(err);
+  };
+
+  audio.onerror = () => fail(new Error('Audio could not be decoded'));
+  audio.play().catch(fail);
   return audio;
 }
 

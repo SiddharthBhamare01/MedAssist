@@ -311,6 +311,18 @@ export default function Analysis() {
     }
   };
 
+  /** Last-resort narration when the synthesized clip will not play. */
+  const speakRemainderInBrowser = (text) => {
+    if (!window.speechSynthesis || !text) { setIsNarrating(false); return; }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.95;
+    utterance.onend = () => setIsNarrating(false);
+    utterance.onerror = () => setIsNarrating(false);
+    window.speechSynthesis.speak(utterance);
+  };
+
   const handleNarrate = async () => {
     if (isNarrating) {
       narrationRunRef.current += 1;   // orphans the running chunk loop
@@ -345,7 +357,15 @@ export default function Analysis() {
     try {
       const { data } = await api.post('/voice/narrate-report', { reportId });
       const chunks = data?.chunks || [];
-      if (!chunks.length) throw new Error('empty narration');
+      // A non-JSON body here means the browser is running a cached bundle from
+      // before this endpoint returned chunks. Say so rather than "try again".
+      if (!chunks.length) {
+        throw new Error(
+          typeof data === 'string'
+            ? 'This page is out of date — please reload (Ctrl+Shift+R).'
+            : 'Could not generate narration. Try again.'
+        );
+      }
 
       // Synthesized chunks survive across presses — replaying costs nothing.
       const urls = narrationAudioRef.current;
@@ -367,15 +387,26 @@ export default function Analysis() {
         setIsLoadingNarration(false);
         pending = i + 1 < chunks.length ? synthesize(i + 1) : null;
 
-        const finished = await new Promise((resolve) => {
-          playAudio(url, { onEnd: () => resolve(true), onStop: () => resolve(false) });
+        const outcome = await new Promise((resolve) => {
+          playAudio(url, {
+            onEnd:   () => resolve('ended'),
+            onStop:  () => resolve('stopped'),
+            onError: () => resolve('failed'),
+          });
         });
-        if (!finished || isStale()) return;
+        if (isStale() || outcome === 'stopped') return;
+
+        // Playback died on us — read the rest aloud with the browser voice
+        // rather than leaving the patient with silence and a spinning button.
+        if (outcome === 'failed') {
+          speakRemainderInBrowser(chunks.slice(i).join(' '));
+          return;
+        }
       }
       setIsNarrating(false);
     } catch (err) {
       if (!isStale()) {
-        toast.error('Could not generate narration. Try again.');
+        toast.error(err.message || 'Could not generate narration. Try again.');
         setIsNarrating(false);
       }
     } finally {

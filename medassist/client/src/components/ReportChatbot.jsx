@@ -89,6 +89,8 @@ export default function ReportChatbot({ reportId }) {
       playAudio(url, {
         onEnd: () => { setPlayingId(null); URL.revokeObjectURL(url); },
         onStop: () => setPlayingId(null),
+        // Without this the play button stays stuck spinning on a bad clip.
+        onError: () => { setPlayingId(null); URL.revokeObjectURL(url); toast.error(t('chatbot.audioFailed')); },
       });
     } catch {
       // Deepgram unavailable — fall back to browser TTS
