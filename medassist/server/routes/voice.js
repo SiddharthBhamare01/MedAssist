@@ -2,8 +2,18 @@ const router  = require('express').Router();
 const verifyToken = require('../middleware/auth');
 const {
   getProviders, getAvailableProviders, getAvailableVoiceProviders,
-  isProviderLimited, markProviderLimitedRPM,
+  isProviderLimited, markProviderLimited, markProviderLimitedRPM,
 } = require('../utils/aiClients');
+
+/**
+ * Bench a provider after a failure so the next request doesn't pay for the same
+ * dead round trip. 401/402/404 are account/config problems that won't clear on
+ * their own, so they get the long TTL; 429 is transient.
+ */
+function benchOnFailure(name, status) {
+  if (status === 429) markProviderLimitedRPM(name);
+  else if (status === 401 || status === 402 || status === 404) markProviderLimited(name);
+}
 
 // ── Deepgram Aura-2 text-to-speech ──────────────────────────────────────────
 // encoding=mp3 is not optional: the browser decodes the response with
@@ -14,6 +24,36 @@ const DEEPGRAM_URL   = `https://api.deepgram.com/v1/speak?model=${DEEPGRAM_MODEL
 
 // Aura-2 rejects anything longer with a 413.
 const MAX_TTS_CHARS = 2000;
+
+/**
+ * Split a narration into chunks the client synthesizes and plays in sequence.
+ *
+ * Synthesis costs roughly 1.2s of fixed overhead plus 19ms per character, so
+ * sending the whole 250-word script as one request means ~50s of silence before
+ * the first word. The first chunk is kept short to start audio quickly.
+ *
+ * The rest are sized against playback, not latency: speech plays at ~53ms per
+ * character while it synthesizes at ~19ms, so a chunk stays gapless only while
+ * it is under roughly twice the length of the one playing before it. Uniform
+ * sizes satisfy that; a large jump after a short opener does not.
+ */
+function chunkForSpeech(text, firstMax = 110, restMax = 220) {
+  const sentences = (
+    text.replace(/\s+/g, ' ').trim().match(/[^.!?]+[.!?]+|\S[^.!?]*$/g) || [text]
+  ).map((s) => s.trim()).filter(Boolean);
+
+  const chunks = [];
+  let buf = '';
+  for (const sentence of sentences) {
+    buf = buf ? `${buf} ${sentence}` : sentence;
+    if (buf.length >= (chunks.length === 0 ? firstMax : restMax)) {
+      chunks.push(buf);
+      buf = '';
+    }
+  }
+  if (buf) chunks.push(buf);
+  return chunks.map((c) => c.slice(0, MAX_TTS_CHARS));
+}
 
 class TTSError extends Error {
   constructor(status, message) {
@@ -81,8 +121,10 @@ router.post('/speak', verifyToken, async (req, res) => {
 });
 
 // ─── POST /api/voice/narrate-report ────────────────────────────────────────
-// Generates a doctor-style audio narration of the patient's blood report.
-// Returns: audio/mpeg buffer
+// Builds the doctor-style narration script and returns it pre-split for speech.
+// The client synthesizes each chunk via /speak and plays them in order, so the
+// first sentence is audible while the rest are still being generated.
+// Returns: { chunks: string[], cached?: boolean }
 router.post('/narrate-report', verifyToken, async (req, res) => {
   const { reportId } = req.body;
   if (!reportId) return res.status(400).json({ error: 'reportId is required' });
@@ -99,6 +141,22 @@ router.post('/narrate-report', verifyToken, async (req, res) => {
     report = rows[0];
   } catch (err) {
     return res.status(500).json({ error: 'Failed to fetch report' });
+  }
+
+  // A report's analysis is immutable once written, so its narration is too —
+  // serve the stored script and skip the LLM entirely on repeat plays.
+  // Best-effort: if migration 008 hasn't run, regenerate rather than fail.
+  try {
+    const { rows } = await pool.query(
+      'SELECT narration_script FROM blood_reports WHERE id = $1 AND patient_id = $2',
+      [reportId, req.user.userId]
+    );
+    const cachedScript = rows[0]?.narration_script;
+    if (cachedScript) {
+      return res.json({ chunks: chunkForSpeech(cachedScript), cached: true });
+    }
+  } catch (err) {
+    console.warn('[narrate-report] Script cache unavailable:', err.message);
   }
 
   const analysis = report.analysis || {};
@@ -130,7 +188,11 @@ Abnormal findings:
 ${abnormalLines}`;
 
   const providers = getProviders();
-  const available = getAvailableProviders();
+  // Skip providers benched by a recent failure — retrying a 402 costs a round
+  // trip on every request and can never succeed until the account changes.
+  const allProviders = getAvailableProviders();
+  const unbenched = allProviders.filter((n) => !isProviderLimited(n));
+  const available = unbenched.length ? unbenched : allProviders;
 
   let script = null;
   for (const name of available) {
@@ -150,7 +212,7 @@ ${abnormalLines}`;
       console.warn(`[narrate-report] ${name} returned empty content — trying next provider`);
     } catch (err) {
       const status = err?.status || err?.response?.status;
-      if (status === 429) markProviderLimitedRPM(name);
+      benchOnFailure(name, status);
       console.warn(`[narrate-report] ${name} failed (${status || 'no status'}): ${err.message}`);
       continue;  // 401/402/404/429/503 etc — fail over; never surface one provider's
                  // billing status as this route's status while others are untried.
@@ -162,14 +224,12 @@ ${abnormalLines}`;
     return res.status(503).json({ error: 'Could not generate narration script. Try again.' });
   }
 
-  try {
-    const audio = await synthesizeSpeech(script);
-    res.setHeader('Content-Type', 'audio/mpeg');
-    return res.send(audio);
-  } catch (err) {
-    console.error('[voice/narrate-report]', err.message);
-    return res.status(err.status || 502).json({ error: err.message });
-  }
+  pool.query(
+    'UPDATE blood_reports SET narration_script = $1 WHERE id = $2 AND patient_id = $3',
+    [script, reportId, req.user.userId]
+  ).catch((e) => console.warn('[narrate-report] Could not cache script:', e.message));
+
+  return res.json({ chunks: chunkForSpeech(script) });
 });
 
 
@@ -413,7 +473,9 @@ ${ingredientsList ? `Helpful recovery ingredients: ${ingredientsList}` : ''}`;
   ];
 
   const providers = getProviders();
-  const available = getAvailableProviders();
+  const allProviders = getAvailableProviders();
+  const unbenched = allProviders.filter((n) => !isProviderLimited(n));
+  const available = unbenched.length ? unbenched : allProviders;
 
   let reply = null;
   for (const name of available) {
@@ -430,7 +492,7 @@ ${ingredientsList ? `Helpful recovery ingredients: ${ingredientsList}` : ''}`;
       console.warn(`[report-chat] ${name} returned empty content — trying next provider`);
     } catch (err) {
       const status = err?.status || err?.response?.status;
-      if (status === 429) markProviderLimitedRPM(name);
+      benchOnFailure(name, status);
       console.warn(`[report-chat] ${name} failed (${status || 'no status'}): ${err.message}`);
       continue;  // fail over rather than aborting with one provider's status
     }

@@ -66,7 +66,15 @@ async function migrate() {
       ADD COLUMN IF NOT EXISTS finding_explanations JSONB DEFAULT '{}'::jsonb
   `);
 
-  console.log('[migrate] Tables ensured: supplement_logs, reminders, doctor_profiles, anemia_symptom_logs; patient_profiles.pregnant; blood_reports.finding_explanations');
+  // Migration 008 — cached doctor-style narration script
+  // The analysis is immutable once written, so the narration derived from it is
+  // too. Storing it turns a repeat "Read Report" into a pure TTS call.
+  await pool.query(`
+    ALTER TABLE blood_reports
+      ADD COLUMN IF NOT EXISTS narration_script TEXT
+  `);
+
+  console.log('[migrate] Tables ensured: supplement_logs, reminders, doctor_profiles, anemia_symptom_logs; patient_profiles.pregnant; blood_reports.finding_explanations, blood_reports.narration_script');
 }
 
 module.exports = migrate;

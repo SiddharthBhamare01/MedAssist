@@ -114,10 +114,22 @@ export default function Analysis() {
   const explainReqIdRef = useRef(0);            // discards responses from superseded clicks
   const explainCacheRef = useRef(new Map());    // session memo: `${reportId}|${parameter}|${lang}` → text
   const lastFindingRef = useRef(null);          // so the retry button can re-run the last request
+  const narrationRunRef = useRef(0);            // cancels the chunk loop when narration is stopped/restarted
+  const narrationAudioRef = useRef([]);         // chunk index → object URL, reused on replay
   const [translatedData, setTranslatedData] = useState(null);
   const [translating, setTranslating] = useState(false);
   const translatedLangRef = useRef('');
   const translateDebounceRef = useRef(null);
+
+  // Chunk audio is cached for replay, so it must be released explicitly when the
+  // report changes or the page unmounts — otherwise the blobs leak.
+  useEffect(() => {
+    return () => {
+      narrationRunRef.current += 1;
+      narrationAudioRef.current.forEach((url) => url && URL.revokeObjectURL(url));
+      narrationAudioRef.current = [];
+    };
+  }, [reportId]);
 
   const VISIT_LABEL = {
     not_needed:           t('analysis.routineCheckup'),
@@ -301,9 +313,11 @@ export default function Analysis() {
 
   const handleNarrate = async () => {
     if (isNarrating) {
+      narrationRunRef.current += 1;   // orphans the running chunk loop
       stopGlobalAudio();
       if (window.speechSynthesis) window.speechSynthesis.cancel();
       setIsNarrating(false);
+      setIsLoadingNarration(false);
       return;
     }
 
@@ -324,23 +338,48 @@ export default function Analysis() {
     }
 
     setIsLoadingNarration(true);
+    narrationRunRef.current += 1;
+    const runId = narrationRunRef.current;
+    const isStale = () => narrationRunRef.current !== runId;
+
     try {
-      const response = await api.post(
-        '/voice/narrate-report',
-        { reportId },
-        { responseType: 'arraybuffer' }
-      );
-      const blob = new Blob([response.data], { type: 'audio/mpeg' });
-      const url = URL.createObjectURL(blob);
-      playAudio(url, {
-        onEnd: () => { setIsNarrating(false); URL.revokeObjectURL(url); },
-        onStop: () => setIsNarrating(false),
-      });
+      const { data } = await api.post('/voice/narrate-report', { reportId });
+      const chunks = data?.chunks || [];
+      if (!chunks.length) throw new Error('empty narration');
+
+      // Synthesized chunks survive across presses — replaying costs nothing.
+      const urls = narrationAudioRef.current;
+      const synthesize = async (i) => {
+        if (urls[i]) return urls[i];
+        const res = await api.post('/voice/speak', { text: chunks[i] }, { responseType: 'arraybuffer' });
+        urls[i] = URL.createObjectURL(new Blob([res.data], { type: 'audio/mpeg' }));
+        return urls[i];
+      };
+
+      // Only the first chunk is blocking; the rest are fetched while audio plays,
+      // so the button stops showing a spinner as soon as sound starts.
+      let pending = synthesize(0);
       setIsNarrating(true);
+
+      for (let i = 0; i < chunks.length; i++) {
+        const url = await pending;
+        if (isStale()) return;
+        setIsLoadingNarration(false);
+        pending = i + 1 < chunks.length ? synthesize(i + 1) : null;
+
+        const finished = await new Promise((resolve) => {
+          playAudio(url, { onEnd: () => resolve(true), onStop: () => resolve(false) });
+        });
+        if (!finished || isStale()) return;
+      }
+      setIsNarrating(false);
     } catch (err) {
-      toast.error('Could not generate narration. Try again.');
+      if (!isStale()) {
+        toast.error('Could not generate narration. Try again.');
+        setIsNarrating(false);
+      }
     } finally {
-      setIsLoadingNarration(false);
+      if (!isStale()) setIsLoadingNarration(false);
     }
   };
 
