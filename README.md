@@ -191,7 +191,7 @@ The system features multi-agent LLM ensemble processing, real-time agent status 
 | **GitHub Models (GPT-4o mini)** | Ensemble agent — free via GitHub PAT |
 | **OpenRouter** | Ensemble agent — fallback model chain (Llama, DeepSeek, Gemma, Mistral) |
 | **Google Gemini Vision** | Blood report OCR (image/PDF → 40+ parameters) |
-| **ElevenLabs** | Text-to-speech report narration |
+| **Deepgram Aura-2** | Text-to-speech report narration |
 | **OpenFDA** | Drug information & adverse events |
 | **RxNorm (NIH)** | Drug name normalization & interaction checking |
 | **OpenStreetMap / Overpass API** | Nearby clinics, labs & hospitals search (10 km radius) |
@@ -270,7 +270,7 @@ The **Blood Report Agent** runs a 4-phase multi-LLM ensemble:
 
 ### Patient — Audio Narration & Explanations
 
-- Doctor-style text-to-speech narration via ElevenLabs
+- Doctor-style text-to-speech narration via Deepgram Aura-2
 - Plain-English explanation of any abnormal finding on demand
 - Native Spanish audio when language is set to Spanish
 
@@ -516,7 +516,7 @@ Cache hits avoid redundant API calls and improve response latency across the sys
 
 - Node.js 18+
 - PostgreSQL database (or a Supabase project)
-- API keys: OpenAI (judge — required), Gemini (OCR — optional fallback), SambaNova + GitHub PAT + OpenRouter (ensemble agents — free), ElevenLabs (TTS — optional)
+- API keys: OpenAI (judge — required), Gemini (OCR — optional fallback), SambaNova + GitHub PAT + OpenRouter (ensemble agents — free), Deepgram (TTS — optional)
 
 ### 1. Clone & Install
 
@@ -547,7 +547,8 @@ GITHUB_TOKEN=your_github_pat
 OPENROUTER_API_KEY=your_openrouter_key
 
 # Optional
-ELEVENLABS_API_KEY=your_elevenlabs_key
+DEEPGRAM_API_KEY=your_deepgram_key
+DEEPGRAM_TTS_MODEL=aura-2-thalia-en
 
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_secret

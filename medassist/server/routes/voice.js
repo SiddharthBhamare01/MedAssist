@@ -1,13 +1,65 @@
 const router  = require('express').Router();
-const https   = require('https');
 const verifyToken = require('../middleware/auth');
 const {
   getProviders, getAvailableProviders, getAvailableVoiceProviders,
   isProviderLimited, markProviderLimitedRPM,
 } = require('../utils/aiClients');
 
-const ELEVENLABS_VOICE_ID = 'W1TKxm4MpGXSlpN7iVQy';
-const ELEVENLABS_MODEL    = 'eleven_turbo_v2';
+// ── Deepgram Aura-2 text-to-speech ──────────────────────────────────────────
+// encoding=mp3 is not optional: the browser decodes the response with
+// AudioContext.decodeAudioData, which needs a container format. Deepgram's
+// default is raw linear16 PCM (audio/l16), which decodeAudioData rejects.
+const DEEPGRAM_MODEL = process.env.DEEPGRAM_TTS_MODEL || 'aura-2-thalia-en';
+const DEEPGRAM_URL   = `https://api.deepgram.com/v1/speak?model=${DEEPGRAM_MODEL}&encoding=mp3`;
+
+// Aura-2 rejects anything longer with a 413.
+const MAX_TTS_CHARS = 2000;
+
+class TTSError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/**
+ * Synthesize `text` to an MP3 Buffer. Throws TTSError with an HTTP status the
+ * caller can pass straight through.
+ */
+async function synthesizeSpeech(text) {
+  const apiKey = process.env.DEEPGRAM_API_KEY;
+  if (!apiKey) {
+    throw new TTSError(503, 'Deepgram API key not configured. Add DEEPGRAM_API_KEY to .env');
+  }
+
+  if (text.length > MAX_TTS_CHARS) {
+    console.warn(`[voice] Text is ${text.length} chars — truncating to ${MAX_TTS_CHARS} for Aura-2`);
+  }
+
+  let dgRes;
+  try {
+    dgRes = await fetch(DEEPGRAM_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Token ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text: text.slice(0, MAX_TTS_CHARS) }),
+    });
+  } catch (err) {
+    throw new TTSError(502, `Deepgram connection failed: ${err.message}`);
+  }
+
+  if (!dgRes.ok) {
+    const detail = await dgRes.text().catch(() => '');
+    console.error('[voice] Deepgram TTS error:', dgRes.status, detail);
+    // 401/402 are ours to fix (bad key, exhausted credits) — don't mask them as 502.
+    const status = dgRes.status === 401 || dgRes.status === 402 ? dgRes.status : 502;
+    throw new TTSError(status, `Deepgram TTS failed (${dgRes.status})`);
+  }
+
+  return Buffer.from(await dgRes.arrayBuffer());
+}
 
 // ── POST /api/voice/speak ───────────────────────────────────────────────────
 // Body: { text: string }
@@ -18,51 +70,14 @@ router.post('/speak', verifyToken, async (req, res) => {
     return res.status(400).json({ error: 'text is required' });
   }
 
-  const apiKey = process.env.ELEVENLABS_API_KEY;
-  if (!apiKey || apiKey === 'your_elevenlabs_api_key_here') {
-    return res.status(503).json({ error: 'ElevenLabs API key not configured. Add ELEVENLABS_API_KEY to .env' });
-  }
-
-  const body = JSON.stringify({
-    text: text.slice(0, 3000),
-    model_id: ELEVENLABS_MODEL,
-    voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-  });
-
-  const options = {
-    hostname: 'api.elevenlabs.io',
-    path: `/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
-    method: 'POST',
-    headers: {
-      'xi-api-key':   apiKey,
-      'Content-Type': 'application/json',
-      'Accept':       'audio/mpeg',
-      'Content-Length': Buffer.byteLength(body),
-    },
-  };
-
-  const elevReq = https.request(options, elevRes => {
-    if (elevRes.statusCode !== 200) {
-      let errData = '';
-      elevRes.on('data', d => { errData += d; });
-      elevRes.on('end', () => {
-        console.error('[voice/speak] ElevenLabs error:', elevRes.statusCode, errData);
-        res.status(502).json({ error: 'ElevenLabs TTS failed', details: errData });
-      });
-      return;
-    }
+  try {
+    const audio = await synthesizeSpeech(text);
     res.setHeader('Content-Type', 'audio/mpeg');
-    res.setHeader('Transfer-Encoding', 'chunked');
-    elevRes.pipe(res);
-  });
-
-  elevReq.on('error', err => {
-    console.error('[voice/speak] Request error:', err.message);
-    res.status(502).json({ error: 'ElevenLabs connection failed' });
-  });
-
-  elevReq.write(body);
-  elevReq.end();
+    return res.send(audio);
+  } catch (err) {
+    console.error('[voice/speak]', err.message);
+    return res.status(err.status || 502).json({ error: err.message });
+  }
 });
 
 // ─── POST /api/voice/narrate-report ────────────────────────────────────────
@@ -143,41 +158,13 @@ ${abnormalLines}`;
     return res.status(503).json({ error: 'Could not generate narration script. Try again.' });
   }
 
-  const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-  if (!ELEVENLABS_API_KEY || ELEVENLABS_API_KEY === 'your_elevenlabs_api_key_here') {
-    return res.status(500).json({ error: 'TTS not configured' });
-  }
-
   try {
-    const ttsRes = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
-      {
-        method: 'POST',
-        headers: {
-          'xi-api-key': ELEVENLABS_API_KEY,
-          'Content-Type': 'application/json',
-          'Accept': 'audio/mpeg',
-        },
-        body: JSON.stringify({
-          text: script,
-          model_id: ELEVENLABS_MODEL,
-          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-        }),
-      }
-    );
-
-    if (!ttsRes.ok) {
-      const errText = await ttsRes.text();
-      console.error('[voice/narrate-report] ElevenLabs error:', errText);
-      return res.status(502).json({ error: 'TTS service error' });
-    }
-
+    const audio = await synthesizeSpeech(script);
     res.setHeader('Content-Type', 'audio/mpeg');
-    const audioBuffer = await ttsRes.arrayBuffer();
-    return res.send(Buffer.from(audioBuffer));
+    return res.send(audio);
   } catch (err) {
-    console.error('[voice/narrate-report] TTS fetch failed:', err.message);
-    return res.status(502).json({ error: 'TTS request failed' });
+    console.error('[voice/narrate-report]', err.message);
+    return res.status(err.status || 502).json({ error: err.message });
   }
 });
 

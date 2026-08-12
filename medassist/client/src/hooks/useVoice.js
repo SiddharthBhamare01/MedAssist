@@ -1,5 +1,5 @@
 /**
- * useVoice.js — ElevenLabs TTS + Browser Speech Recognition hook
+ * useVoice.js — Deepgram TTS + Browser Speech Recognition hook
  *
  * Usage:
  *   const { speak, listen, stopListening, isSpeaking, isListening, transcript, supported } = useVoice();
@@ -36,7 +36,7 @@ export function useVoice() {
     }
   }, []);
 
-  // ── Speak (TTS via ElevenLabs) ────────────────────────────────────────────
+  // ── Speak (TTS via Deepgram) ──────────────────────────────────────────────
   const speak = useCallback(async (text) => {
     if (!text) return;
 

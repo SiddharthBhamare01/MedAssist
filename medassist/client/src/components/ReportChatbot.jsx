@@ -81,7 +81,7 @@ export default function ReportChatbot({ reportId }) {
       return;
     }
 
-    // English: try ElevenLabs, fall back to browser SpeechSynthesis
+    // English: try Deepgram, fall back to browser SpeechSynthesis
     try {
       const res = await api.post('/voice/speak', { text }, { responseType: 'arraybuffer' });
       const url = URL.createObjectURL(new Blob([res.data], { type: 'audio/mpeg' }));
@@ -91,7 +91,7 @@ export default function ReportChatbot({ reportId }) {
         onStop: () => setPlayingId(null),
       });
     } catch {
-      // ElevenLabs unavailable — fall back to browser TTS
+      // Deepgram unavailable — fall back to browser TTS
       if (!window.speechSynthesis) { toast.error(t('chatbot.audioFailed')); return; }
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'en-US';

@@ -6,7 +6,7 @@
 ##   OPENROUTER_API_KEY, GITHUB_TOKEN, HELICONE_API_KEY,
 ##   CLIENT_URL (= your Vercel frontend URL), GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
 ##   SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS,
-##   ELEVENLABS_API_KEY, OPENFDA_API_KEY
+##   DEEPGRAM_API_KEY, OPENFDA_API_KEY
 
 services:
   - type: web
@@ -55,7 +55,7 @@ services:
         sync: false
       - key: SMTP_PASS
         sync: false
-      - key: ELEVENLABS_API_KEY
+      - key: DEEPGRAM_API_KEY
         sync: false
       - key: OPENFDA_API_KEY
         sync: false
