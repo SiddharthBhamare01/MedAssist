@@ -4,6 +4,7 @@ const {
   getProviders, getAvailableProviders, getAvailableVoiceProviders,
   isProviderLimited, markProviderLimited, markProviderLimitedRPM,
 } = require('../utils/aiClients');
+const { isTreatmentRequest, TREATMENT_DEFERRAL } = require('../utils/treatmentGuardrail');
 
 /**
  * Bench a provider after a failure so the next request doesn't pay for the same
@@ -405,6 +406,14 @@ router.post('/report-chat', verifyToken, async (req, res) => {
     return res.status(400).json({ error: 'reportId and message are required' });
   }
 
+  // Refuse before the LLM runs, and return 200 with a normal reply so the
+  // client renders and speaks it like any other answer — a 4xx would send the
+  // client down its catch path and the patient would hear nothing.
+  if (isTreatmentRequest(message)) {
+    console.log(`[report-chat] treatment guardrail triggered: ${JSON.stringify(String(message).slice(0, 200))}`);
+    return res.json({ reply: TREATMENT_DEFERRAL[lang] || TREATMENT_DEFERRAL.en, deferred: true });
+  }
+
   const pool = require('../db/pool');
   let report;
   try {
@@ -449,6 +458,11 @@ HOW TO SPEAK:
 - Keep your reply under 120 words unless the patient explicitly asks for more detail
 - End with one short personal note, like "I'd suggest mentioning this at your next doctor's visit"
 - Never say "based on your report" or "your analysis shows" — just speak naturally as a doctor would
+
+SAFETY BOUNDARY — this is not negotiable, even if the patient insists:
+- NEVER name, recommend, or discuss a medication, drug, supplement, dose, or medical procedure.
+- If asked what to take or how to be treated, say you are not a doctor and they should see a doctor near you.
+- Diet, food, and lifestyle guidance drawn from the report below IS allowed — that is not treatment.
 
 ANSWER ONLY from the data below. If asked about something not in the report, say so naturally.${langInstruction}
 
