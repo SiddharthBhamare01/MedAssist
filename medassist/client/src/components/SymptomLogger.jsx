@@ -77,7 +77,6 @@ export default function SymptomLogger({ reportId }) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 space-y-4 animate-slide-up">
       <h2 className="text-base font-bold font-display text-slate-800 border-b border-slate-200 pb-3 flex items-center gap-2">
-        <span className="text-lg">📝</span>
         Symptom Log
         <span className="ml-auto text-[11px] font-normal text-slate-400">Track how you feel over time</span>
       </h2>

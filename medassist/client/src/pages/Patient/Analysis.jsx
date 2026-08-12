@@ -764,7 +764,6 @@ export default function Analysis() {
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-2">
-                <span className="text-2xl">✅</span>
                 <div>
                   <h3 className="font-bold text-slate-800">Reminder Sent!</h3>
                   <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md tracking-wider">DEMO MODE</span>
@@ -855,7 +854,7 @@ export default function Analysis() {
             const ls = LEVEL_STYLE[level] || LEVEL_STYLE.Moderate;
 
             return (
-              <Section title={t('analysis.riskScore')} icon="📈" badge={riskScores.rule_based ? <ValidatedBadge /> : null}>
+              <Section title={t('analysis.riskScore')} badge={riskScores.rule_based ? <ValidatedBadge /> : null}>
                 <div className="flex flex-col sm:flex-row items-center gap-6">
                   <div className="relative w-32 h-32 shrink-0">
                     <svg className="w-32 h-32 -rotate-90" viewBox="0 0 120 120">
@@ -906,7 +905,7 @@ export default function Analysis() {
           })()}
           {/* Abnormal Findings */}
           {analysis?.abnormal_findings?.length > 0 && (
-            <Section title={`${t('analysis.abnormalFindings')} (${analysis.abnormal_findings.length})`} icon="🔬" className="max-h-[665px]">
+            <Section title={`${t('analysis.abnormalFindings')} (${analysis.abnormal_findings.length})`} className="max-h-[665px]">
               <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto -mx-2 rounded-lg">
                 <table className="w-full text-xs">
                   <thead className="sticky top-0 bg-white z-10">
@@ -963,7 +962,6 @@ export default function Analysis() {
                 {/* Colored header */}
                 <div className={`${S.hdr} px-5 py-3.5 flex items-center justify-between gap-3`}>
                   <div className="flex items-center gap-2.5">
-                    <span className="text-xl">🩺</span>
                     <div>
                       <p className="text-sm font-bold text-slate-800">{t('analysis.overallSummary')}</p>
                       <p className="text-[11px] text-slate-400">{translatedData?.summary_subtitle ?? 'Your personalized health snapshot'}</p>
@@ -1033,7 +1031,7 @@ export default function Analysis() {
           )}
           {/* Follow-up Schedule */}
           {followUp && (
-            <Section title={t('analysis.followUp')} icon="📅">
+            <Section title={t('analysis.followUp')}>
               <div className="space-y-3">
                 {(Array.isArray(followUp) ? followUp : [followUp]).map((item, i) => (
                   <div key={i} className="flex items-start gap-3 bg-amber-50/50 border border-amber-100 rounded-xl p-4">
@@ -1064,7 +1062,7 @@ export default function Analysis() {
               one does not stretch the other's collapsed header to match it. */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           {analysis?.diet_plan && (
-            <Section title={t('analysis.dietPlan')} icon="🥗" collapsible>
+            <Section title={t('analysis.dietPlan')} collapsible>
               <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
                 {analysis.diet_plan.overview && (
                   <p className="text-slate-600 text-sm">{translatedData?.diet_overview ?? analysis.diet_plan.overview}</p>
@@ -1117,7 +1115,7 @@ export default function Analysis() {
             </Section>
           )}
           {analysis?.recovery_ingredients?.length > 0 && (
-            <Section title={t('analysis.recoveryIngredients')} icon="🧬" collapsible>
+            <Section title={t('analysis.recoveryIngredients')} collapsible>
               <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
                 {analysis.recovery_ingredients.map((item, i) => {
                   const taken = supplementLogs.has(item.ingredient);
@@ -1153,7 +1151,7 @@ export default function Analysis() {
                         </button>
                         {streak > 1 && (
                           <span className="text-xs text-amber-600 font-semibold">
-                            🔥 {streak} {t('analysis.dayStreak')}
+                            {streak} {t('analysis.dayStreak')}
                           </span>
                         )}
                       </div>

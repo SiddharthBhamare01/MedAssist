@@ -41,7 +41,6 @@ export default function AnemiaCard({ anemia, summary = null }) {
       {/* Header */}
       <div className={`${S.hdr} px-5 py-3.5 flex items-center justify-between gap-3`}>
         <div className="flex items-center gap-2.5">
-          <span className="text-xl">🩸</span>
           <div>
             <p className="text-sm font-bold text-slate-800">Anemia Assessment</p>
             <p className="text-[11px] text-slate-400">Computed by a rule engine from WHO / AGA criteria</p>
@@ -126,8 +125,7 @@ export default function AnemiaCard({ anemia, summary = null }) {
 
         {/* Deferral banner */}
         {anemia.defer_to_physician && (
-          <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 flex items-start gap-2">
-            <span className="text-red-500 text-base leading-none mt-0.5">⚠️</span>
+          <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
             <p className="text-sm text-red-700">
               <span className="font-bold">Physician review recommended. </span>
               {anemia.deferral_reason || 'This finding falls outside the validated anemia patterns.'}

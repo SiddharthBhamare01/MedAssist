@@ -232,7 +232,6 @@ export default function Vitals() {
       {(loadingInsight || insight) && (
         <div className="bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200 rounded-2xl p-5">
           <div className="flex items-start gap-3">
-            <span className="text-xl shrink-0">🔗</span>
             <div className="flex-1 min-w-0">
               <h3 className="text-sm font-semibold text-teal-800 mb-1">
                 {t('vitals.correlation')}

@@ -233,7 +233,6 @@ export default function ParameterProgress({ extractedValues }) {
       {/* Header — matches Section component exactly */}
       <div className="flex items-center justify-between border-b border-slate-200 pb-3">
         <h2 className="text-base font-bold font-display text-slate-800 flex items-center gap-2">
-          <span className="text-lg">🔬</span>
           {t('analysis.parameterProgress')}
         </h2>
         <span className="text-sm font-semibold text-slate-500">
@@ -252,7 +251,6 @@ export default function ParameterProgress({ extractedValues }) {
       {/* Critical alert */}
       {critical.length > 0 && (
         <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-          <span className="text-base shrink-0">⚠️</span>
           <div>
             <p className="text-sm font-bold text-red-700">
               {critical.length} Critical Value{critical.length > 1 ? 's' : ''} — Immediate Attention Required

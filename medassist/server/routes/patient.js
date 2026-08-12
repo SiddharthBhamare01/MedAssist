@@ -327,11 +327,11 @@ router.get('/badges', verifyToken, async (req, res) => {
     const badges = [];
 
     if (analyzed.length >= 1) {
-      badges.push({ id: 'first_report', label: 'First Report', icon: '🩸', description: 'Uploaded and analyzed your first blood report' });
+      badges.push({ id: 'first_report', label: 'First Report', description: 'Uploaded and analyzed your first blood report' });
     }
 
     if (analyzed.length >= 3) {
-      badges.push({ id: 'on_track', label: 'On Track', icon: '📈', description: 'Has 3 or more analyzed reports — great consistency!' });
+      badges.push({ id: 'on_track', label: 'On Track', description: 'Has 3 or more analyzed reports — great consistency!' });
     }
 
     // Improving: any abnormal parameter status improved between last 2 reports
@@ -356,7 +356,7 @@ router.get('/badges', verifyToken, async (req, res) => {
         }
       }
       if (improving) {
-        badges.push({ id: 'improving', label: 'Improving', icon: '✅', description: 'A parameter moved closer to normal range between your last two reports' });
+        badges.push({ id: 'improving', label: 'Improving', description: 'A parameter moved closer to normal range between your last two reports' });
       }
     }
 
@@ -377,7 +377,7 @@ router.get('/badges', verifyToken, async (req, res) => {
           if (unit === 'month') days *= 30;
           const diffDays = (new Date(latest.created_at) - new Date(penultimate.created_at)) / 86400000;
           if (diffDays <= days) {
-            badges.push({ id: 'followup_champion', label: 'Follow-up Champion', icon: '🔁', description: 'Uploaded a new report within the recommended recheck window' });
+            badges.push({ id: 'followup_champion', label: 'Follow-up Champion', description: 'Uploaded a new report within the recommended recheck window' });
             break;
           }
         }

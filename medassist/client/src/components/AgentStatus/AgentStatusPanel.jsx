@@ -8,19 +8,20 @@ const STATUS_LABELS = {
   error: 'Connection lost',
 };
 
-const STEP_ICON = {
-  tool_call: '🔧',
-  tool_result: '✅',
-  thinking: '🧠',
-  message: '💬',
-  throttled: '⏳',
+// Step type reads from a colored marker rather than an icon glyph.
+const STEP_DOT = {
+  tool_call: 'bg-blue-400',
+  tool_result: 'bg-emerald-500',
+  thinking: 'bg-violet-400',
+  message: 'bg-slate-400',
+  throttled: 'bg-amber-400',
 };
 
 function StepRow({ step, index }) {
-  const icon = STEP_ICON[step.type] || '⚡';
+  const dot = STEP_DOT[step.type] || 'bg-slate-300';
   return (
     <div className="flex items-start gap-2.5 animate-fade-in">
-      <span className="mt-0.5 text-base shrink-0">{icon}</span>
+      <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
       <div className="min-w-0 flex-1">
         <p className="text-xs font-medium text-slate-700 leading-snug">{step.label}</p>
         {step.detail && (

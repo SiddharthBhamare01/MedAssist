@@ -44,7 +44,7 @@ export default function Login() {
       const status = err.response?.status || err.status;
       if (status === 404) {
         toast.error(`No account found for ${form.email}. Please register first.`, {
-          duration: 5000, icon: '👤',
+          duration: 5000,
         });
         setTimeout(() => navigate('/register'), 2500);
       } else if (status === 403) {
@@ -75,7 +75,7 @@ export default function Login() {
       if (data.needsRole) {
         // Email not in DB — this is Sign In page, so redirect to Register
         toast.error(`No account found for ${data.profile?.email}. Please register first.`, {
-          duration: 5000, icon: '👤',
+          duration: 5000,
         });
         setTimeout(() => navigate('/register'), 2500);
         return;
@@ -131,7 +131,6 @@ export default function Login() {
             onClick={toggleLang}
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-600 transition-colors"
           >
-            <span>{lang === 'en' ? '🇺🇸' : '🇪🇸'}</span>
             <span>{lang === 'en' ? 'EN' : 'ES'}</span>
           </button>
         </div>

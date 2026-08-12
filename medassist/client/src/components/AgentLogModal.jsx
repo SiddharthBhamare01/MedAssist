@@ -57,7 +57,7 @@ function StepRow({ step, index }) {
         </span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-slate-800 font-mono">🔧 {step.tool}</span>
+            <span className="text-xs font-bold text-slate-800 font-mono">{step.tool}</span>
             {ts && <span className="text-xs text-slate-400">{ts}</span>}
           </div>
           {argsStr && (

@@ -131,10 +131,9 @@ export default function PatientDashboard() {
             {badges.map((badge) => (
               <div
                 key={badge.id}
-                className="flex items-center gap-2 bg-gradient-to-r from-slate-50 to-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-sm"
+                className="flex items-center bg-gradient-to-r from-slate-50 to-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-sm"
                 title={badge.description}
               >
-                <span className="text-xl">{badge.icon}</span>
                 <span className="text-sm font-semibold text-slate-700">{badge.label}</span>
               </div>
             ))}

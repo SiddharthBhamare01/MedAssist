@@ -293,7 +293,7 @@ export default function NearbyClinics() {
                   />
                   <Marker position={[userLoc.lat, userLoc.lng]} icon={userIcon}>
                     <Popup>
-                      <div className="text-sm font-semibold text-blue-600">📍 Your Location</div>
+                      <div className="text-sm font-semibold text-blue-600">Your Location</div>
                     </Popup>
                   </Marker>
                 </>

@@ -25,7 +25,7 @@ async function sendVerificationEmail(userId, email) {
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 0">
         <div style="text-align:center;margin-bottom:24px">
-          <div style="display:inline-block;width:56px;height:56px;background:#0d9488;border-radius:16px;line-height:56px;font-size:28px">🏥</div>
+          <div style="display:inline-block;width:56px;height:56px;background:#0d9488;border-radius:16px;line-height:56px;font-size:22px;color:#ffffff;font-weight:700;font-family:Arial,Helvetica,sans-serif;letter-spacing:1px">MA</div>
         </div>
         <h2 style="color:#0f172a;margin:0 0 8px">Welcome to MedAssist AI</h2>
         <p style="color:#475569;margin:0 0 24px">Please verify your email address to activate your account. This link expires in <strong>24 hours</strong>.</p>

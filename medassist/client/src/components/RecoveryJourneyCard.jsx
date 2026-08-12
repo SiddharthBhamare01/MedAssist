@@ -88,7 +88,6 @@ function RecoveryVerdict({ recovery, t }) {
     <div className={`rounded-2xl border ${S.outer} shadow animate-slide-up overflow-hidden`}>
       <div className={`${S.hdr} px-5 py-3.5 flex items-center justify-between gap-3`}>
         <div className="flex items-center gap-2.5">
-          <span className="text-xl">{S.icon}</span>
           <div>
             <p className="text-sm font-bold text-slate-800">{t('journey.recoveryTitle')}</p>
             <p className="text-[11px] text-slate-400">{t('journey.recoverySubtitle')}</p>
@@ -138,8 +137,7 @@ function RecoveryVerdict({ recovery, t }) {
 
         {/* Non-responder / declining alert — reuses AnemiaCard's deferral banner */}
         {recovery.defer_to_physician && (
-          <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 flex items-start gap-2">
-            <span className="text-red-500 text-base leading-none mt-0.5">⚠️</span>
+          <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
             <p className="text-sm text-red-700">
               <span className="font-bold">{t('journey.physicianReview')} </span>
               {recovery.deferral_reason}
@@ -242,7 +240,6 @@ export default function RecoveryJourneyCard({ showEmptyState = true }) {
       {/* 0 reports — nothing to plot yet */}
       {showEmptyState && points.length === 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow p-10 text-center animate-slide-up">
-          <p className="text-4xl mb-3">🩸</p>
           <p className="text-slate-700 font-semibold">{t('journey.emptyTitle')}</p>
           <p className="text-sm text-slate-500 mt-1">{t('journey.emptyBody')}</p>
           <button
@@ -292,7 +289,7 @@ export default function RecoveryJourneyCard({ showEmptyState = true }) {
         <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 space-y-4 animate-slide-up">
           <div className="flex items-center justify-between gap-3 flex-wrap border-b border-slate-200 pb-3">
             <h2 className="text-base font-bold font-display text-slate-800 flex items-center gap-2">
-              <span className="text-lg">📈</span>{t('journey.chartTitle')}
+              {t('journey.chartTitle')}
             </h2>
             {cutoff != null && (
               <span className="text-xs text-slate-400">
@@ -381,8 +378,7 @@ export default function RecoveryJourneyCard({ showEmptyState = true }) {
 
           {/* The cutoff moved between reports — say so rather than flattening it */}
           {data.mixed_basis && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 flex items-start gap-2">
-              <span className="text-amber-500 text-base leading-none mt-0.5">ℹ️</span>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
               <p className="text-sm text-amber-800">{t('journey.mixedBasis')}</p>
             </div>
           )}

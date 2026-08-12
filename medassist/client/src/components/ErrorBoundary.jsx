@@ -20,7 +20,6 @@ export default class ErrorBoundary extends Component {
     return (
       <div className="min-h-[60vh] flex items-center justify-center p-8">
         <div className="bg-white border border-red-200 rounded-2xl p-8 max-w-md w-full text-center shadow-sm space-y-4">
-          <div className="text-5xl">⚠️</div>
           <h2 className="text-xl font-bold text-slate-800">Something went wrong</h2>
           <p className="text-sm text-slate-500">
             An unexpected error occurred on this page. This has been logged.

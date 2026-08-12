@@ -43,7 +43,7 @@ export default function Register() {
     } catch (err) {
       const status = err.response?.status || err.status;
       if (status === 409) {
-        toast.error('This Google account already has an account. Please sign in.', { duration: 5000, icon: '👤' });
+        toast.error('This Google account already has an account. Please sign in.', { duration: 5000 });
         setTimeout(() => navigate('/login'), 2500);
       } else {
         toast.error('Google sign-up failed. Please try again.');
@@ -73,7 +73,6 @@ export default function Register() {
       if (status === 409) {
         toast.error(`${form.email} already has an account. Redirecting to sign in…`, {
           duration: 5000,
-          icon: '👤',
         });
         setTimeout(() => navigate('/login'), 2500);
       } else {

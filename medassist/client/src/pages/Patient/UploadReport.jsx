@@ -351,7 +351,6 @@ export default function UploadReport() {
           />
           {!file ? (
             <>
-              <div className="text-5xl mb-3">📄</div>
               <p className="font-semibold text-slate-700">Drag & drop your blood report here</p>
               <p className="text-sm text-slate-400 mt-1">or click to browse</p>
               <p className="text-xs text-slate-300 mt-3">JPG, PNG, PDF — max {MAX_MB} MB</p>
@@ -361,7 +360,7 @@ export default function UploadReport() {
               {preview && preview !== 'pdf' ? (
                 <img src={preview} alt="Report preview" className="max-h-64 mx-auto rounded-lg border border-slate-200 object-contain" />
               ) : (
-                <div className="text-6xl">📑</div>
+                <div className="inline-block px-4 py-2 rounded-lg bg-slate-100 border border-slate-200 text-sm font-semibold tracking-wider text-slate-500">PDF</div>
               )}
               <div>
                 <p className="font-semibold text-slate-800">{file.name}</p>

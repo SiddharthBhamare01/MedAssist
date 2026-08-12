@@ -225,9 +225,6 @@ export default function Navbar() {
               title={lang === 'en' ? 'Cambiar a Español' : 'Switch to English'}
             >
               <div className="flex items-center gap-2.5">
-                <span className="shrink-0 text-white/55 group-hover:text-white/80 text-base leading-none">
-                  {lang === 'en' ? '🇺🇸' : '🇪🇸'}
-                </span>
                 <span className="text-[13px] text-white/55 group-hover:text-white/80 transition-colors">
                   {lang === 'en' ? 'English' : 'Español'}
                 </span>

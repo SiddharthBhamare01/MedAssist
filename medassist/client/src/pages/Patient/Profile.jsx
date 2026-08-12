@@ -14,12 +14,9 @@ const ALCOHOL = ['none', 'occasional', 'moderate', 'heavy'];
 const inputClass = 'w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 transition-all placeholder:text-slate-400';
 const labelClass = 'block text-xs font-semibold text-slate-500 mb-1.5';
 
-function InfoRow({ icon, label, value }) {
+function InfoRow({ label, value }) {
   return (
     <div className="flex items-start gap-3 py-3 border-b border-slate-200 last:border-0">
-      <div className="w-8 h-8 bg-teal-50 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
-        <span className="text-sm">{icon}</span>
-      </div>
       <div className="flex-1 min-w-0">
         <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{label}</p>
         <p className="text-sm text-slate-800 font-medium mt-0.5">{value || '—'}</p>
@@ -288,16 +285,16 @@ export default function PatientProfile() {
           {/* Left column */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
             <h2 className="text-sm font-bold text-slate-700 pb-3 mb-1 border-b border-slate-200">Basic Information</h2>
-            <InfoRow icon="🎂" label="Age" value={profile?.age ? `${profile.age} years` : null} />
-            <InfoRow icon="👤" label="Gender" value={profile?.gender ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1) : null} />
+            <InfoRow label="Age" value={profile?.age ? `${profile.age} years` : null} />
+            <InfoRow label="Gender" value={profile?.gender ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1) : null} />
             {profile?.gender === 'female' && (
-              <InfoRow icon="🤰" label="Pregnant" value={profile?.pregnant ? 'Yes' : 'No'} />
+              <InfoRow label="Pregnant" value={profile?.pregnant ? 'Yes' : 'No'} />
             )}
-            <InfoRow icon="⚖️" label="Weight" value={profile?.weightKg || profile?.weight_kg ? `${profile.weightKg || profile.weight_kg} kg` : null} />
-            <InfoRow icon="📏" label="Height" value={profile?.heightCm || profile?.height_cm ? `${profile.heightCm || profile.height_cm} cm` : null} />
-            <InfoRow icon="🩸" label="Blood Group" value={profile?.bloodGroup || profile?.blood_group} />
-            <InfoRow icon="🚬" label="Smoking" value={profile?.smokingStatus || profile?.smoking_status ? (profile.smokingStatus || profile.smoking_status).charAt(0).toUpperCase() + (profile.smokingStatus || profile.smoking_status).slice(1) : null} />
-            <InfoRow icon="🍷" label="Alcohol" value={profile?.alcoholUse || profile?.alcohol_use ? (profile.alcoholUse || profile.alcohol_use).charAt(0).toUpperCase() + (profile.alcoholUse || profile.alcohol_use).slice(1) : null} />
+            <InfoRow label="Weight" value={profile?.weightKg || profile?.weight_kg ? `${profile.weightKg || profile.weight_kg} kg` : null} />
+            <InfoRow label="Height" value={profile?.heightCm || profile?.height_cm ? `${profile.heightCm || profile.height_cm} cm` : null} />
+            <InfoRow label="Blood Group" value={profile?.bloodGroup || profile?.blood_group} />
+            <InfoRow label="Smoking" value={profile?.smokingStatus || profile?.smoking_status ? (profile.smokingStatus || profile.smoking_status).charAt(0).toUpperCase() + (profile.smokingStatus || profile.smoking_status).slice(1) : null} />
+            <InfoRow label="Alcohol" value={profile?.alcoholUse || profile?.alcohol_use ? (profile.alcoholUse || profile.alcohol_use).charAt(0).toUpperCase() + (profile.alcoholUse || profile.alcohol_use).slice(1) : null} />
           </div>
 
           {/* Right column */}
