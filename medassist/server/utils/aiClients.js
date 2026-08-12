@@ -83,23 +83,27 @@ function getProviders() {
             },
           })
         : null,
+      // Refreshed 2026-08-11: every previous slug (llama-3.1-8b, mistral-7b,
+      // gemma-3, deepseek-v3) had lost its :free tier and 404'd, which took
+      // OpenRouter out of the chain entirely. Verified against
+      // GET /api/v1/models — keep this list in sync when models retire.
       // Tool-calling fallbacks (need function calling support)
-      model: 'meta-llama/llama-3.1-8b-instruct:free',
+      model: 'nvidia/nemotron-3-super-120b-a12b:free',
       fallbackModels: [
-        'meta-llama/llama-3.1-8b-instruct:free',
-        'mistralai/mistral-7b-instruct:free',
-        'google/gemma-3-27b-it:free',
-        'google/gemma-3-12b-it:free',
-        'google/gemma-3n-e4b-it:free',
-        'google/gemma-3-4b-it:free',
+        'nvidia/nemotron-3-super-120b-a12b:free',
+        'openai/gpt-oss-20b:free',
+        'google/gemma-4-31b-it:free',
+        // Below leak chain-of-thought into `content` — last resort only.
+        'nvidia/nemotron-3-nano-30b-a3b:free',
+        'nvidia/nemotron-nano-9b-v2:free',
       ],
       // Analysis-only models (no tool calling needed — bigger/stronger free models)
       analysisModels: [
-        'deepseek/deepseek-chat-v3-0324:free',
-        'deepseek/deepseek-r1-distill-llama-70b:free',
-        'google/gemma-3-27b-it:free',
-        'mistralai/mistral-nemo:free',
-        'meta-llama/llama-3.1-8b-instruct:free',
+        'nvidia/nemotron-3-ultra-550b-a55b:free',
+        'nvidia/nemotron-3-super-120b-a12b:free',
+        'google/gemma-4-31b-it:free',
+        'openai/gpt-oss-20b:free',
+        'nvidia/nemotron-3-nano-30b-a3b:free',
       ],
     },
     // GitHub Models — gpt-4o-mini, needs PAT with models:read scope

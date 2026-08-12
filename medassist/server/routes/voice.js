@@ -145,16 +145,20 @@ ${abnormalLines}`;
         temperature: 0.7,
         max_tokens: 400,
       });
-      script = response.choices[0]?.message?.content?.trim();
+      script = cleanExplanation(response.choices[0]?.message?.content);
       if (script) break;
+      console.warn(`[narrate-report] ${name} returned empty content — trying next provider`);
     } catch (err) {
       const status = err?.status || err?.response?.status;
-      if (status === 429 || status === 503) continue;
-      throw err;
+      if (status === 429) markProviderLimitedRPM(name);
+      console.warn(`[narrate-report] ${name} failed (${status || 'no status'}): ${err.message}`);
+      continue;  // 401/402/404/429/503 etc — fail over; never surface one provider's
+                 // billing status as this route's status while others are untried.
     }
   }
 
   if (!script) {
+    console.error(`[narrate-report] All providers failed — tried: ${available.join(', ') || '(none configured)'}`);
     return res.status(503).json({ error: 'Could not generate narration script. Try again.' });
   }
 
@@ -421,16 +425,19 @@ ${ingredientsList ? `Helpful recovery ingredients: ${ingredientsList}` : ''}`;
         temperature: 0.6,
         max_tokens: 300,
       });
-      reply = response.choices[0]?.message?.content?.trim();
+      reply = cleanExplanation(response.choices[0]?.message?.content);
       if (reply) break;
+      console.warn(`[report-chat] ${name} returned empty content — trying next provider`);
     } catch (err) {
       const status = err?.status || err?.response?.status;
-      if (status === 429 || status === 503) continue;
-      throw err;
+      if (status === 429) markProviderLimitedRPM(name);
+      console.warn(`[report-chat] ${name} failed (${status || 'no status'}): ${err.message}`);
+      continue;  // fail over rather than aborting with one provider's status
     }
   }
 
   if (!reply) {
+    console.error(`[report-chat] All providers failed — tried: ${available.join(', ') || '(none configured)'}`);
     return res.status(503).json({ error: 'Could not generate response. Try again.' });
   }
 
