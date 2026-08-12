@@ -104,6 +104,16 @@ Last updated: 2026-08-06.
 - **Phase 2 remainder** (optional, beyond Sprint 4): unified journey timeline (Pillar 3), reminders/nudges (Pillar 4).
 - **Phase 3 — Prove & Position** (Month 3, Sprints 5–6): safety/critical-value net, in-app validation dashboard, clinician-review workflow, positioning brief, capstone walkthrough.
 
-> **Resume point:** [CHECKPOINT-03-recovery-journey.md](./CHECKPOINT-03-recovery-journey.md) — most recent.
-> [CHECKPOINT-02](./CHECKPOINT-02-roadmap.md) has the Phase 1 recap + Phase 2/3 build order;
+## ⚠️ Gate 3 is earlier than the work plan assumes
+
+Per `LOF_LABS_Participant_Guide.docx`, **Gate 3 (feature-complete beta) is due end of Week 10,
+~6 Sep** — not 30 Sep. The Month 3 plan is ~3 weeks late against the actual gate. Reconcile
+this before scheduling Sprint 5/6 work. Full detail in
+[CHECKPOINT-04](./CHECKPOINT-04-voice-safety-compliance.md) §7.
+
+> **Resume point:** [CHECKPOINT-04-voice-safety-compliance.md](./CHECKPOINT-04-voice-safety-compliance.md) — most recent.
+> Carries the voice pipeline rebuild, the chatbot treatment guardrail, licensing compliance,
+> the Gate 2 self-assessment, and the open credential/compliance checklist.
+> [CHECKPOINT-03](./CHECKPOINT-03-recovery-journey.md) has the recovery journey;
+> [CHECKPOINT-02](./CHECKPOINT-02-roadmap.md) the Phase 1 recap + Phase 2/3 build order;
 > [CHECKPOINT-01](./CHECKPOINT-01-cbc-expert.md) the anemia classifier.
