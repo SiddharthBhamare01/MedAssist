@@ -599,5 +599,18 @@ Frontend: `http://localhost:5173` · Backend: `http://localhost:5000`
 |-|-|
 | **Course** | CS 595 — Medical Informatics & AI |
 | **Institution** | Illinois Institute of Technology |
-| **Developer** | Siddharth Bhamare |
+| **Developers** | Vaishnav Bhujbal, Siddharth Bhamare |
 | **Academic Year** | 2025–2026 |
+| **Program** | LOF AI Build Studio (LABS) — Summer 2026 |
+
+## License
+
+Licensed under the **Apache License 2.0** — see [`LICENSE`](LICENSE) for the full text.
+
+    Copyright 2026 Vaishnav Bhujbal and Siddharth Bhamare
+
+Third-party dependencies and their licenses are listed in
+[`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md), generated from the installed
+dependency tree by `medassist/scripts/license-manifest.js`. Regenerate it after
+changing dependencies rather than editing it by hand — the script exits non-zero
+when a dependency declares terms that need review, so it can gate a build.
