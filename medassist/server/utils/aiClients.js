@@ -23,6 +23,11 @@ const OpenAI = require('openai');
  * heliconePathPrefix: '/v1' for providers whose API paths include /v1 (Cerebras, SambaNova, OpenRouter)
  *                    ''    for providers whose paths don't include /v1 (GitHub Models)
  */
+// Free-tier models occasionally accept a request and then never respond. Without a
+// ceiling, one of those stalls a whole report; 90s is well clear of a normal 3500-token
+// analysis call.
+const REQUEST_TIMEOUT_MS = 90_000;
+
 function makeClient(apiKey, targetURL, extraHeaders = {}, heliconePathPrefix = '/v1') {
   if (!apiKey) return null;
 
@@ -31,6 +36,7 @@ function makeClient(apiKey, targetURL, extraHeaders = {}, heliconePathPrefix = '
     return new OpenAI({
       apiKey,
       baseURL: `https://gateway.helicone.ai${heliconePathPrefix}`,
+      timeout: REQUEST_TIMEOUT_MS,
       defaultHeaders: {
         'Helicone-Auth': `Bearer ${heliconeKey}`,
         'Helicone-Target-URL': targetURL,
@@ -39,7 +45,7 @@ function makeClient(apiKey, targetURL, extraHeaders = {}, heliconePathPrefix = '
     });
   }
 
-  return new OpenAI({ apiKey, baseURL: targetURL, defaultHeaders: extraHeaders });
+  return new OpenAI({ apiKey, baseURL: targetURL, timeout: REQUEST_TIMEOUT_MS, defaultHeaders: extraHeaders });
 }
 
 // Lazily constructed so .env is read after dotenv.config() runs
@@ -77,6 +83,7 @@ function getProviders() {
         ? new OpenAI({
             apiKey: process.env.OPENROUTER_API_KEY,
             baseURL: 'https://openrouter.ai/api/v1',
+            timeout: REQUEST_TIMEOUT_MS,
             defaultHeaders: {
               'HTTP-Referer': process.env.CLIENT_URL || 'http://localhost:5173',
               'X-Title': 'MedAssist AI CS595',
@@ -98,16 +105,22 @@ function getProviders() {
         'nvidia/nemotron-nano-9b-v2:free',
       ],
       // Analysis-only models (no tool calling needed — bigger/stronger free models)
+      // nemotron-3-ultra is still listed by GET /api/v1/models but its upstream
+      // hangs and then drops the connection (ECONNRESET), so it sits below super
+      // rather than first — leading with it cost ~2 min before every fallback.
       analysisModels: [
-        'nvidia/nemotron-3-ultra-550b-a55b:free',
         'nvidia/nemotron-3-super-120b-a12b:free',
+        'nvidia/nemotron-3-ultra-550b-a55b:free',
         'google/gemma-4-31b-it:free',
         'openai/gpt-oss-20b:free',
         'nvidia/nemotron-3-nano-30b-a3b:free',
       ],
     },
-    // GitHub Models — gpt-4o-mini, needs PAT with models:read scope
-    // Note: GitHub's endpoint has no /v1 prefix, so heliconePathPrefix = ''
+    // GitHub Models — RETIRED by GitHub (verified 2026-08-13): the old
+    // models.inference.ai.azure.com endpoint 404s and the newer
+    // models.github.ai/inference returns 410 "github_models_retirement_brownout".
+    // Kept here only so the name resolves; it is absent from every priority order
+    // below. Delete once GitHub confirms the retirement is permanent.
     github: {
       name: 'GitHub gpt-4o-mini',
       client: makeClient(process.env.GITHUB_TOKEN, 'https://models.inference.ai.azure.com', {}, ''),
@@ -123,18 +136,22 @@ function getProviders() {
   return _providers;
 }
 
+// 'github' appears in none of these orders — GitHub Models is retired (see above).
+// SambaNova is kept last in each: its free tier 402s until a payment method is
+// added, so it is only worth trying once everything else is exhausted.
+
 // Ensemble agents — free models run in parallel (OpenAI excluded: it's the dedicated judge).
-// Cerebras first: fastest free inference, no monthly cap. SambaNova demoted (free tier now 402s).
-const PRIORITY_ORDER = ['cerebras', 'sambanova', 'github', 'openrouter'];
+// Cerebras first: fastest free inference, no monthly cap.
+const PRIORITY_ORDER = ['cerebras', 'openrouter', 'sambanova'];
 
 // Tool-calling — OpenAI first (paid, most reliable function calling), then Cerebras, then free fallbacks
-const TOOL_PROVIDERS_ORDER = ['openai', 'cerebras', 'sambanova', 'github'];
+const TOOL_PROVIDERS_ORDER = ['openai', 'cerebras', 'sambanova'];
 
 // Judge — OpenAI gpt-4o first (paid, independent from ensemble agents → best accuracy)
-const JUDGE_PRIORITY_ORDER = ['openai', 'sambanova', 'github'];
+const JUDGE_PRIORITY_ORDER = ['openai', 'openrouter', 'sambanova'];
 
-// Voice/lightweight order — GitHub gpt-4o-mini first (generous rate limits, fast JSON extraction)
-const VOICE_PRIORITY_ORDER = ['github', 'cerebras', 'sambanova', 'openrouter'];
+// Voice/lightweight order — Cerebras first (fastest free inference, fast JSON extraction)
+const VOICE_PRIORITY_ORDER = ['cerebras', 'openrouter', 'sambanova'];
 
 // Providers to exclude (set via EXCLUDED_AI_PROVIDERS env var, comma-separated)
 const EXCLUDED_PROVIDERS = new Set(

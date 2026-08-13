@@ -38,7 +38,7 @@ async function callProvider(provider, systemPrompt, userMessage, maxTokens = 200
         temperature: 0,
         max_tokens: maxTokens,
       }, { headers: heliconeHeaders });
-      const msg = response.choices[0]?.message;
+      const msg = response?.choices?.[0]?.message;
       // Some models (reasoning/thinking) put output in reasoning_content with null content
       const text = msg?.content || msg?.reasoning_content || '';
       if (!text) {
@@ -51,16 +51,18 @@ async function callProvider(provider, systemPrompt, userMessage, maxTokens = 200
       }
       return text.trim();
     } catch (err) {
-      // 429 = overloaded, 503 = down, 404 = model gone, 400 = provider error, 402 = free tier/credits exhausted — try next model
-      if (err.status === 429 || err.status === 503 || err.status === 404 || err.status === 400 || err.status === 402) {
-        lastErr = err;
-        continue;
-      }
-      throw err; // non-retryable error
+      // Only a bad credential is worth aborting on — it will fail identically for
+      // every model on this provider. Everything else (429 overloaded, 503 down,
+      // 404 model gone, 400/402 provider error, timeouts, and malformed responses
+      // that surface as plain TypeErrors) is model-specific, so try the next one.
+      if (err.status === 401 || err.status === 403) throw err;
+      lastErr = err;
     }
   }
   // All models exhausted — throw with clean message (not the raw API error object)
-  const exhaustedErr = new Error(`${provider.name}: all ${modelsToTry.length} models unavailable (${lastErr?.status})`);
+  const exhaustedErr = new Error(
+    `${provider.name}: all ${modelsToTry.length} models unavailable (${lastErr?.status || lastErr?.message})`
+  );
   exhaustedErr.status = lastErr?.status;
   throw exhaustedErr;
 }
@@ -127,41 +129,47 @@ Compare drug interaction analyses from each agent.
 const MAX_ENSEMBLE_PROVIDERS = 2;
 
 async function runParallel(systemPrompt, userMessage, maxTokens = 2000) {
-  const available = getAvailableProviders()
-    .filter(name => !isProviderLimited(name))
-    .slice(0, MAX_ENSEMBLE_PROVIDERS);
+  const available = getAvailableProviders().filter(name => !isProviderLimited(name));
   if (available.length === 0) throw new Error('No AI providers configured');
 
   const providers = getProviders();
 
-  const results = await Promise.allSettled(
-    available.map(async (name) => {
+  // Keep MAX_ENSEMBLE_PROVIDERS calls in flight and, when one fails, pull the next
+  // provider off the queue. Slicing the list up front instead meant an exhausted
+  // free tier (402) on the top two sank the whole ensemble while the remaining
+  // providers were never tried.
+  const queue = [...available];
+  const successful = [];
+  const failed = [];
+
+  async function worker() {
+    while (successful.length < MAX_ENSEMBLE_PROVIDERS) {
+      const name = queue.shift();
+      if (!name) return;
       const provider = providers[name];
       try {
         const output = await callProvider(provider, systemPrompt, userMessage, maxTokens);
-        return { provider: name, providerName: provider.name, output };
+        successful.push({ provider: name, providerName: provider.name, output });
+        return;
       } catch (err) {
         // 429 = rate cap, 402 = free tier/credits exhausted — bench the provider so we stop hammering it
         if (err.status === 429 || err.status === 402) markProviderLimited(name);
-        throw err;
+        failed.push({ provider: name, error: err.message });
       }
-    })
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(MAX_ENSEMBLE_PROVIDERS, queue.length) }, worker)
   );
-
-  const successful = results
-    .filter((r) => r.status === 'fulfilled')
-    .map((r) => r.value);
-
-  // Map failures back to provider names using index into available[]
-  const failed = results
-    .map((r, i) => ({ status: r.status, provider: available[i], error: r.reason?.message }))
-    .filter((r) => r.status === 'rejected');
 
   if (failed.length > 0) {
     failed.forEach((f) => console.log(`[ensembleRunner] ${f.provider} skipped: ${f.error}`));
   }
 
-  if (successful.length === 0) throw new Error('All AI providers failed in ensemble run');
+  if (successful.length === 0) {
+    throw new Error(`All AI providers failed in ensemble run (tried: ${available.join(', ')})`);
+  }
   return successful;
 }
 
@@ -190,12 +198,11 @@ ${agentOutputs.map((a, i) => `=== Agent ${i + 1} (${a.providerName}) ===\n${a.ou
       const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
       return clean;
     } catch (err) {
-      if (err.status === 429 || err.status === 503 || err.status === 402) {
-        if (err.status === 429 || err.status === 402) markProviderLimited(name);
-        lastErr = err;
-        continue;
-      }
-      throw err;
+      // Same rule as callProvider: any failure means try the next judge, since
+      // dropping out here loses the merged result the agents already paid for.
+      if (err.status === 429 || err.status === 402) markProviderLimited(name);
+      console.log(`[ensembleRunner] judge ${name} failed: ${err.message}`);
+      lastErr = err;
     }
   }
   throw lastErr || new Error('All providers failed for consensus judge');
@@ -207,23 +214,29 @@ ${agentOutputs.map((a, i) => `=== Agent ${i + 1} (${a.providerName}) ===\n${a.ou
  * If only 1 provider is available, skips consensus and returns that output directly.
  * Returns: { consensusRaw, agentCount, agentOutputs }
  */
+function stripFences(text) {
+  return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+}
+
 async function runEnsembleWithConsensus(systemPrompt, userMessage, taskType, maxTokens = 2000) {
   const agentOutputs = await runParallel(systemPrompt, userMessage, maxTokens);
 
   // Single provider — no consensus needed
   if (agentOutputs.length === 1) {
     console.log(`[ensembleRunner] Single provider (${agentOutputs[0].providerName}) — skipping consensus`);
-    const clean = agentOutputs[0].output
-      .replace(/^```(?:json)?\s*/i, '')
-      .replace(/\s*```\s*$/, '')
-      .trim();
-    return { consensusRaw: clean, agentCount: 1, agentOutputs };
+    return { consensusRaw: stripFences(agentOutputs[0].output), agentCount: 1, agentOutputs };
   }
 
   console.log(`[ensembleRunner] Running consensus across ${agentOutputs.length} providers: ${agentOutputs.map((a) => a.providerName).join(', ')}`);
-  const consensusRaw = await runConsensus(agentOutputs, taskType);
-
-  return { consensusRaw, agentCount: agentOutputs.length, agentOutputs };
+  try {
+    const consensusRaw = await runConsensus(agentOutputs, taskType);
+    return { consensusRaw, agentCount: agentOutputs.length, agentOutputs };
+  } catch (err) {
+    // The agents already produced usable analyses — losing the whole phase because
+    // no judge was reachable is worse than returning one unmerged agent output.
+    console.error(`[ensembleRunner] Consensus judge unavailable (${err.message}) — falling back to ${agentOutputs[0].providerName} alone`);
+    return { consensusRaw: stripFences(agentOutputs[0].output), agentCount: 1, agentOutputs };
+  }
 }
 
 module.exports = { runParallel, runConsensus, runEnsembleWithConsensus };

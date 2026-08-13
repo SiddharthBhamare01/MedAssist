@@ -577,7 +577,7 @@ router.post('/translate', verifyToken, async (req, res) => {
 
   const langName = LANG_NAMES[lang] || lang;
   const providers = getProviders();
-  const available = getAvailableVoiceProviders(); // GitHub gpt-4o-mini first — higher RPM than Cerebras
+  const available = getAvailableVoiceProviders(); // Cerebras first — fastest free inference
 
   // Split into segments of 15 keys — each segment stays well under 4096 output tokens
   const SEGMENT_SIZE = 15;
@@ -586,7 +586,7 @@ router.post('/translate', verifyToken, async (req, res) => {
     segments.push(Object.fromEntries(entries.slice(i, i + SEGMENT_SIZE)));
   }
 
-  // Sequential — avoids concurrent request limits on GitHub (5/s) and Cerebras
+  // Sequential — avoids concurrent request limits on Cerebras and OpenRouter free tiers
   const merged = {};
   for (const seg of segments) {
     const result = await translateSegment(seg, langName, providers, available);

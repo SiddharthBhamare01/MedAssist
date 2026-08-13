@@ -1,7 +1,7 @@
 # MedAssist — Progress Tracker
 
 Mapped to the v3 work plan (*The Anemia Intelligence Module · Detect → Confirm & Track → Prove & Position*).
-Last updated: 2026-08-06.
+Last updated: 2026-08-13.
 
 ---
 
@@ -10,6 +10,11 @@ Last updated: 2026-08-06.
 ### Infrastructure / reliability (pre-Stage-1)
 - Blood-report OCR restored — refreshed to current 2026 vision model IDs (Gemini 3.x / Qwen 3.7 via OpenRouter).
 - AI provider failover hardened — 402/404 handling, Cerebras promoted to `gpt-oss-120b`.
+- **Blood-report analysis failover fixed** (13 Aug, [CHECKPOINT-05](./CHECKPOINT-05-ensemble-failover.md)) — the
+  ensemble narrowed its provider list to two *before* calling any of them, so two exhausted free tiers
+  killed the whole analysis phase while healthy providers went untried. GitHub Models is retired (HTTP 410)
+  and is out of every priority order. ⚠️ On Render this now runs on OpenRouter **alone** until
+  `CEREBRAS_API_KEY` is fixed there — the report renders, but nothing is being cross-checked.
 
 ### Stage 1 — CBC Expert Module (Month 1, "Detect") — **✅ COMPLETE**
 - **Deterministic anemia engine** (`server/services/anemiaClassifier.js`): rule-based status, WHO 2024 cutoffs, WHO 2011 severity bands, MCV/MCH/RDW morphology, AGA 2020 iron-deficiency confirmation, conservative deferral. *The AI only explains; the rule engine decides.*
@@ -111,9 +116,13 @@ Per `LOF_LABS_Participant_Guide.docx`, **Gate 3 (feature-complete beta) is due e
 this before scheduling Sprint 5/6 work. Full detail in
 [CHECKPOINT-04](./CHECKPOINT-04-voice-safety-compliance.md) §7.
 
-> **Resume point:** [CHECKPOINT-04-voice-safety-compliance.md](./CHECKPOINT-04-voice-safety-compliance.md) — **2026-08-11**, most recent.
-> Carries the voice pipeline rebuild, the chatbot treatment guardrail, licensing compliance,
-> the Gate 2 self-assessment, and the open credential/compliance checklist.
+> **Resume point:** [CHECKPOINT-05-ensemble-failover.md](./CHECKPOINT-05-ensemble-failover.md) — **2026-08-13**, most recent.
+> Carries the blood-report ensemble failover fix, the measured provider state, and two
+> deliberate degradations (single-provider analysis on Render; a consensus judge that is
+> not independent when OpenAI is down).
+> [CHECKPOINT-04](./CHECKPOINT-04-voice-safety-compliance.md) — **2026-08-11** — has the voice
+> pipeline rebuild, the chatbot treatment guardrail, licensing compliance, the Gate 2
+> self-assessment, and the open credential/compliance checklist;
 > [CHECKPOINT-03](./CHECKPOINT-03-recovery-journey.md) has the recovery journey;
 > [CHECKPOINT-02](./CHECKPOINT-02-roadmap.md) the Phase 1 recap + Phase 2/3 build order;
 > [CHECKPOINT-01](./CHECKPOINT-01-cbc-expert.md) the anemia classifier.
