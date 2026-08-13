@@ -98,6 +98,12 @@ Last updated: 2026-08-13.
 
 ## 🔧 In progress / next
 
+- **⚠️ Vision OCR fabricates values from an unreadable image** — a blank PNG returns a full set of
+  invented results copied from the few-shot example in the prompt, and the deterministic classifier
+  then builds a confident anemia verdict on them. Affects both the Gemini and OpenRouter vision
+  paths; pre-existing, not introduced by enabling Gemini. Needs a scanned/photographed sample
+  before a prompt fix can be validated. Detail in
+  [CHECKPOINT-05](./CHECKPOINT-05-ensemble-failover.md) §6b.
 - **⚠️ Visual verification of the whole recovery journey UI** — chart, cutoff line, recovery card,
   collapse behavior, section order, merged anemia card. All verified by harness/build/live API, none
   seen rendered. The `RESPONDING`/`RECOVERED` states and the dashed projection line need a patient

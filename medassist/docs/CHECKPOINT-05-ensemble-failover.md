@@ -115,6 +115,52 @@ The second case is the one that used to throw `All AI providers failed in ensemb
 
 **Not verified:** nothing was exercised through the deployed app. No report was uploaded to Render after the fix, and the browser rendering of a `agentCount=1` analysis has not been seen. The failing upload's user-visible symptom was never established either — Phase 2a's `catch` leaves `medical = null` and the report should render with sections missing rather than erroring outright, but that was not confirmed against what the user actually saw.
 
+## 6a. Where the time actually goes — "OCR is slow" was the wrong suspect
+
+Measured on `sample-cbc-reports/CBC_1_iron_deficiency_anemia.pdf`, 13 Aug:
+
+| Stage | Time |
+|---|---|
+| `pdf-parse` text layer | **285 ms** |
+| Full text path (pdf-parse + Cerebras parse) | **1.4 s** — 10 values |
+| Gemini direct on the raw PDF | 6.3 s (`flash-lite`) · 7.4 s (`flash`) — 10 values |
+| **Phase 2a ensemble** (2000 tok, 2 providers + judge) | **119 s** |
+| **Phase 2b ensemble** (3500 tok, 2 providers + judge) | **157 s** |
+| Phase 2a with Cerebras benched — Render's situation | 39 s, `agentCount=1` |
+
+**Extraction is 1.4 s. The two analysis phases are ~4.6 minutes.** Whatever a user experiences as a slow upload is almost entirely the ensemble, and no OCR change affects it.
+
+The long pole inside a phase is the **OpenRouter free models** — Cerebras answers in ~1 s, so a two-provider phase runs at OpenRouter's speed, and the judge is a further OpenRouter call whenever OpenAI is unavailable. Note the counter-intuitive row: benching Cerebras made Phase 2a *faster* (39 s), because one provider skips consensus entirely. Restoring Cerebras buys real cross-checking, not lower latency.
+
+One 90 s stall appeared in the Phase 2b judge (`Request timed out` from OpenAI). It did **not** reproduce — four consecutive calls on that key returned 401 in 84–582 ms — so it was a one-off gateway stall rather than a systematic cost.
+
+## 6b. ⚠️ A blank image produces a fabricated blood report
+
+Found while verifying the Gemini routing. Uploading a **blank white PNG** returns a full set of invented values:
+
+```
+BLANK WHITE IMAGE returned 9 values:
+{ "parameter": "Hemoglobin", "value": "13.2", "unit": "g/dL",
+  "normal_range": "13.5–17.5", "status": "low" }
+```
+
+Those are the numbers from the few-shot example inside `VISION_PARSE_PROMPT` itself. With nothing to read, the model copies the example and presents it as extracted data.
+
+**This is pre-existing and not caused by enabling Gemini** — the OpenRouter vision path does the same thing (11 fabricated values on the same image). It matters more than a normal extraction bug because the deterministic anemia classifier runs on whatever comes out: a failed photo can yield a confident, sourced, WHO-cutoff-anchored anemia verdict built on values no one ever measured.
+
+Not fixed here. The fix is a prompt change plus a sanity gate, and neither can be validated without a scanned or photographed sample report to test against — the three files in `sample-cbc-reports/` are all text-layer PDFs that never reach a vision model. Tracked in §8.
+
+## 6c. Gemini enabled
+
+`GEMINI_API_KEY` was commented out in `server/.env` (two distinct keys, both verified working against the live API) and absent from `render.yaml`. Now active locally and declared in the blueprint, alongside `OPENAI_API_KEY`, which was also missing.
+
+- `geminiModels` corrected: `gemini-2.5-flash` returns 404 *"no longer available to new users"*, so it could never have served as a fallback. The list is now `gemini-3.1-flash-lite` → `gemini-3.5-flash`, flash-lite first on the measured 6.3 s vs 7.4 s.
+- Verified routing: an image upload now logs `Gemini Vision OCR — gemini-3.1-flash-lite` instead of falling through to OpenRouter.
+
+**What this buys:** scanned PDFs stop failing outright on a host without the `pdftoppm` binary — `extractFromPDF` sends the raw PDF to Gemini in that case, which read the sample PDF natively and returned all 10 values. **What it does not buy: any speed.** See §6a.
+
+**`.env` is untracked**, so this commit changes nothing in production by itself. `GEMINI_API_KEY` must be set in the Render dashboard.
+
 ## 7. ⚠️ Two degradations to be aware of
 
 **The ensemble will probably not be ensembling on Render.** With Cerebras 402ing there, the only healthy provider is OpenRouter — so `agentCount=1`, the single-provider path, no consensus. The pipeline produces a report; the accuracy claim that rests on cross-provider agreement does not hold. **Fixing `CEREBRAS_API_KEY` in Render is the single highest-value action** and restores two-provider consensus immediately.
@@ -127,10 +173,16 @@ Deliberate: a self-judged merge beats a dead analysis phase. But for a medical t
 
 Carried forward from CHECKPOINT-04 §8, still open and now higher priority:
 
-- [ ] **Set a working `CEREBRAS_API_KEY` in Render.** Now the difference between a real ensemble and a single-model analysis, not just narration latency.
-- [ ] **Add `SAMBANOVA_API_KEY` billing or drop the provider.** It has 402'd continuously since 11 Aug and costs a round trip on every phase.
+- [ ] **Set a working `CEREBRAS_API_KEY` in Render.** Now the difference between a real ensemble and a single-model analysis, not just narration latency. The key currently active in `server/.env` works and answers in ~1s; Render's does not. Note this buys *accuracy*, not speed (§6a).
+- [ ] **Add `SAMBANOVA_API_KEY` billing or drop the provider.** 402 "A payment method is required" — an account-level state with no code remedy. It has 402'd continuously since 11 Aug and costs a round trip on every phase. It is last in every order and self-benches for 5 minutes, so leaving it is defensible; removing it from `PRIORITY_ORDER` is a one-line alternative.
 
 New:
+
+- [ ] **⚠️ Stop vision OCR fabricating values from an unreadable image (§6b).** Highest-severity item here. Needs a scanned/photographed sample report before the prompt and sanity gate can be validated.
+- [ ] **Set `GEMINI_API_KEY` in the Render dashboard** — declared `sync: false`, so Render will not create it, and `.env` is untracked.
+- [ ] **Confirm whether `pdftoppm` exists on Render.** Upload a scanned PDF and look for `pdftoppm: PDF → JPEG` versus `pdftoppm unavailable or failed`. With Gemini now enabled either branch works, but only one reads every page.
+- [ ] **Multi-page scanned reports lose everything after page 1** — `convertScannedPDFToImage` runs `pdftoppm -singlefile -f 1 -l 1`. Sending the raw PDF to Gemini instead would read all pages; untested on a scanned input, so not changed.
+- [ ] **Consider running Phase 2a and 2b concurrently.** They share one context and are independent; serially they are ~4.6 minutes (§6a). Deferred — it doubles concurrent load on the free tiers that are already 402ing.
 
 - [ ] **Add `OPENAI_API_KEY` to `render.yaml`.** It is set in the Render dashboard but absent from the blueprint, so a rebuild from the blueprint would silently lose the judge.
 - [ ] **Refresh the local `server/.env` OpenAI key** — 401 locally, which makes judge behavior untestable off-Render.

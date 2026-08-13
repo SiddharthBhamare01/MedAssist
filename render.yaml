@@ -3,7 +3,7 @@
 ##
 ## After connecting this repo in Render dashboard, set these env vars:
 ##   DATABASE_URL, JWT_SECRET, CEREBRAS_API_KEY, SAMBANOVA_API_KEY,
-##   OPENROUTER_API_KEY, GITHUB_TOKEN, HELICONE_API_KEY,
+##   OPENROUTER_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, HELICONE_API_KEY,
 ##   CLIENT_URL (= your Vercel frontend URL), GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
 ##   SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS,
 ##   DEEPGRAM_API_KEY, OPENFDA_API_KEY
@@ -34,6 +34,16 @@ services:
         sync: false
       - key: OPENROUTER_API_KEY
         sync: false
+      # Gemini Vision — primary OCR for scanned PDFs and photos. Without it a scanned
+      # PDF fails outright on any host that lacks the pdftoppm binary.
+      - key: GEMINI_API_KEY
+        sync: false
+      # OpenAI — Phase 1 tool calling and the consensus judge. Was set in the dashboard
+      # but missing here, so a rebuild from this blueprint would have dropped the judge.
+      - key: OPENAI_API_KEY
+        sync: false
+      # GITHUB_TOKEN is retained only for a possible GitHub Models return; the service
+      # answers 410 github_models_retirement_brownout and is in no provider order.
       - key: GITHUB_TOKEN
         sync: false
       - key: HELICONE_API_KEY

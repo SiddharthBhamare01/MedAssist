@@ -10,7 +10,11 @@
  *   1. google/gemini-3.1-flash-lite
  *   2. google/gemini-3.5-flash
  *   3. qwen/qwen3.7-plus
- *   Primary (if GEMINI_API_KEY has quota): Gemini 3.5 Flash direct API
+ *   Primary (if GEMINI_API_KEY has quota): Gemini direct API — see extractWithGeminiVision.
+ *
+ * Note: only the scanned/image branches do OCR at all. A PDF with a text layer never
+ * reaches a vision model — pdf-parse pulls the text and an ordinary chat model parses it,
+ * which measured 1.4s end to end on a sample CBC.
  */
 
 const fs = require('fs');
@@ -164,7 +168,10 @@ async function extractWithGeminiVision(buffer, mimeType) {
   const { GoogleGenerativeAI } = require('@google/generative-ai');
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-  const geminiModels = ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
+  // Verified against the live API 2026-08-13. gemini-2.5-flash was dropped: it returns
+  // 404 "no longer available to new users", so it could never have served as a fallback.
+  // flash-lite leads — it read a sample CBC in 6.3s vs 7.4s for flash, same 10 values.
+  const geminiModels = ['gemini-3.1-flash-lite', 'gemini-3.5-flash'];
   let lastGeminiErr;
 
   for (const modelName of geminiModels) {
