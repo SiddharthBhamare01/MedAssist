@@ -86,7 +86,27 @@ function getProviders() {
       client: cerebrasClient,
       model: 'gpt-oss-120b',
     },
-    // SambaNova — free, OpenAI-compatible, no monthly cap
+    // Groq — free, and by far the fastest of the free tiers: 0.5–0.9s for a 2000-token
+    // medical JSON answer against 60–120s from the OpenRouter free models. Added
+    // 2026-08-13 after SambaNova's free tier ended; the key had been sitting unused
+    // and commented out in .env.
+    // Helicone path prefix is '/openai/v1', not '/v1' — Groq's API lives under
+    // /openai/v1 and the gateway keeps the request path while swapping the origin.
+    // Verified end to end through the gateway, not assumed.
+    groq: {
+      name: 'Groq',
+      client: makeClient(process.env.GROQ_API_KEY, 'https://api.groq.com/openai/v1', {}, '/openai/v1'),
+      // Both slugs verified 2026-08-13: valid JSON in `content` (not reasoning_content),
+      // and both drive the real medicalTools definitions via tool_calls.
+      model: 'llama-3.3-70b-versatile',
+      fallbackModels: ['llama-3.3-70b-versatile', 'openai/gpt-oss-120b'],
+      // gpt-oss-120b leads for analysis — same latency, markedly fuller output.
+      analysisModels: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile'],
+    },
+    // SambaNova — free tier ended. Every model 402s with balance_units: 0 and
+    // PAYMENT_METHOD_REQUIRED, verified across all three keys on 2026-08-13. The model
+    // ID below is current (it is listed by GET /v1/models); the account, not the model,
+    // is what fails. Left last in every order in case billing is ever added.
     sambanova: {
       name: 'SambaNova Llama-3.3-70B',
       client: makeClient(process.env.SAMBANOVA_API_KEY, 'https://api.sambanova.ai/v1'),
@@ -159,17 +179,23 @@ function getProviders() {
 // added, so it is only worth trying once everything else is exhausted.
 
 // Ensemble agents — free models run in parallel (OpenAI excluded: it's the dedicated judge).
-// Cerebras first: fastest free inference, no monthly cap.
-const PRIORITY_ORDER = ['cerebras', 'openrouter', 'sambanova'];
+// Groq and Cerebras lead because they answer in about a second; OpenRouter's free models
+// take 60–120s and were the reason a report took minutes.
+const PRIORITY_ORDER = ['groq', 'cerebras', 'openrouter', 'sambanova'];
 
-// Tool-calling — OpenAI first (paid, most reliable function calling), then Cerebras, then free fallbacks
-const TOOL_PROVIDERS_ORDER = ['openai', 'cerebras', 'sambanova'];
+// Tool-calling — OpenAI first (paid, most reliable function calling), then the fast free
+// tiers. Groq was checked against the real medicalTools definitions before being added.
+const TOOL_PROVIDERS_ORDER = ['openai', 'groq', 'cerebras', 'sambanova'];
 
-// Judge — OpenAI gpt-4o first (paid, independent from ensemble agents → best accuracy)
+// Judge — OpenAI gpt-4o first (paid, independent from ensemble agents → best accuracy).
+// Groq is deliberately absent: it now leads PRIORITY_ORDER, so judging here would have it
+// merging its own output. OpenRouter backs OpenAI up instead, and with Groq and Cerebras
+// filling the two agent slots it is usually not an agent — so the judge stays independent.
 const JUDGE_PRIORITY_ORDER = ['openai', 'openrouter', 'sambanova'];
 
-// Voice/lightweight order — Cerebras first (fastest free inference, fast JSON extraction)
-const VOICE_PRIORITY_ORDER = ['cerebras', 'openrouter', 'sambanova'];
+// Voice/lightweight order — Groq first (sub-second, and returns text in `content`, which
+// these routes read directly).
+const VOICE_PRIORITY_ORDER = ['groq', 'cerebras', 'openrouter', 'sambanova'];
 
 // Providers to exclude (set via EXCLUDED_AI_PROVIDERS env var, comma-separated)
 const EXCLUDED_PROVIDERS = new Set(

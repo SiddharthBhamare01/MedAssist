@@ -54,7 +54,9 @@ async function callProvider(provider, systemPrompt, userMessage, maxTokens = 200
         noContentErr.status = 400;
         throw noContentErr;
       }
-      if (model !== provider.model) {
+      // Only note a genuine fallback. Comparing against provider.model would flag the
+      // normal case too, since analysisModels deliberately leads with a different slug.
+      if (model !== modelsToTry[0]) {
         console.log(`[ensembleRunner] ${provider.name}: using fallback model ${model}`);
       }
       return text.trim();

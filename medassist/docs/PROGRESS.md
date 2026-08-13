@@ -13,8 +13,12 @@ Last updated: 2026-08-13.
 - **Blood-report analysis failover fixed** (13 Aug, [CHECKPOINT-05](./CHECKPOINT-05-ensemble-failover.md)) — the
   ensemble narrowed its provider list to two *before* calling any of them, so two exhausted free tiers
   killed the whole analysis phase while healthy providers went untried. GitHub Models is retired (HTTP 410)
-  and is out of every priority order. ⚠️ On Render this now runs on OpenRouter **alone** until
-  `CEREBRAS_API_KEY` is fixed there — the report renders, but nothing is being cross-checked.
+  and is out of every priority order.
+- **Groq added as the lead free provider** (13 Aug, [CHECKPOINT-05](./CHECKPOINT-05-ensemble-failover.md) §6e)
+  — ensemble agents went from 60–120s to **1.5s**. A model-ID audit found nothing outdated:
+  SambaNova's 402 is `balance_units: 0` across all three keys and all six models, so no model
+  change can fix it. ⚠️ Needs `GROQ_API_KEY` and `CEREBRAS_API_KEY` set in the Render dashboard —
+  until then production runs on OpenRouter alone, slowly and with nothing cross-checked.
 
 ### Stage 1 — CBC Expert Module (Month 1, "Detect") — **✅ COMPLETE**
 - **Deterministic anemia engine** (`server/services/anemiaClassifier.js`): rule-based status, WHO 2024 cutoffs, WHO 2011 severity bands, MCV/MCH/RDW morphology, AGA 2020 iron-deficiency confirmation, conservative deferral. *The AI only explains; the rule engine decides.*

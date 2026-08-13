@@ -161,6 +161,60 @@ Not fixed here. The fix is a prompt change plus a sanity gate, and neither can b
 
 **`.env` is untracked**, so this commit changes nothing in production by itself. `GEMINI_API_KEY` must be set in the Render dashboard.
 
+## 6d. Model-ID audit — nothing was outdated
+
+Prompted by the theory that the 402s were caused by stale model IDs. They were not. Every configured ID checked against its provider's live `GET /models`, 13 Aug:
+
+| Provider | Configured | Verdict |
+|---|---|---|
+| Cerebras | `gpt-oss-120b` | **Current** |
+| SambaNova | `Meta-Llama-3.3-70B-Instruct` | **Current** — listed on the dashboard and by the API |
+| OpenRouter | all six nemotron/gemma/gpt-oss slugs | **All current** |
+| OpenAI | `gpt-4o` | Catalogue unreadable — the local key 401s |
+
+**SambaNova's 402 is account balance, not the model.** All six models it offers — DeepSeek-V3.1, DeepSeek-V3.2, Meta-Llama-3.3-70B-Instruct, MiniMax-M2.7, gemma-4-31B-it, gpt-oss-120b — return the identical error:
+
+```json
+{"error":{"balance_units":0,"code":"PAYMENT_METHOD_REQUIRED",
+          "billing_portal_url":"https://cloud.sambanova.ai/plans/billing"}}
+```
+
+Tested across **all three SambaNova keys** in `.env`: one 401s (invalid), the other two both report `balance_units: 0`. One initially returned 429, which looked like a working rate-limited account, but it settled to the same 402 on every retry.
+
+**"No API hits in the SambaNova logs" is consistent with this, not contradictory.** A 402 is rejected at the billing gate before any inference runs, so it never becomes a usage entry. The dashboard and the probe agree.
+
+The SambaNova model ID is deliberately **left unchanged**. Swapping it to DeepSeek-V3.2 would imply a fix that does not exist and could not be verified until someone adds a payment method.
+
+## 6e. Groq added — the fix for the latency in §6a
+
+The `GROQ_API_KEY` sitting commented out in `.env` works. Groq is free, and it is dramatically faster than every other free tier available here.
+
+| Measurement | Result |
+|---|---|
+| Groq via Helicone gateway | **works** — prefix `/openai/v1`, verified end to end, not assumed |
+| `llama-3.3-70b-versatile` | 0.5–0.7s, valid JSON, text in `content` |
+| `openai/gpt-oss-120b` | 0.9s, valid JSON, fuller output — leads `analysisModels` |
+| Tool calling, real `medicalTools` definitions | both models emit correct `tool_calls` |
+
+**Effect on the phase timing from §6a:**
+
+| | Before | After |
+|---|---|---|
+| Agents (parallel) | 60–120 s | **1.5 s** |
+| Phase 2a total | 119 s | 84 s |
+| Phase 2b total | 157 s | 93 s |
+
+The agents are no longer the bottleneck at all — **the residual 87 s is entirely the consensus judge**, measured separately. That is a local artifact: the `.env` OpenAI key 401s, so the judge falls through to OpenRouter. Render has a working OpenAI key, where the judge should cost seconds and a phase should land around 5 s. **Unverified on Render.**
+
+Placement, and why:
+
+- `PRIORITY_ORDER` → `groq, cerebras, openrouter, sambanova`. Groq leads; the two fast providers fill both ensemble slots.
+- `TOOL_PROVIDERS_ORDER` → Groq inserted after OpenAI, only after its tool calling was checked against the real definitions.
+- `VOICE_PRIORITY_ORDER` → Groq first; it returns text in `content`, which those routes read directly.
+- `JUDGE_PRIORITY_ORDER` → **Groq deliberately excluded.** It now leads the agent order, so judging would mean merging its own output. Keeping OpenRouter as the fallback judge actually *restores* the independence §7 warns about — with Groq and Cerebras filling the agent slots, OpenRouter is usually not an agent. The cost of that choice is the 87 s fallback whenever OpenAI is unreachable; independence was preferred over latency in the already-degraded case.
+
+Groq's free tier has a **daily token cap** — worth knowing before a live demo.
+
 ## 7. ⚠️ Two degradations to be aware of
 
 **The ensemble will probably not be ensembling on Render.** With Cerebras 402ing there, the only healthy provider is OpenRouter — so `agentCount=1`, the single-provider path, no consensus. The pipeline produces a report; the accuracy claim that rests on cross-provider agreement does not hold. **Fixing `CEREBRAS_API_KEY` in Render is the single highest-value action** and restores two-provider consensus immediately.
@@ -174,7 +228,8 @@ Deliberate: a self-judged merge beats a dead analysis phase. But for a medical t
 Carried forward from CHECKPOINT-04 §8, still open and now higher priority:
 
 - [ ] **Set a working `CEREBRAS_API_KEY` in Render.** Now the difference between a real ensemble and a single-model analysis, not just narration latency. The key currently active in `server/.env` works and answers in ~1s; Render's does not. Note this buys *accuracy*, not speed (§6a).
-- [ ] **Add `SAMBANOVA_API_KEY` billing or drop the provider.** 402 "A payment method is required" — an account-level state with no code remedy. It has 402'd continuously since 11 Aug and costs a round trip on every phase. It is last in every order and self-benches for 5 minutes, so leaving it is defensible; removing it from `PRIORITY_ORDER` is a one-line alternative.
+- [ ] **Set `GROQ_API_KEY` in the Render dashboard** — the single biggest latency win (§6e), and `.env` is untracked so the commit alone does nothing in production.
+- [ ] **Add `SAMBANOVA_API_KEY` billing or drop the provider.** 402 "A payment method is required" — an account-level state with no code remedy, confirmed across all three keys and all six models (§6d). It has 402'd continuously since 11 Aug and costs a round trip on every phase. It is last in every order and self-benches for 5 minutes, so leaving it is defensible; removing it from `PRIORITY_ORDER` is a one-line alternative.
 
 New:
 
