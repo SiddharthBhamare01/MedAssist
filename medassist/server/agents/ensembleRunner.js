@@ -15,6 +15,8 @@ const { getProviders, getAvailableProviders, getAvailableJudgeProviders, isProvi
 
 // ─── Low-level helpers ────────────────────────────────────────────────────────
 
+const ENSEMBLE_TIMEOUT_MS = 90_000;
+
 async function callProvider(provider, systemPrompt, userMessage, maxTokens = 2000, isJudge = false) {
   const messages = [];
   if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
@@ -37,7 +39,13 @@ async function callProvider(provider, systemPrompt, userMessage, maxTokens = 200
         messages,
         temperature: 0,
         max_tokens: maxTokens,
-      }, { headers: heliconeHeaders });
+      }, {
+        headers: heliconeHeaders,
+        // Tighter than the shared client default: nothing here asks for more than
+        // 3500 tokens, so a call still running at 90s has stalled rather than
+        // being slow, and there are more models waiting behind it.
+        timeout: ENSEMBLE_TIMEOUT_MS,
+      });
       const msg = response?.choices?.[0]?.message;
       // Some models (reasoning/thinking) put output in reasoning_content with null content
       const text = msg?.content || msg?.reasoning_content || '';

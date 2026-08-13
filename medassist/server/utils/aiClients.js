@@ -24,9 +24,19 @@ const OpenAI = require('openai');
  *                    ''    for providers whose paths don't include /v1 (GitHub Models)
  */
 // Free-tier models occasionally accept a request and then never respond. Without a
-// ceiling, one of those stalls a whole report; 90s is well clear of a normal 3500-token
-// analysis call.
-const REQUEST_TIMEOUT_MS = 90_000;
+// ceiling, one of those stalls a whole report.
+//
+// This default is deliberately generous: the longest shared-client call is
+// geminiService's text-PDF parse at max_tokens 8000, which a slow free model can
+// legitimately spend minutes on. Callers with a smaller budget pass a tighter
+// per-request timeout instead (see ensembleRunner).
+const REQUEST_TIMEOUT_MS = 180_000;
+
+// The SDK retries timeouts, so its default of 2 would silently triple every ceiling
+// above. Every caller here already loops over models and providers on failure, which
+// recovers better than retrying the same stalled model — and agentRunner keeps its own
+// explicit backoff for 429/5xx.
+const MAX_SDK_RETRIES = 0;
 
 function makeClient(apiKey, targetURL, extraHeaders = {}, heliconePathPrefix = '/v1') {
   if (!apiKey) return null;
@@ -37,6 +47,7 @@ function makeClient(apiKey, targetURL, extraHeaders = {}, heliconePathPrefix = '
       apiKey,
       baseURL: `https://gateway.helicone.ai${heliconePathPrefix}`,
       timeout: REQUEST_TIMEOUT_MS,
+      maxRetries: MAX_SDK_RETRIES,
       defaultHeaders: {
         'Helicone-Auth': `Bearer ${heliconeKey}`,
         'Helicone-Target-URL': targetURL,
@@ -45,7 +56,13 @@ function makeClient(apiKey, targetURL, extraHeaders = {}, heliconePathPrefix = '
     });
   }
 
-  return new OpenAI({ apiKey, baseURL: targetURL, timeout: REQUEST_TIMEOUT_MS, defaultHeaders: extraHeaders });
+  return new OpenAI({
+    apiKey,
+    baseURL: targetURL,
+    timeout: REQUEST_TIMEOUT_MS,
+    maxRetries: MAX_SDK_RETRIES,
+    defaultHeaders: extraHeaders,
+  });
 }
 
 // Lazily constructed so .env is read after dotenv.config() runs
@@ -84,6 +101,7 @@ function getProviders() {
             apiKey: process.env.OPENROUTER_API_KEY,
             baseURL: 'https://openrouter.ai/api/v1',
             timeout: REQUEST_TIMEOUT_MS,
+            maxRetries: MAX_SDK_RETRIES,
             defaultHeaders: {
               'HTTP-Referer': process.env.CLIENT_URL || 'http://localhost:5173',
               'X-Title': 'MedAssist AI CS595',

@@ -112,7 +112,9 @@ async function extractWithOpenRouterVision(imageBuffer, mimeType) {
         max_tokens: 8000,
       });
 
-      const raw = response.choices[0].message.content.trim();
+      // A provider returning an error body with no `choices` used to throw a bare
+      // TypeError here, which the catch below re-raised instead of failing over.
+      const raw = (response?.choices?.[0]?.message?.content || '').trim();
       const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
 
       let parsed;
@@ -133,8 +135,11 @@ async function extractWithOpenRouterVision(imageBuffer, mimeType) {
       return parsed;
     } catch (err) {
       const status = err.status || err.code;
-      if (status === 429 || status === 503 || status === 400 || status === 404 || status === 402) {
-        console.warn(`[geminiService] ${model} failed (${status}), trying next vision model`);
+      // Abort only on a bad credential — it fails identically for every model here.
+      // Anything else (rate cap, retired model, timeout, malformed body) is
+      // model-specific, so fail over rather than sinking the whole OCR attempt.
+      if (status !== 401 && status !== 403) {
+        console.warn(`[geminiService] ${model} failed (${status || err.message}), trying next vision model`);
         lastErr = err;
         continue;
       }
@@ -254,7 +259,9 @@ async function parseTextWithAI(rawText) {
         max_tokens: 8000,
       });
 
-      const raw = response.choices[0].message.content.trim();
+      // A provider returning an error body with no `choices` used to throw a bare
+      // TypeError here, which the catch below re-raised instead of failing over.
+      const raw = (response?.choices?.[0]?.message?.content || '').trim();
       const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
 
       let parsed;
@@ -270,8 +277,12 @@ async function parseTextWithAI(rawText) {
       console.log(`[geminiService] Text PDF parsed by ${provider.name}`);
       return parsed;
     } catch (err) {
-      // 402 = free tier/credits exhausted, 404 = model retired — fail over to next provider
-      if ([429, 503, 400, 402, 404].includes(err.status)) { lastErr = err; continue; }
+      // Same rule as the vision loop above: only a bad credential is worth aborting on.
+      if (err.status !== 401 && err.status !== 403) {
+        console.warn(`[geminiService] ${provider.name} failed (${err.status || err.message}), trying next provider`);
+        lastErr = err;
+        continue;
+      }
       throw err;
     }
   }

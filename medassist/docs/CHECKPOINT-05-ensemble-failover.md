@@ -49,7 +49,7 @@ Probed directly with the keys in `server/.env`, both bare and through the Helico
 |---|---|---|
 | Cerebras `gpt-oss-120b` | **Working locally** · **402 on Render** | Unchanged — the Render key is still the open item from CHECKPOINT-04 §8 |
 | SambaNova | **402** — free tier requires a payment method | Unchanged |
-| GitHub Models | **410 `github_models_retirement_brownout`** | Now an explicit retirement notice, not a generic 404 |
+| GitHub Models | **410 `github_models_retirement_brownout`** | The 410 itself was already recorded on 11 Aug; the error *code* naming a retirement is new |
 | OpenRouter | **Working** | Recovered — the 11 Aug slug refresh holds; all six slugs still listed |
 | OpenAI `gpt-4o` | **401 with the local key** · **succeeding on Render** per Helicone | The local `.env` key is stale; production's is valid |
 
@@ -67,6 +67,18 @@ OpenRouter's `nemotron-3-ultra-550b-a55b:free` — the **first** entry in `analy
 
 The slug is still listed by `GET /api/v1/models`, so it is upstream instability rather than retirement. Demoted below `nemotron-3-super` rather than removed — leading with it cost ~2 minutes before every fallback.
 
+**The same defect exists twice more, in `geminiService.js`** — both the vision OCR loop and the text-PDF parse loop read `response.choices[0].message.content` unguarded and fail over only on an allowlist of status codes, re-raising everything else. Both are fixed the same way. The text-parse one matters most: it is the path this very report took.
+
+## 4a. The timeout needed a retry ceiling to mean anything
+
+The first version of this fix set `timeout: 90_000` and left `maxRetries` at the OpenAI SDK default of **2**. The SDK retries timeouts, so the real ceiling was 3 × 90s = 270s per model — and with five models in `analysisModels`, one unlucky provider could burn ~22 minutes per phase. That is worse than the 2-minute hang the timeout was meant to bound.
+
+Corrected to `maxRetries: 0`. Every caller in this codebase already loops over models and providers on failure, which recovers better than retrying the same stalled model, and `agentRunner` keeps its own explicit backoff for 429/5xx.
+
+The client default also had to rise to **180s**, not fall. `geminiService.parseTextWithAI()` shares these clients and asks for `max_tokens: 8000`; 90s could plausibly cut off a legitimate slow parse and break the extraction step that was working. The tight 90s ceiling is now passed per-request from `ensembleRunner`, where nothing exceeds 3500 tokens.
+
+**The vision OCR client is separate** (`geminiService.getOpenRouterClient()`) and is deliberately left alone — scanned multi-page PDFs are the one call that genuinely runs long.
+
 ## 5. Changes
 
 **`server/agents/ensembleRunner.js`**
@@ -80,7 +92,10 @@ The slug is still listed by `GET /api/v1/models`, so it is upstream instability 
 - SambaNova moved last in each — it 402s until billing is added, so it is only worth trying once everything else is exhausted.
 - `openrouter` added to `JUDGE_PRIORITY_ORDER` (see the caveat in §7).
 - `nemotron-3-ultra` demoted below `nemotron-3-super`.
-- **90s request timeout** on every client. Free-tier models occasionally accept a request and never respond; without a ceiling one stalls an entire report.
+- **180s client timeout + `maxRetries: 0`**, with a 90s per-request override from `ensembleRunner` (§4a).
+
+**`server/services/geminiService.js`**
+- Both provider loops — vision OCR and text-PDF parse — now optional-chain the response and fail over on any non-auth error, matching `callProvider` (§4).
 
 **`server/routes/voice.js`** — comment updates only. Two comments named GitHub as the preferred voice provider and cited its 5/s concurrency limit. Both paths were checked against the new Cerebras-first order and need no code change: `/explain-finding` already caps at `max_tokens: 1200` with an explicit note about reasoning models charging internal tokens against the cap, and fails over on empty content; `translateSegment()` caps at 4096, strips `<think>` blocks, and falls back to English per segment.
 
@@ -92,10 +107,11 @@ Ran against live providers, not fixtures:
 |---|---|
 | Normal run | 2 providers (Cerebras + OpenRouter) → consensus merged, `agentCount=2` |
 | **Cerebras benched** — reproduces the Render condition | `sambanova 402 → openrouter answers`, `agentCount=1`, valid JSON |
+| **Text-PDF extraction** on `sample-cbc-reports/CBC_1_iron_deficiency_anemia.pdf` | `Text PDF detected → parsed by Cerebras`, 10 values, Hb 9.4 / MCV 74 correctly flagged low |
 
-The second case is the one that used to throw `All AI providers failed in ensemble run`. Case 1 also exercised the judge fallback for free: the local OpenAI key 401'd, and OpenRouter picked up the merge.
+The second case is the one that used to throw `All AI providers failed in ensemble run`. Case 1 also exercised the judge fallback for free: the local OpenAI key 401'd, and OpenRouter picked up the merge. The third is the exact path the failing upload took, re-run after the `geminiService` changes.
 
-`node --check` clean on all three modified files.
+`node --check` clean on all four modified files; the three deterministic harnesses re-run and passing (§9).
 
 **Not verified:** nothing was exercised through the deployed app. No report was uploaded to Render after the fix, and the browser rendering of a `agentCount=1` analysis has not been seen. The failing upload's user-visible symptom was never established either — Phase 2a's `catch` leaves `medical = null` and the report should render with sections missing rather than erroring outright, but that was not confirmed against what the user actually saw.
 
