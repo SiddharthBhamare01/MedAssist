@@ -171,6 +171,20 @@ function getProviders() {
     console.log('[aiClients] Helicone observability enabled — traces at helicone.ai/dashboard');
   }
 
+  // A provider with no key is dropped silently by _filterAvailable, which made a missing
+  // GROQ_API_KEY on Render look like ordinary slowness rather than a configuration gap.
+  // Say out loud what is configured and what is not.
+  const configured = Object.entries(_providers).filter(([, p]) => p.client).map(([n]) => n);
+  const missing = Object.keys(_providers).filter((n) => !_providers[n].client);
+  console.log(`[aiClients] Providers configured: ${configured.join(', ') || 'NONE'}`);
+  if (missing.length) {
+    console.warn(`[aiClients] No API key, so unavailable: ${missing.join(', ')}`);
+  }
+  if (!_providers.groq.client) {
+    console.warn('[aiClients] GROQ_API_KEY is not set — the fastest free provider is off, ' +
+                 'so analysis falls back to models that take 60-120s per call.');
+  }
+
   return _providers;
 }
 

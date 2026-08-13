@@ -215,6 +215,24 @@ Placement, and why:
 
 Groq's free tier has a **daily token cap** — worth knowing before a live demo.
 
+## 6f. Confirmed from Helicone: Render is missing the keys
+
+After the §6e deploy the app still hung on "Blood Report Agent is running…". The Helicone request log separates the two environments cleanly:
+
+| Time | Providers seen | Environment |
+|---|---|---|
+| 1:39–1:47 PM | **Groq Success**, **Cerebras Success**, OpenAI 401 | local test runs |
+| 1:54–1:55 PM | Cerebras 402, SambaNova 402, OpenAI Success ×2 — **no Groq at all** | Render |
+
+Groq never appears in the production batch. `makeClient` returns `null` without a key and `_filterAvailable` drops the provider, so **`GROQ_API_KEY` is not set on Render**. Cerebras 402s there as well, which leaves only OpenRouter — invisible in Helicone because it uses a direct client — at 60–120s per call across Phase 2a, Phase 2b and the remaining agents.
+
+Nothing is broken in the code. The environment simply has none of the fast providers.
+
+Two notes from the same session:
+
+- The browser console screenshot contains **no application errors**. Every red line came from the Grammarly extension (`chrome-extension://kbfnbcaeplbcioakkpcpgfkobkghlhen`, `Grammarly.js:2`).
+- **The silent drop was the real problem.** A provider with no key vanished without a word, so a configuration gap looked identical to ordinary slowness. `getProviders()` now logs what is configured, what is missing for lack of a key, and a specific warning when `GROQ_API_KEY` is absent. Verified in both configurations.
+
 ## 7. ⚠️ Two degradations to be aware of
 
 **The ensemble will probably not be ensembling on Render.** With Cerebras 402ing there, the only healthy provider is OpenRouter — so `agentCount=1`, the single-provider path, no consensus. The pipeline produces a report; the accuracy claim that rests on cross-provider agreement does not hold. **Fixing `CEREBRAS_API_KEY` in Render is the single highest-value action** and restores two-provider consensus immediately.
