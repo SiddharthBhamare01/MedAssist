@@ -22,7 +22,7 @@
  * 'general_only' plus questions to put to a clinician.
  */
 
-const { resolveRange } = require('../data/referenceRanges');
+const { resolveRange, parseRangeString } = require('../data/referenceRanges');
 
 const SOURCES = {
   cutoff:  { claim: 'anemia cutoff', source: 'WHO 2024 Guideline on haemoglobin cutoffs to define anaemia' },
@@ -106,11 +106,57 @@ function readNumeric(values, key) {
 }
 
 /**
+ * Resolve the band a value should be judged against, preferring the reference
+ * range printed on the patient's own report.
+ *
+ * Phase 2 faculty review (Dr. Leibovitz, Aug 2026):
+ *
+ *   "Reference ranges are assay-, instrument-, age-, sex-, and
+ *    pregnancy-specific. Do not hard-code 12 to 16 g/dL. Parse the range
+ *    printed on the patient's own report and fall back to a labeled default
+ *    only when parsing fails, disclosing that fallback in the interface."
+ *
+ * The printed range and the value are read from the same row of the same
+ * report, so they are in the same units by construction — even when those units
+ * differ from our table. That is precisely why the printed range wins.
+ *
+ * Critical thresholds are NOT taken from the report: they are safety limits for
+ * "call a doctor now", not assay-specific normal bands, so they stay on the
+ * curated table regardless of which source supplies the normal range.
+ *
+ * @returns {{low, high, critical_low, critical_high, unit, source}|null}
+ *          source is 'report' (printed range parsed) or 'fallback' (our table).
+ */
+function resolveEffectiveRange(paramKey, { gender, printedRange } = {}) {
+  const table = resolveRange(paramKey, { gender });
+  const printed = parseRangeString(printedRange);
+  const usable = printed && (printed.low != null || printed.high != null) &&
+    // Reject transposed/garbled OCR (e.g. "17.5–13.5") rather than judging
+    // every value against an impossible band.
+    !(printed.low != null && printed.high != null && printed.low >= printed.high);
+
+  if (usable) {
+    return {
+      low: printed.low,
+      high: printed.high,
+      critical_low: table?.critical_low ?? null,
+      critical_high: table?.critical_high ?? null,
+      unit: table?.unit ?? null,
+      source: 'report',
+    };
+  }
+  if (!table) return null;
+  return { ...table, source: 'fallback' };
+}
+
+/**
  * Deterministic status for ONE parameter given its numeric value + demographics.
+ * Pass `printedRange` (the report's own `normal_range` string) to have it win
+ * over the curated table.
  * @returns 'normal'|'low'|'high'|'critical_low'|'critical_high'|null (no known range)
  */
-function statusByRule(paramKey, numericValue, { gender } = {}) {
-  const r = resolveRange(paramKey, { gender });
+function statusByRule(paramKey, numericValue, { gender, printedRange } = {}) {
+  const r = resolveEffectiveRange(paramKey, { gender, printedRange });
   if (!r || numericValue == null) return null;
   if (r.critical_low != null && numericValue < r.critical_low) return 'critical_low';
   if (r.critical_high != null && numericValue > r.critical_high) return 'critical_high';
@@ -122,6 +168,10 @@ function statusByRule(paramKey, numericValue, { gender } = {}) {
 /**
  * Return a NEW extracted-values array with CBC statuses overridden by rule.
  * Non-CBC params (or those without a known range) keep their original status.
+ *
+ * Each recomputed item carries `range_source` so the interface can disclose
+ * which band was used — the review requires the fallback to be visible, not
+ * silent.
  */
 function recomputeStatuses(values, { gender } = {}) {
   if (!Array.isArray(values)) return values;
@@ -129,9 +179,16 @@ function recomputeStatuses(values, { gender } = {}) {
     const key = canonicalKey(item.parameter) || canonicalKey(item.abbreviation);
     if (!key || !CBC_RECOMPUTE_KEYS.has(key)) return item;
     const num = parseNumeric(item.value);
-    const ruleStatus = statusByRule(key, num, { gender });
+    const eff = resolveEffectiveRange(key, { gender, printedRange: item.normal_range });
+    if (!eff) return item;
+    const ruleStatus = statusByRule(key, num, { gender, printedRange: item.normal_range });
     if (!ruleStatus) return item;
-    return { ...item, status: ruleStatus };
+    return {
+      ...item,
+      status: ruleStatus,
+      range_source: eff.source,
+      applied_range: { low: eff.low, high: eff.high },
+    };
   });
 }
 
@@ -443,6 +500,7 @@ module.exports = {
   classifyAnemia,
   recomputeStatuses,
   statusByRule,
+  resolveEffectiveRange,
   canonicalKey,
   parseNumeric,
   readNumeric,

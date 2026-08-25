@@ -232,8 +232,14 @@ Tool data: ${toolSummary || 'none'}${anemiaBlock}`;
         (v) => (canonicalKey(v.parameter) || canonicalKey(v.abbreviation)) === key
       );
       const num = src ? parseFloat(String(src.value).replace(/,/g, '')) : NaN;
-      const ruleStatus = Number.isFinite(num) ? statusByRule(key, num, { gender }) : null;
+      // The report's own printed range wins over our table — see
+      // anemiaClassifier.resolveEffectiveRange.
+      const printedRange = src?.normal_range;
+      const ruleStatus = Number.isFinite(num)
+        ? statusByRule(key, num, { gender, printedRange })
+        : null;
       if (ruleStatus) f.status = ruleStatus;
+      if (src?.range_source) f.range_source = src.range_source;
     }
   }
 

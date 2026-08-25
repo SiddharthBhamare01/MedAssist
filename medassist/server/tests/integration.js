@@ -201,20 +201,39 @@ async function testDiagnosticAgent() {
     }, patientToken);
 
     assert(r.status === 200, `Expected 200, got ${r.status}: ${JSON.stringify(r.body)}`);
-    assert(Array.isArray(r.body.diseases), `diseases not an array: ${JSON.stringify(r.body)}`);
-    assert(r.body.diseases.length > 0, 'No diseases returned');
+    assert(Array.isArray(r.body.considerations), `considerations not an array: ${JSON.stringify(r.body)}`);
+    assert(r.body.considerations.length > 0, 'No considerations returned');
     assert(r.body.sessionId, 'No sessionId in response');
+    assert(r.body.disclaimer && /not a diagnosis/i.test(r.body.disclaimer),
+      'Response is missing the not-a-diagnosis disclaimer');
 
     sessionId = r.body.sessionId;
-    const d = r.body.diseases[0];
+    const d = r.body.considerations[0];
 
-    assert(d.disease, 'First disease missing name');
-    assert(d.icd_code, 'First disease missing icd_code');
-    assert(typeof d.probability === 'number', 'probability not a number');
+    assert(d.condition, 'First consideration missing name');
+    assert(d.icd_code, 'First consideration missing icd_code');
+    assert(Array.isArray(d.clinician_questions) && d.clinician_questions.length > 0,
+      'First consideration has no clinician_questions');
 
-    ok(`Diagnostic Agent returned ${r.body.diseases.length} diseases (top: ${d.disease} — ${d.icd_code})`);
+    // Phase 2 review: this endpoint must not ship a likelihood claim. Assert it
+    // on every item, since one leaked field is enough to make it a diagnosis.
+    const BANNED = ['probability', 'confidence', 'likelihood', 'percentage', 'rank', 'score'];
+    for (const item of r.body.considerations) {
+      for (const key of BANNED) {
+        assert(!(key in item), `consideration "${item.condition}" leaked a ${key} field`);
+      }
+    }
+
+    // Alphabetical ordering is what stops the list reading as a ranking.
+    const names = r.body.considerations.map((c) => c.condition);
+    const sorted = [...names].sort((a, b) => a.localeCompare(b));
+    assert(JSON.stringify(names) === JSON.stringify(sorted),
+      `considerations not in alphabetical order: ${names.join(', ')}`);
+
+    ok(`Symptom flagging returned ${r.body.considerations.length} conditions to rule out (first: ${d.condition})`);
+    ok('No likelihood field on any consideration; order is alphabetical');
     ok(`Agent completed in ${r.body.turns} reasoning turn(s)`);
-  } catch (e) { fail('Diagnostic Agent /disease/predict', e.message); }
+  } catch (e) { fail('Symptom flagging /disease/predict', e.message); }
 }
 
 async function testBloodTests() {
@@ -224,7 +243,7 @@ async function testBloodTests() {
   try {
     const r = await request('POST', '/disease/tests', {
       sessionId,
-      disease: { disease: 'Type 2 Diabetes Mellitus', icd_code: 'E11', probability: 85 },
+      disease: { condition: 'Type 2 Diabetes Mellitus', icd_code: 'E11' },
     }, patientToken);
     assert(r.status === 200, `Expected 200, got ${r.status}: ${JSON.stringify(r.body)}`);
     assert(Array.isArray(r.body.tests), 'tests not an array');

@@ -3,6 +3,12 @@ const fetch = require('node-fetch');
 // Reference ranges live in one shared module so the deterministic anemia
 // classifier and this tool layer agree on a single source of truth.
 const { REFERENCE_RANGES } = require('../../data/referenceRanges');
+const {
+  findCuratedInteractions,
+  isCuratedAlertingEnabled,
+  DISCLOSURE,
+  NEVER_STOP_NOTICE,
+} = require('../../data/curatedInteractions');
 
 // ── Tool Definitions (Gemini functionDeclarations format) ─────────────────────
 // OpenAI/Groq-compatible function definitions (lowercase types)
@@ -165,9 +171,36 @@ async function checkDrugInteractions({ drug_names }) {
         }
       }
     }
-    return { drugs_checked: rxcuis.map(r => r.name), interactions };
+    // RxNorm normalizes drug names; it does not grade severity. Anything it
+    // returns is informational, and is labelled as such so no downstream layer
+    // can present it as a graded warning. The curated set below is the only
+    // thing allowed to carry a severity — see data/curatedInteractions.js.
+    const informational = interactions.map((i) => ({
+      ...i,
+      severity: 'not_graded',
+      severity_note: 'RxNorm does not supply graded severity; this is label-derived text.',
+    }));
+
+    const curated = findCuratedInteractions(drug_names);
+
+    return {
+      drugs_checked: rxcuis.map(r => r.name),
+      curated_alerts: curated,
+      curated_alerting_enabled: isCuratedAlertingEnabled(),
+      interactions: informational,
+      disclosure: DISCLOSURE,
+      never_stop_notice: NEVER_STOP_NOTICE,
+    };
   } catch (err) {
-    return { error: `Interaction check failed: ${err.message}` };
+    // Even on failure, the curated check is offline and still worth running —
+    // and the disclosure must not disappear just because the network did.
+    return {
+      error: `Interaction check failed: ${err.message}`,
+      curated_alerts: findCuratedInteractions(drug_names),
+      curated_alerting_enabled: isCuratedAlertingEnabled(),
+      disclosure: DISCLOSURE,
+      never_stop_notice: NEVER_STOP_NOTICE,
+    };
   }
 }
 

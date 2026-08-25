@@ -9,8 +9,8 @@
  * Run: node tests/anemia/runClassifier.js
  */
 
-const { classifyAnemia } = require('../../services/anemiaClassifier');
-const { FIXTURES } = require('./fixtures');
+const { classifyAnemia, recomputeStatuses } = require('../../services/anemiaClassifier');
+const { FIXTURES, RANGE_FIXTURES } = require('./fixtures');
 
 const THRESHOLD = 0.90;
 const CHECK_FIELDS = ['anemia_present', 'status', 'severity', 'morphology', 'type', 'dietary_guidance'];
@@ -92,13 +92,41 @@ if (mismatches.length) {
   console.log(mismatches.join('\n'));
 }
 
+// ── Reference-range suite ────────────────────────────────────────────────────
+// The classifier fixtures above carry no printed range, so they exercise only
+// the curated-table path. These cases cover the report-printed range and the
+// disclosed fallback.
+console.log('\n' + '='.repeat(60));
+console.log(`REFERENCE RANGE RESOLUTION — ${RANGE_FIXTURES.length} cases`);
+console.log('='.repeat(60));
+
+let rangePass = 0;
+const rangeFails = [];
+for (const fx of RANGE_FIXTURES) {
+  const [out] = recomputeStatuses(fx.values, { gender: fx.profile?.gender });
+  const gotStatus = out.status;
+  const gotSource = out.range_source ?? '(none)';
+  const ok = gotStatus === fx.expected.status && gotSource === fx.expected.range_source;
+  if (ok) rangePass += 1;
+  else rangeFails.push(`  ${fx.id}: expected ${fx.expected.status}/${fx.expected.range_source}, got ${gotStatus}/${gotSource}`);
+  console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${fx.id.padEnd(32)} ${String(gotStatus).padEnd(14)} range from: ${gotSource}`);
+}
+console.log(`\nReference-range accuracy: ${rangePass}/${RANGE_FIXTURES.length}`);
+if (rangeFails.length) console.log(rangeFails.join('\n'));
+
 // ── Pass/fail ────────────────────────────────────────────────────────────────
-const failed = fn > 0 || fieldAccuracy < THRESHOLD;
+const rangeFailed = rangePass < RANGE_FIXTURES.length;
+const failed = fn > 0 || fieldAccuracy < THRESHOLD || rangeFailed;
 console.log('\n' + '='.repeat(60));
 if (failed) {
-  console.log(`RESULT: FAIL  (FN=${fn}, field accuracy ${(fieldAccuracy * 100).toFixed(1)}% < ${THRESHOLD * 100}%)`);
+  const why = [
+    fn > 0 ? `FN=${fn}` : null,
+    fieldAccuracy < THRESHOLD ? `field accuracy ${(fieldAccuracy * 100).toFixed(1)}% < ${THRESHOLD * 100}%` : null,
+    rangeFailed ? `range resolution ${rangePass}/${RANGE_FIXTURES.length}` : null,
+  ].filter(Boolean).join(', ');
+  console.log(`RESULT: FAIL  (${why})`);
   process.exit(1);
 } else {
-  console.log(`RESULT: PASS  (0 false negatives, field accuracy ${(fieldAccuracy * 100).toFixed(1)}%)`);
+  console.log(`RESULT: PASS  (0 false negatives, field accuracy ${(fieldAccuracy * 100).toFixed(1)}%, range resolution ${rangePass}/${RANGE_FIXTURES.length})`);
   process.exit(0);
 }

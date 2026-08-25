@@ -37,6 +37,10 @@ uploads/
 sample-cbc-reports/
 sample-reports/
 test-reports/
+# OCR accuracy set: photographs, and labels.json which holds transcribed
+# report content. The harness and labels.example.json ARE committed.
+medassist/server/tests/ocr/images/
+medassist/server/tests/ocr/labels.json
 *-report.jpg
 *-report.jpeg
 *-report.png

@@ -1,11 +1,42 @@
 # MedAssist — Progress Tracker
 
 Mapped to the v3 work plan (*The Anemia Intelligence Module · Detect → Confirm & Track → Prove & Position*).
-Last updated: 2026-08-24.
+Last updated: 2026-08-24 (round 2).
 
 ---
 
 ## ✅ Done
+
+### Phase 2 faculty review — round 2 (24 Aug, [CHECKPOINT-07](./CHECKPOINT-07-phase2-review-round-2.md))
+
+Six of the nine items left open by CHECKPOINT-06. **Running total: 8 of 13 review items closed,
+2 partly closed, 3 open.**
+
+- **Condition inference reframed — the SaMD item.** `/api/disease/predict` returned the top 5
+  *most likely diseases* ranked by an integer `probability` with ICD-10 codes. It now returns
+  conditions a clinician would want to rule out, **ordered alphabetically**, each with
+  `clinician_questions` and `how_it_is_ruled_out`, plus a top-level not-a-diagnosis disclaimer.
+  Likelihood fields are stripped deterministically and likelihood prose is dropped sentence by
+  sentence. No frontend consumes this endpoint, so nothing broke.
+- **Reference ranges from the patient's own report** — new `resolveEffectiveRange()`; the printed
+  range wins, the curated table is the disclosed fallback (`range_source`). Critical thresholds
+  stay on the table (safety limits, not assay bands); transposed/garbled ranges are rejected; WHO
+  anemia cutoffs untouched. **7 new fixtures** — the existing 29 omit `normal_range` and would have
+  passed without testing a line of it.
+- **Inter-provider disagreement is measured** — new `utils/ensembleMetrics.js`, logged on every
+  multi-provider run. Returns `null` rather than 0% when only one provider ran. ⚠️ The *instrument*
+  exists; the production number is still uncollected.
+- **Interaction alerts scoped** — 8-entry curated set; RxNorm results forced to `not_graded` with
+  the limitation disclosed. Two rules enforced by test: no entry may advise stopping a medicine,
+  and curated alerting stays **disabled** until a pharmacist signs off.
+- **Association-not-causation disclaimer** on every recovery result; one treatment-presuming
+  recommendation reworded.
+- **Week 7 documents** — [SAMD-POSTURE-MEMO](./SAMD-POSTURE-MEMO.md) and
+  [PHI-DATA-FLOW](./PHI-DATA-FLOW.md). The latter names two under-discussed flows: the whole report
+  image goes to OCR with any printed identifiers, and Helicone proxies every model call.
+- **OCR accuracy harness built** (`tests/ocr/`) with labelling format and fabrication count.
+  ⚠️ **The 100 photographs must be produced by hand** — the harness exits 2 rather than fake a pass.
+- `npm run test:offline` now runs all five suites: 29 + 7 + 29 + 30 + 16 + 16, all green.
 
 ### Phase 2 faculty review — first four fixes (24 Aug, [CHECKPOINT-06](./CHECKPOINT-06-phase2-review-quick-fixes.md))
 
@@ -131,16 +162,19 @@ analysis of all 13 review points in
 
 ## 🔧 In progress / next
 
-- **⚠️ Dietary gate is invisible to the patient** — the rule engine now withholds targeted
-  nutrition and persists `dietary_guidance_reason` + `clinician_questions`, but neither
-  `Analysis.jsx` nor `AnemiaCard.jsx` renders them, and `diet_plan` prose is still model-generated
-  under a prompt instruction that has never been exercised against a live provider. The safety fix
-  is half-landed. [CHECKPOINT-06](./CHECKPOINT-06-phase2-review-quick-fixes.md).
-- **⚠️ Nine of thirteen review items still open** — reference ranges parsed from the patient's own
-  report, LOINC/UCUM, the `/api/disease/predict` SaMD reframe, inter-provider disagreement
-  measurement, the 100-photograph OCR test set, deterministic extraction, curated interaction
-  alerts, the SaMD posture memo, and the pre-visit report / FHIR bundle. Priority order in
-  [`MedAssist_AI_Phase2_Review_Response_Analysis.md`](../../MedAssist_AI_Phase2_Review_Response_Analysis.md).
+- **⚠️ Every safeguard added is backend-only** — the dietary gate's reason and questions,
+  `range_source` disclosure, the symptom-flagging disclaimer, the association-not-causation notice
+  and the interaction disclosure are all persisted and none is rendered. This is now the single
+  largest gap between what the system enforces and what a patient sees. `Analysis.jsx` and
+  `AnemiaCard.jsx` are the surfaces. [CHECKPOINT-07](./CHECKPOINT-07-phase2-review-round-2.md).
+- **⚠️ Three of thirteen review items still open** — deterministic parsing + LOINC/UCUM (1–2 weeks),
+  the 100-photograph OCR set (**harness built, photographs must be collected by hand**), and the
+  pre-visit report / FHIR bundle (**the Gate 3 dependency**). BAAs and pharmacist review are
+  documented but need people, not code. Detail in
+  [CHECKPOINT-07](./CHECKPOINT-07-phase2-review-round-2.md).
+- **⚠️ Production disagreement rate uncollected** — `utils/ensembleMetrics.js` logs it on every
+  multi-provider run, but nobody has gathered a sample. Cheapest remaining item, and if the
+  providers agree it justifies cutting the fan-out on cost, latency *and* PHI exposure at once.
 - **⚠️ Vision OCR fabricates values from an unreadable image** — a blank PNG returns a full set of
   invented results copied from the few-shot example in the prompt, and the deterministic classifier
   then builds a confident anemia verdict on them. Affects both the Gemini and OpenRouter vision
@@ -171,10 +205,13 @@ prescription OCR, or the effectiveness scoring the review describes in the prese
 review is grading the Phase 2 *proposal*, not the repository. Raise the gap with the professor
 now rather than at the gate.
 
-> **Resume point:** [CHECKPOINT-06-phase2-review-quick-fixes.md](./CHECKPOINT-06-phase2-review-quick-fixes.md) — **2026-08-24**, most recent.
-> Carries the dietary-guidance gate (a live safety defect closed at the rule engine), removal of
-> four unearned clinical-instrument names, the vendor terms manifest, and repo hygiene. Notes that
-> the gate is backend-only and invisible to the patient until the UI work lands.
+> **Resume point:** [CHECKPOINT-07-phase2-review-round-2.md](./CHECKPOINT-07-phase2-review-round-2.md) — **2026-08-24**, most recent.
+> Carries the SaMD reframe of the symptom endpoint, report-printed reference ranges, the ensemble
+> disagreement metric, the curated interaction set, the association disclaimer, and the two Week 7
+> memos. Records the three items that cannot be closed by writing code.
+> [CHECKPOINT-06](./CHECKPOINT-06-phase2-review-quick-fixes.md) — **2026-08-24** —
+> carries the dietary-guidance gate (a live safety defect closed at the rule engine), removal of
+> four unearned clinical-instrument names, the vendor terms manifest, and repo hygiene.
 > [CHECKPOINT-05](./CHECKPOINT-05-ensemble-failover.md) — **2026-08-13** —
 > carries the blood-report ensemble failover fix, the measured provider state, and two
 > deliberate degradations (single-provider analysis on Render; a consensus judge that is

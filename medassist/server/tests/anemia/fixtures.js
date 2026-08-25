@@ -12,6 +12,12 @@
 // helper: build an extracted-value object
 const v = (parameter, value, unit = '', abbreviation = '') => ({ parameter, abbreviation, value: String(value), unit });
 
+// helper: an extracted value that also carries the range printed on the report.
+// The plain `v()` helper deliberately omits normal_range, so classifier fixtures
+// exercise the curated-table path; these exercise the printed-range path.
+const vr = (parameter, value, unit, normal_range, abbreviation = '') =>
+  ({ parameter, abbreviation, value: String(value), unit, normal_range });
+
 const FIXTURES = [
   // ── Normal ──────────────────────────────────────────────────────────────
   { id: 'N1', description: 'Normal male',
@@ -153,4 +159,68 @@ const FIXTURES = [
     expected: { anemia_present: true, status: 'SUSPECTED', severity: 'moderate', morphology: 'microcytic', type: 'iron_deficiency' } },
 ];
 
-module.exports = { FIXTURES };
+/**
+ * Reference-range fixtures — exercise recomputeStatuses / resolveEffectiveRange
+ * rather than classifyAnemia. Each case states the range printed on the report
+ * and the status + source we expect.
+ *
+ * Phase 2 review: "Parse the range printed on the patient's own report and fall
+ * back to a labeled default only when parsing fails, disclosing that fallback."
+ */
+const RANGE_FIXTURES = [
+  {
+    id: 'RR-report-wins',
+    description: "Printed range disagrees with our table — the report's range decides",
+    // Our table calls 13.0 low for a male (13.5–17.5). This lab prints 12.5–16.5,
+    // so the same value is normal on the patient's own report.
+    values: [vr('Hemoglobin', 13.0, 'g/dL', '12.5–16.5')],
+    profile: { gender: 'male' },
+    expected: { parameter: 'Hemoglobin', status: 'normal', range_source: 'report' },
+  },
+  {
+    id: 'RR-report-flags-what-table-misses',
+    description: 'Printed range is narrower — flags a value our table would pass',
+    values: [vr('MCV', 82, 'fL', '83–101')],
+    profile: { gender: 'female' },
+    expected: { parameter: 'MCV', status: 'low', range_source: 'report' },
+  },
+  {
+    id: 'RR-no-printed-range',
+    description: 'No range on the report → curated table, disclosed as a fallback',
+    values: [v('Hemoglobin', 13.0, 'g/dL')],
+    profile: { gender: 'male' },
+    expected: { parameter: 'Hemoglobin', status: 'low', range_source: 'fallback' },
+  },
+  {
+    id: 'RR-unparseable-range',
+    description: 'Garbled OCR range → fallback rather than a nonsense band',
+    values: [vr('Hemoglobin', 13.0, 'g/dL', 'see report')],
+    profile: { gender: 'male' },
+    expected: { parameter: 'Hemoglobin', status: 'low', range_source: 'fallback' },
+  },
+  {
+    id: 'RR-transposed-range',
+    description: 'Transposed bounds (17.5–13.5) are rejected, not applied',
+    values: [vr('Hemoglobin', 13.0, 'g/dL', '17.5–13.5')],
+    profile: { gender: 'male' },
+    expected: { parameter: 'Hemoglobin', status: 'low', range_source: 'fallback' },
+  },
+  {
+    id: 'RR-critical-still-table',
+    description: 'Critical thresholds stay on our table even when the report supplies a range',
+    // Printed range would call 6.0 merely "low"; 6.0 is below the critical_low of
+    // 7, and that safety threshold is not the lab's to relax.
+    values: [vr('Hemoglobin', 6.0, 'g/dL', '6.5–16.5')],
+    profile: { gender: 'male' },
+    expected: { parameter: 'Hemoglobin', status: 'critical_low', range_source: 'report' },
+  },
+  {
+    id: 'RR-open-upper-bound',
+    description: 'One-sided printed range (>13.0) is usable',
+    values: [vr('Hemoglobin', 12.0, 'g/dL', '>13.0')],
+    profile: { gender: 'male' },
+    expected: { parameter: 'Hemoglobin', status: 'low', range_source: 'report' },
+  },
+];
+
+module.exports = { FIXTURES, RANGE_FIXTURES };

@@ -7,6 +7,17 @@ guesses** for ordering purposes only — nobody has sized this work.
 
 ---
 
+> **Update, 24 Aug 2026 (round 2).** Six more items have since been closed or
+> substantially advanced — see
+> [`CHECKPOINT-07`](medassist/docs/CHECKPOINT-07-phase2-review-round-2.md).
+> **Current status: 8 of 13 closed, 2 partly closed, 3 open.** The three open
+> items are deterministic parsing + LOINC/UCUM, the 100-photograph OCR set
+> (harness built, photographs must be collected by hand), and the pre-visit
+> report / FHIR bundle — which remains the Gate 3 dependency. The status table
+> and priority order below describe the state *before* that round.
+
+---
+
 ## 0. Read this first: the review is grading the proposal, not the repo
 
 Section 1 of the review describes Phase 2 in the present tense as a working system:

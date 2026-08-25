@@ -11,12 +11,32 @@
  * mirror of a false negative in the classifier: telling someone whose
  * hemoglobin is falling that they are on track.
  *
+ * Association, not causation (Phase 2 faculty review, Dr. Leibovitz, Aug 2026):
+ *
+ *   "Showing a patient that 86% adherence produced a 24% hemoglobin rise is an
+ *    n-of-1 causal claim confounded by regression to the mean, diet, and disease
+ *    course. Present it as a co-occurring trend rather than proof of effect."
+ *
+ *   Adherence tracking does not exist yet, so there is no adherence-to-outcome
+ *   correlation to soften. What this engine *does* assert is a treatment
+ *   response inferred from serial hemoglobin alone — `RESPONDING` reads as
+ *   "the iron is working" when the app has never observed whether iron was
+ *   taken. The wording throughout is therefore conditional, and every result
+ *   carries `association_disclaimer` so a consumer cannot render the trajectory
+ *   without the limit attached. When adherence tracking is built, it must join
+ *   this engine under the same rule: co-occurring trend, never proof of effect.
+ *
  * Clinical sources:
  *   - Iron-replacement response ≈1 g/dL per week; responder ≥1 g/dL by day 14
  *     (Am J Medicine 5-trial analysis; Medscape iron-deficiency anemia treatment)
  *   - Anemia cutoff / target: WHO 2024 haemoglobin cutoffs to define anaemia
  *   - Non-response workup (GI blood loss / malabsorption): AGA 2020 IDA guideline
  */
+
+const ASSOCIATION_DISCLAIMER =
+  'This compares your hemoglobin readings over time. It shows what changed together, ' +
+  'not what caused the change — diet, other illness, and the natural course of the ' +
+  'condition all affect these numbers. Only your doctor can say why they moved.';
 
 const SOURCES = {
   response: { claim: 'expected hemoglobin response to iron', source: 'Am J Medicine 5-trial analysis — ≈1 g/dL per week; responder ≥1 g/dL at day 14' },
@@ -100,6 +120,10 @@ function forecastRecovery(points, { type = null, cutoff = null, mixedBasis = fal
     deferral_reason: null,
     recommendation: null,
     explanation_seed: '',
+    // Carried on every result, including the ones that decline to forecast, so
+    // no consumer can render a trajectory without the limit attached. See the
+    // "Association, not causation" note in the file header.
+    association_disclaimer: ASSOCIATION_DISCLAIMER,
     sources: [SOURCES.target],
     computed_at: null, // stamped by the caller (pure fn — no Date.now here)
   };
@@ -210,7 +234,7 @@ function forecastRecovery(points, { type = null, cutoff = null, mixedBasis = fal
   } else if (days > ASSESS_MAX_DAYS) {
     result.responder_status = 'INTERVAL_TOO_LONG';
     result.explanation_seed = `Hemoglobin moved from ${baseline.hb} to ${latest.hb} g/dL over ${days} days (${trend}). That gap is too long for the two-week response check, so only the trend is reported.`;
-    result.recommendation = 'Ask your physician whether a more recent CBC would help judge how treatment is working.';
+    result.recommendation = 'Ask your physician whether a more recent CBC would help — the gap between these two readings is too long to judge a response.';
   } else if (observedRise >= RESPONDER_MIN_RISE) {
     result.responder_status = 'RESPONDING';
     result.explanation_seed = `Hemoglobin rose ${observedRise} g/dL over ${days} days, which matches or exceeds the ≈1 g/dL expected by the two-week checkpoint.`;

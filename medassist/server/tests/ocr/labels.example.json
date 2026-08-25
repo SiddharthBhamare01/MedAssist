@@ -1,0 +1,59 @@
+{
+  "_readme": [
+    "Labelling format for the real-world OCR accuracy set (Phase 2 review, Week 9).",
+    "",
+    "One entry per photograph. `file` is relative to tests/ocr/images/, which is",
+    "gitignored — photographs of lab reports are never committed. Ground truth is",
+    "transcribed BY HAND from the report, not from any model output; a label copied",
+    "from the extractor measures nothing.",
+    "",
+    "`conditions` drives the per-condition breakdown the review asks for: accuracy",
+    "on clean scans is not the number in question. Tag honestly — a photo can carry",
+    "several conditions at once.",
+    "",
+    "Copy this file to labels.json and replace the entries. labels.json is",
+    "gitignored too, because it contains transcribed report content."
+  ],
+
+  "_conditions_vocabulary": [
+    "clean",
+    "glare",
+    "skew",
+    "curl",
+    "shadow",
+    "low_light",
+    "blur",
+    "multi_column",
+    "handwritten_annotation",
+    "partial",
+    "creased",
+    "screen_photo",
+    "non_english_header"
+  ],
+
+  "reports": [
+    {
+      "file": "001-cbc-glare-skew.jpg",
+      "source": "synthetic report printed and photographed",
+      "conditions": ["glare", "skew"],
+      "notes": "Overhead light reflecting across the hemoglobin row.",
+      "expected": [
+        { "parameter": "Hemoglobin",  "value": "9.1",  "unit": "g/dL",    "normal_range": "13.5-17.5" },
+        { "parameter": "MCV",         "value": "76",   "unit": "fL",      "normal_range": "80-100" },
+        { "parameter": "RDW",         "value": "16.0", "unit": "%",       "normal_range": "11.5-14.5" },
+        { "parameter": "Platelets",   "value": "310",  "unit": "x10^3/uL","normal_range": "150-400" }
+      ]
+    },
+    {
+      "file": "002-cmp-multicolumn-curl.jpg",
+      "source": "synthetic report printed and photographed",
+      "conditions": ["multi_column", "curl"],
+      "notes": "Two-column layout; page curls away from the camera on the right.",
+      "expected": [
+        { "parameter": "Sodium",     "value": "139", "unit": "mEq/L", "normal_range": "136-145" },
+        { "parameter": "Potassium",  "value": "4.1", "unit": "mEq/L", "normal_range": "3.5-5.0" },
+        { "parameter": "Creatinine", "value": "1.9", "unit": "mg/dL", "normal_range": "0.74-1.35" }
+      ]
+    }
+  ]
+}

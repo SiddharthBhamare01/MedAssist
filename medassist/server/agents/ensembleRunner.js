@@ -12,6 +12,7 @@
  */
 
 const { getProviders, getAvailableProviders, getAvailableJudgeProviders, isProviderLimited, markProviderLimited } = require('../utils/aiClients');
+const { measureDisagreement, formatDisagreement } = require('../utils/ensembleMetrics');
 
 // ─── Low-level helpers ────────────────────────────────────────────────────────
 
@@ -80,13 +81,17 @@ async function callProvider(provider, systemPrompt, userMessage, maxTokens = 200
 // ─── Consensus task instructions ─────────────────────────────────────────────
 
 const TASK_INSTRUCTIONS = {
-  disease_diagnosis: `
-Compare the disease diagnosis lists from each agent.
-- Diseases predicted by 2+ agents: assign confidence 0.8–1.0
-- Diseases predicted by only 1 agent: assign confidence 0.4–0.6
-- Merge into a single ranked JSON array of top 5 diseases (highest confidence first)
-- Add "consensus_count" (how many agents predicted it) and "confidence" (0–1) fields to each item
-- Keep all original fields: disease, icd_code, icd_description, probability, description, matched_symptoms, reasoning
+  // Renamed from disease_diagnosis in the Phase 2 review reframe: this task
+  // flags patterns for a clinician, it does not diagnose. No likelihood field
+  // is merged in, because none is produced — see agents/diagnosticAgent.js.
+  symptom_flagging: `
+Compare the lists of conditions-to-rule-out from each agent.
+- Merge into a single JSON array of at most 5 conditions
+- Order the array ALPHABETICALLY by condition name — never by likelihood
+- Add "consensus_count" (how many agents flagged it) to each item
+- Do NOT add a probability, confidence, likelihood or rank field, and drop any an agent supplied
+- Keep all original fields: condition, icd_code, icd_description, why_flagged, matched_symptoms, clinician_questions, how_it_is_ruled_out
+- Where agents disagree on a condition, keep it — the clinician decides, not the vote
 - Return ONLY the JSON array, no markdown fences`,
 
   blood_analysis: `
@@ -234,18 +239,29 @@ async function runEnsembleWithConsensus(systemPrompt, userMessage, taskType, max
   // Single provider — no consensus needed
   if (agentOutputs.length === 1) {
     console.log(`[ensembleRunner] Single provider (${agentOutputs[0].providerName}) — skipping consensus`);
-    return { consensusRaw: stripFences(agentOutputs[0].output), agentCount: 1, agentOutputs };
+    // One provider means nothing was cross-checked. `disagreement: null` says
+    // that explicitly, so a caller never reads a missing figure as 0%.
+    return { consensusRaw: stripFences(agentOutputs[0].output), agentCount: 1, agentOutputs, disagreement: null };
   }
 
   console.log(`[ensembleRunner] Running consensus across ${agentOutputs.length} providers: ${agentOutputs.map((a) => a.providerName).join(', ')}`);
+
+  // Measure how much the providers actually differed before the judge merges
+  // them away. If this is consistently near zero, the ensemble is paying N times
+  // the cost and latency for no benefit — which is the review's point, and the
+  // argument for cutting providers on cost, latency and PHI exposure at once.
+  const disagreement = measureDisagreement(agentOutputs);
+  const summary = formatDisagreement(disagreement, taskType);
+  if (summary) console.log(summary);
+
   try {
     const consensusRaw = await runConsensus(agentOutputs, taskType);
-    return { consensusRaw, agentCount: agentOutputs.length, agentOutputs };
+    return { consensusRaw, agentCount: agentOutputs.length, agentOutputs, disagreement };
   } catch (err) {
     // The agents already produced usable analyses — losing the whole phase because
     // no judge was reachable is worse than returning one unmerged agent output.
     console.error(`[ensembleRunner] Consensus judge unavailable (${err.message}) — falling back to ${agentOutputs[0].providerName} alone`);
-    return { consensusRaw: stripFences(agentOutputs[0].output), agentCount: 1, agentOutputs };
+    return { consensusRaw: stripFences(agentOutputs[0].output), agentCount: 1, agentOutputs, disagreement };
   }
 }
 

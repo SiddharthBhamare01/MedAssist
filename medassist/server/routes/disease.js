@@ -12,8 +12,12 @@ const {
 
 /**
  * POST /api/disease/predict
- * Runs the Diagnostic Agent on submitted symptoms.
- * Body: { symptoms: [{ name, severity, duration, onset }] }
+ * Flags conditions a clinician may want to rule out for the submitted symptoms,
+ * with questions for the patient to ask. This is NOT a diagnosis and returns no
+ * likelihood — see agents/diagnosticAgent.js for the Phase 2 review reframe.
+ * Body:    { symptoms: [{ name, severity, duration, onset }] }
+ * Returns: { sessionId, considerations, diseases (alias), disclaimer, turns }
+ *          Any client rendering `considerations` MUST render `disclaimer` too.
  */
 router.post('/predict', verifyToken, async (req, res) => {
   if (req.user.role !== 'patient') {
@@ -33,18 +37,21 @@ router.post('/predict', verifyToken, async (req, res) => {
     const session = await createSymptomSession(patientId, symptoms);
     const sessionId = session.id;
 
-    const { diseases, turns } = await runDiagnosticAgent(symptoms, profile);
+    const { considerations, disclaimer, turns } = await runDiagnosticAgent(symptoms, profile);
 
     // Persist results + log
-    await updateSessionDiseases(sessionId, diseases);
+    await updateSessionDiseases(sessionId, considerations);
     await saveAgentLog({
       sessionId,
       agentName: 'diagnosticAgent',
-      steps: [{ type: 'ensemble', description: `Ran diagnostic agent — ${turns} provider(s)` }],
+      steps: [{ type: 'ensemble', description: `Ran symptom flagging — ${turns} provider(s)` }],
       totalTurns: turns,
     });
 
-    return res.json({ sessionId, diseases, turns });
+    // `diseases` is kept as an alias so existing callers keep working; it holds
+    // the same objects. New callers should read `considerations` and must show
+    // `disclaimer` alongside them.
+    return res.json({ sessionId, considerations, diseases: considerations, disclaimer, turns });
   } catch (err) {
     console.error('Diagnostic Agent error:', err);
     return res.status(500).json({ error: 'Diagnostic Agent failed: ' + err.message });
@@ -53,8 +60,10 @@ router.post('/predict', verifyToken, async (req, res) => {
 
 /**
  * POST /api/disease/tests
- * Returns recommended blood tests for a given disease.
- * Body: { sessionId, disease: { disease, icd_code, probability } }
+ * Returns the blood tests a clinician would typically order to confirm or
+ * exclude a flagged condition.
+ * Body: { sessionId, disease: { disease | condition, icd_code } }
+ *       `icd_code` is an internal lookup reference, not a diagnosis.
  */
 router.post('/tests', verifyToken, async (req, res) => {
   if (req.user.role !== 'patient') {
@@ -62,8 +71,10 @@ router.post('/tests', verifyToken, async (req, res) => {
   }
 
   const { sessionId, disease } = req.body;
-  if (!disease?.disease || !disease?.icd_code) {
-    return res.status(400).json({ error: 'disease object with disease and icd_code is required' });
+  // Accept `condition` (the reframed field) or `disease` (the original alias).
+  const name = disease?.condition || disease?.disease;
+  if (!name || !disease?.icd_code) {
+    return res.status(400).json({ error: 'disease object with condition (or disease) and icd_code is required' });
   }
 
   try {

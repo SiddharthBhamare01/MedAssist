@@ -24,9 +24,9 @@ Rules:
 - Educational use only — not a substitute for professional medical advice`;
 
 /**
- * Get recommended blood tests for a given disease.
- * Runs across all available AI providers and merges into a consensus list.
- * @param {object} disease  - { disease, icd_code, description, ... }
+ * Get the blood tests a clinician would order to confirm or exclude a flagged
+ * condition. Runs across all available providers and merges into a consensus list.
+ * @param {object} disease  - { condition|disease, icd_code, why_flagged, ... }
  * @param {object} profile  - patient_profiles row (may be null)
  * @returns {Array} tests array
  */
@@ -47,11 +47,11 @@ async function getRecommendedBloodTests(disease, profile) {
         .join(' | ')
     : 'Profile not available';
 
-  const userMessage = `Disease: ${disease.disease} (ICD-10: ${disease.icd_code})
-Description: ${disease.description || 'N/A'}
+  const userMessage = `Condition to rule out: ${disease.condition || disease.disease} (ICD-10 reference: ${disease.icd_code})
+Why it was flagged: ${disease.why_flagged || disease.description || 'N/A'}
 Patient Profile: ${profileText}
 
-List the key blood tests a doctor would order to confirm and monitor this condition.`;
+List the key blood tests a doctor would order to confirm or exclude this condition.`;
 
   const { consensusRaw, agentCount } = await runEnsembleWithConsensus(
     SYSTEM_PROMPT,
