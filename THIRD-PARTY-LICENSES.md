@@ -4,7 +4,7 @@ MedAssist AI is distributed under the Apache License 2.0 (see `LICENSE`).
 This manifest lists every **direct** dependency and the license it declares,
 so that any term conflicting with those terms is visible rather than assumed away.
 
-Generated 2026-08-12 by `medassist/scripts/license-manifest.js` from the installed
+Generated 2026-08-25 by `medassist/scripts/license-manifest.js` from the installed
 dependency tree. Regenerate after any dependency change rather than editing by hand.
 
 ## server (23 direct dependencies)
@@ -70,9 +70,43 @@ Hippocratic License 2.1 is an "ethical source" license: it permits use, modifica
 ### Services accessed over the network
 
 These are called as hosted APIs. No code is redistributed, so their licenses do
-not attach to this project, but their terms of service govern use:
-Cerebras, SambaNova, OpenRouter, GitHub Models, OpenAI, Google Gemini,
-Deepgram (text-to-speech), Helicone (observability), OpenFDA, and RxNorm (NIH).
+not attach to this project, but their **terms of service** govern use, and every
+row that carries report data is a separate relationship to account for before
+any deployment handling real patient data.
+
+| Service | Used for | Report data sent | Terms / restrictions to confirm |
+| --- | --- | --- | --- |
+| Groq | Lead LLM provider (analysis, voice) | Extracted lab values + patient profile | Commercial API terms; no BAA in place |
+| Cerebras | LLM provider (analysis, voice) | Extracted lab values + patient profile | Commercial API terms; no BAA in place |
+| OpenRouter | LLM provider + vision OCR fallback | Extracted lab values, profile, report images | Commercial API terms. **Aggregator** — sub-routes to further model hosts, so the downstream vendor set is not fixed by us |
+| SambaNova | LLM provider (analysis, voice) | Extracted lab values + patient profile | Commercial API terms; no BAA in place |
+| OpenAI | Consensus-judge provider | Candidate analyses from other providers | Commercial API terms; no BAA in place |
+| GitHub Models | **Retired, not called.** Provider is still defined at `server/utils/aiClients.js` but appears in none of the three priority orders (endpoint returns HTTP 410 since 13 Aug 2026) | none | Remove the definition once the retirement is confirmed permanent |
+| Google Gemini | Vision OCR of uploaded reports | **The report image itself** — the highest-sensitivity payload we transmit | Commercial API terms; no BAA in place |
+| Deepgram | Text-to-speech for spoken explanations | Text of report findings sent for synthesis — exact payload to be confirmed | Commercial API terms; no BAA in place |
+| Helicone | Observability gateway | **All LLM prompts and responses**, when `HELICONE_API_KEY` is set every provider call is proxied through it (`aiClients.js`) | Commercial terms; retention and data-residency settings to be confirmed |
+| openFDA (FDA) | Drug label lookup | Drug names only — no patient identifiers or lab values | Public US Government API; label text is unstructured and is not a curated interaction graph |
+| RxNorm (NIH/NLM) | Drug name normalization | Drug names only — no patient identifiers or lab values | Public NIH API. **Some source vocabularies within RxNorm require UMLS Metathesaurus credentials** — confirm which subsets we touch before redistribution |
+
+Ten services are live; GitHub Models is defined but disabled. Rows marked "to be
+confirmed" are unverified at the time of writing and should not be relied on as
+compliance statements.
+
+**Not yet addressed:** none of the commercial providers above is covered by a
+business associate agreement, and report data is transmitted without
+de-identification. A single uncovered provider in the fan-out is enough to
+invalidate a HIPAA compliance claim, so this must be resolved — by BAAs, by
+de-identifying before transmission, or by reducing the provider set — before
+any pilot with real patient data. Data residency and retention per provider are
+likewise undocumented.
+
+#### Infrastructure subprocessors
+
+Distinct from the API terms above, but they hold or transit the same data:
+Render (backend hosting + PostgreSQL), Vercel (frontend), the configured SMTP
+provider (outbound email), and OpenStreetMap/Nominatim (nearby-clinic lookup,
+which receives patient location). These need the same treatment as the API
+vendors before a real-data deployment.
 
 ### Clinical reference sources
 

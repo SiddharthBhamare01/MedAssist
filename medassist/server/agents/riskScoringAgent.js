@@ -48,15 +48,16 @@ function applyDeterministicRisk(parsed, anemia) {
 const SYSTEM_PROMPT = `You are a clinical risk scoring calculator. Given a patient's blood report values and profile, compute a single composite health risk score.
 
 Evaluate ALL of the following clinical dimensions that are relevant to the available data:
-- Cardiovascular risk (Framingham-based: total cholesterol, HDL, LDL, BP, smoking, diabetes history)
-- Diabetes risk (FINDRISC-based: fasting glucose, HbA1c, age, BMI, BP history)
-- Kidney function (CKD-EPI-based: creatinine, eGFR, age, gender)
-- Liver function (Child-Pugh-based: bilirubin, albumin, ALT, AST, INR)
+- Cardiovascular risk (total cholesterol, HDL, LDL, triglycerides)
+- Diabetes risk (fasting glucose, HbA1c)
+- Kidney function (creatinine, eGFR as reported on the panel)
+- Liver function (bilirubin, albumin, ALT, AST, INR)
 - Thyroid function risk (TSH deviation from normal, free T4, free T3, total T3, reverse T3, thyroid antibody titers — TPO, TgAb — and presence of hypothyroidism/hyperthyroidism pattern)
 - Hematological risk (hemoglobin, hematocrit, RBC, MCV, MCH, MCHC — severity of anemia, type of anemia)
 - Autoimmune / Inflammatory risk (ANA titer, elevated antibodies like TPO >100 IU/mL, TgAb, CRP, ESR, other inflammatory markers)
 
 Composite score rules:
+- This is a heuristic triage signal computed from the values on this report. It is NOT a validated clinical risk score. Never name, cite, or claim to compute a published instrument (Framingham, PREVENT, ASCVD, FINDRISC, CKD-EPI, MDRD, Child-Pugh, MELD or any other) — those require inputs such as blood pressure, smoking status, treatment status and clinical findings that this report does not contain.
 - Each dimension contributes to the final score based on severity and clinical significance.
 - Thyroid: TSH >10 mIU/L or florid antibody elevation (TPO >500 IU/mL or TgAb >200 IU/mL) = score 60–80 for that area.
 - Hematological: Hemoglobin <11 g/dL = score 50–70; <9 g/dL = score 70–90.

@@ -1,11 +1,40 @@
 # MedAssist — Progress Tracker
 
 Mapped to the v3 work plan (*The Anemia Intelligence Module · Detect → Confirm & Track → Prove & Position*).
-Last updated: 2026-08-13.
+Last updated: 2026-08-24.
 
 ---
 
 ## ✅ Done
+
+### Phase 2 faculty review — first four fixes (24 Aug, [CHECKPOINT-06](./CHECKPOINT-06-phase2-review-quick-fixes.md))
+
+Responding to `MedAssist_AI_Phase2_Review_Dr. Leibovitz's.docx`. Full item-by-item
+analysis of all 13 review points in
+[`MedAssist_AI_Phase2_Review_Response_Analysis.md`](../../MedAssist_AI_Phase2_Review_Response_Analysis.md).
+
+- **Dietary-guidance gate — a live safety defect, now closed at the rule engine.** A microcytic
+  anemia with no iron studies was typed `iron_deficiency` and drove an iron-themed diet plan; the
+  review's point is that this can delay the workup for occult blood loss. `dietary_guidance`
+  (`condition_specific` | `general_only`), `dietary_guidance_reason` and `clinician_questions` are
+  now set on every classifier branch, and **only a `CONFIRMED` determination unlocks targeted
+  nutrition**. Gated paths force a doctor referral. Deterministic backstop in `bloodReportAgent`
+  empties `recovery_ingredients` rather than trusting the prompt. Extended past the review's ask to
+  macrocytic and normocytic anemia. Harness: 29 cases (new `GATE-hb91-no-iron-panel` reproduces the
+  reviewed scenario), 100% sensitivity/specificity held, field accuracy 151/151.
+  ⚠️ **Backend only — no UI renders the reason or the questions yet.**
+- **Four unearned clinical instruments removed** — `riskScoringAgent` told the model to score
+  `Framingham-based`, `FINDRISC-based`, `CKD-EPI-based` and `Child-Pugh-based` risk without ever
+  collecting BP, smoking status, treatment status or clinical findings. Labels replaced with the
+  inputs we actually have, plus an explicit prohibition on naming any published instrument.
+  Dimension names left byte-identical so `applyDeterministicRisk` still matches.
+- **Vendor terms manifest** — `THIRD-PARTY-LICENSES.md` hosted-services section rewritten from one
+  sentence into an eleven-row table (service, use, report data sent, terms to confirm), plus an
+  explicit BAA/de-identification gap statement and infrastructure subprocessors. **Groq was missing
+  entirely** despite being the lead provider; retired GitHub Models was still listed. Edited
+  `scripts/license-manifest.js`, which generates that section — a hand edit would have been wiped.
+- **`sample-cbc-reports/` was untracked but not ignored** — one `git add .` from committing lab
+  PDFs. Now in `.gitignore`. ⚠️ 33 tracked image files still need auditing.
 
 ### Infrastructure / reliability (pre-Stage-1)
 - Blood-report OCR restored — refreshed to current 2026 vision model IDs (Gemini 3.x / Qwen 3.7 via OpenRouter).
@@ -102,6 +131,16 @@ Last updated: 2026-08-13.
 
 ## 🔧 In progress / next
 
+- **⚠️ Dietary gate is invisible to the patient** — the rule engine now withholds targeted
+  nutrition and persists `dietary_guidance_reason` + `clinician_questions`, but neither
+  `Analysis.jsx` nor `AnemiaCard.jsx` renders them, and `diet_plan` prose is still model-generated
+  under a prompt instruction that has never been exercised against a live provider. The safety fix
+  is half-landed. [CHECKPOINT-06](./CHECKPOINT-06-phase2-review-quick-fixes.md).
+- **⚠️ Nine of thirteen review items still open** — reference ranges parsed from the patient's own
+  report, LOINC/UCUM, the `/api/disease/predict` SaMD reframe, inter-provider disagreement
+  measurement, the 100-photograph OCR test set, deterministic extraction, curated interaction
+  alerts, the SaMD posture memo, and the pre-visit report / FHIR bundle. Priority order in
+  [`MedAssist_AI_Phase2_Review_Response_Analysis.md`](../../MedAssist_AI_Phase2_Review_Response_Analysis.md).
 - **⚠️ Vision OCR fabricates values from an unreadable image** — a blank PNG returns a full set of
   invented results copied from the few-shot example in the prompt, and the deterministic classifier
   then builds a confident anemia verdict on them. Affects both the Gemini and OpenRouter vision
@@ -119,20 +158,32 @@ Last updated: 2026-08-13.
 - **Phase 2 remainder** (optional, beyond Sprint 4): unified journey timeline (Pillar 3), reminders/nudges (Pillar 4).
 - **Phase 3 — Prove & Position** (Month 3, Sprints 5–6): safety/critical-value net, in-app validation dashboard, clinician-review workflow, positioning brief, capstone walkthrough.
 
-## ⚠️ Gate 3 is earlier than the work plan assumes
+## ⚠️ Gate 3 is earlier than the work plan assumes — and now has a missing dependency
 
 Per `LOF_LABS_Participant_Guide.docx`, **Gate 3 (feature-complete beta) is due end of Week 10,
 ~6 Sep** — not 30 Sep. The Month 3 plan is ~3 weeks late against the actual gate. Reconcile
 this before scheduling Sprint 5/6 work. Full detail in
 [CHECKPOINT-04](./CHECKPOINT-04-voice-safety-compliance.md) §7.
 
-> **Resume point:** [CHECKPOINT-05-ensemble-failover.md](./CHECKPOINT-05-ensemble-failover.md) — **2026-08-13**, most recent.
-> Carries the blood-report ensemble failover fix, the measured provider state, and two
+**Compounding this:** the Phase 2 review sets Gate 3 as "report upload through **pre-visit PDF**
+end to end, including failure paths." No pre-visit report exists — nor does adherence tracking,
+prescription OCR, or the effectiveness scoring the review describes in the present tense. The
+review is grading the Phase 2 *proposal*, not the repository. Raise the gap with the professor
+now rather than at the gate.
+
+> **Resume point:** [CHECKPOINT-06-phase2-review-quick-fixes.md](./CHECKPOINT-06-phase2-review-quick-fixes.md) — **2026-08-24**, most recent.
+> Carries the dietary-guidance gate (a live safety defect closed at the rule engine), removal of
+> four unearned clinical-instrument names, the vendor terms manifest, and repo hygiene. Notes that
+> the gate is backend-only and invisible to the patient until the UI work lands.
+> [CHECKPOINT-05](./CHECKPOINT-05-ensemble-failover.md) — **2026-08-13** —
+> carries the blood-report ensemble failover fix, the measured provider state, and two
 > deliberate degradations (single-provider analysis on Render; a consensus judge that is
 > not independent when OpenAI is down).
 > [CHECKPOINT-04](./CHECKPOINT-04-voice-safety-compliance.md) — **2026-08-11** — has the voice
 > pipeline rebuild, the chatbot treatment guardrail, licensing compliance, the Gate 2
 > self-assessment, and the open credential/compliance checklist;
 > [CHECKPOINT-03](./CHECKPOINT-03-recovery-journey.md) has the recovery journey;
+> the full 13-item Phase 2 review analysis lives at
+> [`MedAssist_AI_Phase2_Review_Response_Analysis.md`](../../MedAssist_AI_Phase2_Review_Response_Analysis.md) in the repo root;
 > [CHECKPOINT-02](./CHECKPOINT-02-roadmap.md) the Phase 1 recap + Phase 2/3 build order;
 > [CHECKPOINT-01](./CHECKPOINT-01-cbc-expert.md) the anemia classifier.

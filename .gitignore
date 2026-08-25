@@ -31,6 +31,21 @@ medassist/client/dist/
 medassist/server/uploads/
 uploads/
 
+# Lab reports & prescription images (patient data — never commit, real or sample).
+# Phase 2 faculty review: "commit no photographed reports or prescription images
+# to the repository." Sample sets live locally and are shared out of band.
+sample-cbc-reports/
+sample-reports/
+test-reports/
+*-report.jpg
+*-report.jpeg
+*-report.png
+*-report.pdf
+prescription-*.jpg
+prescription-*.jpeg
+prescription-*.png
+prescription-*.pdf
+
 # Large media files (exceed GitHub's 100 MB limit)
 *.mp4
 *.mov
