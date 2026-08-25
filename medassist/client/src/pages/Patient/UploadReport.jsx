@@ -52,6 +52,10 @@ export default function UploadReport() {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress]   = useState(0);
   const [result, setResult]       = useState(null);
+  // A refused extraction (HTTP 422). Held in state rather than shown as a toast:
+  // this is the one message a patient must actually read, and a toast that fades
+  // leaves them staring at an unchanged screen wondering what happened.
+  const [rejection, setRejection] = useState(null);
   const fileInputRef = useRef();
 
   // ── mode: 'file' | 'camera' ──
@@ -185,6 +189,7 @@ export default function UploadReport() {
     setFile(null);
     setPreview(null);
     setResult(null);
+    setRejection(null);
     if (videoRef.current) {
       videoRef.current.play();
     }
@@ -208,6 +213,7 @@ export default function UploadReport() {
     }
     setFile(f);
     setResult(null);
+    setRejection(null);
 
     if (overridePreview) {
       setPreview(overridePreview);
@@ -238,6 +244,8 @@ export default function UploadReport() {
     formData.append('report', file);
     if (sessionId) formData.append('sessionId', sessionId);
 
+    setRejection(null);
+
     try {
       const res = await api.post('/blood-report/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -246,10 +254,30 @@ export default function UploadReport() {
       setResult(res.data);
       toast.success(`Extracted ${res.data.count} blood parameters`);
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Upload or OCR failed');
+      // 422 means the server read the file but would not vouch for the values —
+      // a blurred photo, a blank page, or output that looked invented. That is a
+      // result the patient has to act on, so it gets a panel, not a toast.
+      if (err.response?.status === 422) {
+        setRejection({
+          message: err.response.data?.error || "We couldn't read this report.",
+          code: err.response.data?.code || null,
+          signals: err.response.data?.signals || null,
+        });
+      } else {
+        toast.error(err.response?.data?.error || 'Upload or OCR failed');
+      }
     } finally {
       setUploading(false);
     }
+  };
+
+  /** Clear a refusal and return to the picker so the patient can try again. */
+  const tryAnotherFile = () => {
+    setRejection(null);
+    setFile(null);
+    setPreview(null);
+    setResult(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleProceed = () => {
@@ -529,8 +557,69 @@ export default function UploadReport() {
         </div>
       )}
 
+      {/* Extraction refused (422) — persistent, because this is the one message
+          the patient has to read and act on. Never renders partial values:
+          showing "we couldn't read this" beside a table of numbers would defeat
+          the point of refusing them. */}
+      {rejection && !uploading && (
+        <div className="bg-white rounded-2xl border-2 border-amber-300 shadow p-6 space-y-4">
+          <div className="flex items-start gap-3">
+            <svg className="w-6 h-6 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24"
+                 stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round"
+                    d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+            <div>
+              <h3 className="font-semibold text-slate-800 text-lg">
+                We couldn&apos;t read this report
+              </h3>
+              <p className="text-slate-600 mt-1">{rejection.message}</p>
+            </div>
+          </div>
+
+          <div className="bg-amber-50 rounded-xl p-4">
+            <p className="text-sm font-semibold text-amber-900 mb-2">What usually helps</p>
+            <ul className="text-sm text-amber-900/80 space-y-1.5 list-disc list-inside">
+              <li>Lay the page flat and take the photo straight on, not at an angle</li>
+              <li>Use bright, even light and avoid shadows or glare on the page</li>
+              <li>Fill the frame with the results table so the numbers are large</li>
+              <li>If your lab emailed you a PDF, upload that instead — it reads best</li>
+            </ul>
+          </div>
+
+          <p className="text-xs text-slate-500">
+            We stopped rather than show you values we couldn&apos;t read with confidence.
+            Nothing has been saved to your records.
+          </p>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={tryAnotherFile}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2.5 rounded-xl transition-colors"
+            >
+              Try another file
+            </button>
+            {file && (
+              <button
+                onClick={handleUpload}
+                className="border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium px-5 py-2.5 rounded-xl transition-colors"
+              >
+                Retry this file
+              </button>
+            )}
+          </div>
+
+          {rejection.code && (
+            <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-100">
+              Reference: {rejection.code}
+              {rejection.signals ? ` · ${rejection.signals.row_count} row(s) read, ${rejection.signals.numeric_row_count} with values` : ''}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Analyze button */}
-      {file && !uploading && !result && (
+      {file && !uploading && !result && !rejection && (
         <div className="flex items-center justify-between gap-4">
           <p className="text-xs text-slate-400">
             {mode === 'camera' ? 'Camera capture ready for analysis' : `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB`}
@@ -545,7 +634,7 @@ export default function UploadReport() {
       )}
 
       {/* Extracted values table */}
-      {result && (
+      {result && !rejection && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div>
