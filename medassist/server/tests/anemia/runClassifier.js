@@ -13,7 +13,7 @@ const { classifyAnemia } = require('../../services/anemiaClassifier');
 const { FIXTURES } = require('./fixtures');
 
 const THRESHOLD = 0.90;
-const CHECK_FIELDS = ['anemia_present', 'status', 'severity', 'morphology', 'type'];
+const CHECK_FIELDS = ['anemia_present', 'status', 'severity', 'morphology', 'type', 'dietary_guidance'];
 
 let tp = 0, fp = 0, tn = 0, fn = 0;
 let fieldChecks = 0, fieldPass = 0;

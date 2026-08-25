@@ -5,8 +5,8 @@
  * expected fields are the ground-truth labels the classifier must reproduce.
  * Coverage: normal (M/F/preg), severity × sex, pregnancy-shifted bands,
  * morphology, iron-studies CONFIRMED/SUSPECTED/INCONCLUSIVE, B12/folate,
- * chronic-disease, garbage-Hb, out-of-pattern deferral, and pediatric
- * (age-adjusted) cases. (28 cases.)
+ * chronic-disease, garbage-Hb, out-of-pattern deferral, pediatric
+ * (age-adjusted), and the dietary-guidance gate. (29 cases.)
  */
 
 // helper: build an extracted-value object
@@ -86,26 +86,37 @@ const FIXTURES = [
     expected: { anemia_present: true, status: 'SUSPECTED', severity: 'moderate', morphology: 'macrocytic', type: 'b12_folate_deficiency' } },
 
   // ── Iron studies ──────────────────────────────────────────────────────────
+  // `dietary_guidance` is the Phase 2 review gate: only a CONFIRMED determination
+  // may drive condition-targeted nutrition. See the anemiaClassifier file header.
   { id: 'IRON-confirm-ferritin', description: 'CONFIRMED iron-deficiency (ferritin 10 <45)',
     values: [v('Hemoglobin', 9.0, 'g/dL'), v('MCV', 74, 'fL'), v('Ferritin', 10, 'ng/mL')],
     profile: { gender: 'female', pregnant: false },
-    expected: { anemia_present: true, status: 'CONFIRMED', severity: 'moderate', morphology: 'microcytic', type: 'iron_deficiency' } },
+    expected: { anemia_present: true, status: 'CONFIRMED', severity: 'moderate', morphology: 'microcytic', type: 'iron_deficiency', dietary_guidance: 'condition_specific' } },
   { id: 'IRON-confirm-tsat', description: 'CONFIRMED iron-deficiency via TSAT 12% (<20)',
     values: [v('Hemoglobin', 9.0, 'g/dL'), v('MCV', 75, 'fL'), v('Transferrin Saturation', 12, '%')],
     profile: { gender: 'female', pregnant: false },
-    expected: { anemia_present: true, status: 'CONFIRMED', severity: 'moderate', morphology: 'microcytic', type: 'iron_deficiency' } },
+    expected: { anemia_present: true, status: 'CONFIRMED', severity: 'moderate', morphology: 'microcytic', type: 'iron_deficiency', dietary_guidance: 'condition_specific' } },
   { id: 'IRON-suspect', description: 'SUSPECTED iron-deficiency, no iron panel',
     values: [v('Hemoglobin', 9.0, 'g/dL'), v('MCV', 74, 'fL')],
     profile: { gender: 'male' },
-    expected: { anemia_present: true, status: 'SUSPECTED', severity: 'moderate', morphology: 'microcytic', type: 'iron_deficiency' } },
+    expected: { anemia_present: true, status: 'SUSPECTED', severity: 'moderate', morphology: 'microcytic', type: 'iron_deficiency', dietary_guidance: 'general_only' } },
   { id: 'IRON-indeterminate', description: 'Microcytic w/ ferritin 60 (45–100 indeterminate)',
     values: [v('Hemoglobin', 10.0, 'g/dL'), v('MCV', 78, 'fL'), v('Ferritin', 60, 'ng/mL')],
     profile: { gender: 'male' },
-    expected: { anemia_present: true, status: 'SUSPECTED', severity: 'moderate', morphology: 'microcytic', type: 'iron_deficiency' } },
+    expected: { anemia_present: true, status: 'SUSPECTED', severity: 'moderate', morphology: 'microcytic', type: 'iron_deficiency', dietary_guidance: 'general_only' } },
   { id: 'INCONCLUSIVE-disagree', description: 'Microcytic but ferritin 200 (high) → CBC/iron disagree → defer',
     values: [v('Hemoglobin', 9.0, 'g/dL'), v('MCV', 76, 'fL'), v('Ferritin', 200, 'ng/mL')],
     profile: { gender: 'male' },
-    expected: { anemia_present: true, status: 'INCONCLUSIVE', severity: 'moderate', morphology: 'microcytic', type: 'iron_deficiency', defer_to_physician: true } },
+    expected: { anemia_present: true, status: 'INCONCLUSIVE', severity: 'moderate', morphology: 'microcytic', type: 'iron_deficiency', defer_to_physician: true, dietary_guidance: 'general_only' } },
+
+  // ── Dietary-guidance gate (Phase 2 faculty review) ────────────────────────
+  // The case named in the review: "A hemoglobin of 9.1 g/dL is anemia of
+  // undetermined cause... Activating a dietary iron module on that value can
+  // delay colonoscopy." Must NOT unlock condition-targeted nutrition.
+  { id: 'GATE-hb91-no-iron-panel', description: 'Review case — Hb 9.1, MCV 76, no iron studies → general_only + clinician questions',
+    values: [v('Hemoglobin', 9.1, 'g/dL'), v('MCV', 76, 'fL'), v('RDW', 16.0, '%')],
+    profile: { gender: 'male', age: 58 },
+    expected: { anemia_present: true, status: 'SUSPECTED', severity: 'moderate', morphology: 'microcytic', type: 'iron_deficiency', dietary_guidance: 'general_only' } },
 
   // ── B12 / folate + chronic disease ────────────────────────────────────────
   { id: 'B12-macro', description: 'Macrocytic B12/folate pattern (Hb 9.5, MCV 115)',

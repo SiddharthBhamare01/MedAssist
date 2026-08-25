@@ -11,6 +11,15 @@
  *     men <13.0, non-pregnant women <12.0, pregnant <11.0 g/dL
  *   - Severity bands: WHO 2011 VMNIS (WHO/NMH/NHD/MNM/11.1) — pregnant scale shifted
  *   - Iron-deficiency confirmation: AGA 2020 IDA guideline (ferritin <45 ng/mL; TSAT <20%)
+ *
+ * Dietary-guidance gate (Phase 2 faculty review, Dr. Leibovitz, Aug 2026):
+ * a low hemoglobin with microcytic indices and no iron studies is NOT established
+ * iron deficiency — the differential still holds thalassemia trait, anemia of
+ * chronic disease, and occult GI blood loss. Emitting an iron-rich diet plan on
+ * that pattern reads to the patient as an answer and can delay the workup that
+ * finds the real cause. `dietary_guidance` therefore unlocks condition-targeted
+ * nutrition ONLY on a CONFIRMED determination; every other path returns
+ * 'general_only' plus questions to put to a clinician.
  */
 
 const { resolveRange } = require('../data/referenceRanges');
@@ -19,6 +28,7 @@ const SOURCES = {
   cutoff:  { claim: 'anemia cutoff', source: 'WHO 2024 Guideline on haemoglobin cutoffs to define anaemia' },
   severity:{ claim: 'severity band', source: 'WHO 2011 VMNIS (WHO/NMH/NHD/MNM/11.1)' },
   confirm: { claim: 'iron-deficiency confirmation', source: 'AGA 2020 IDA Clinical Practice Guideline (ferritin <45 ng/mL)' },
+  gate:    { claim: 'dietary guidance gate', source: 'AGA 2020 IDA Clinical Practice Guideline — confirm iron deficiency and evaluate for a source of blood loss before treating' },
 };
 
 // Normalized parameter name / abbreviation → canonical key.
@@ -182,6 +192,21 @@ function microcyticThreshold(age) {
   return 77; // 6–11y
 }
 
+/**
+ * Deny condition-targeted dietary guidance and record why, plus the questions the
+ * patient should take to a clinician instead. Mutates and returns `result`.
+ * @param {Object} result
+ * @param {string} reason  why targeted nutrition is withheld (shown to the patient)
+ * @param {string[]} questions  questions for the clinician
+ */
+function gateDiet(result, reason, questions) {
+  result.dietary_guidance = 'general_only';
+  result.dietary_guidance_reason = reason;
+  result.clinician_questions = questions;
+  if (!result.sources.some((s) => s.claim === SOURCES.gate.claim)) result.sources.push(SOURCES.gate);
+  return result;
+}
+
 const TYPE_LABELS = {
   iron_deficiency_confirmed: 'Iron-deficiency anemia (confirmed)',
   iron_deficiency_suspected: 'Iron-deficiency pattern (unconfirmed)',
@@ -228,6 +253,11 @@ function classifyAnemia(extractedValues, patientProfile) {
     defer_to_physician: false,
     deferral_reason: null,
     recommendation: null,
+    // Gate on condition-targeted nutrition: 'condition_specific' | 'general_only'.
+    // Only a CONFIRMED determination unlocks targeted guidance — see the file header.
+    dietary_guidance: 'general_only',
+    dietary_guidance_reason: null,
+    clinician_questions: [],
     explanation_seed: '',
     sources,
     computed_at: null, // stamped by the caller (pure fn — no Date.now here)
@@ -242,6 +272,8 @@ function classifyAnemia(extractedValues, patientProfile) {
       defer_to_physician: true,
       deferral_reason: 'Hemoglobin value not found or not parseable in the report.',
       recommendation: 'A hemoglobin measurement is required to assess for anemia.',
+      dietary_guidance_reason: 'No hemoglobin value could be read, so there is no determination to build nutrition around.',
+      clinician_questions: ['Can you confirm my hemoglobin result from this report?'],
       explanation_seed: 'No usable hemoglobin value was found, so anemia cannot be assessed; physician review is recommended.',
     };
   }
@@ -289,6 +321,13 @@ function classifyAnemia(extractedValues, patientProfile) {
         result.type_label = TYPE_LABELS.iron_deficiency_confirmed;
         result.confidence = 'high';
         result.recommendation = 'Iron-deficiency anemia confirmed by iron studies. Discuss iron replacement and, in adults, evaluation for a source of blood loss with your physician.';
+        // The only path that unlocks condition-targeted nutrition. Confirmation
+        // settles the type, but not the cause — the blood-loss question stands.
+        result.dietary_guidance = 'condition_specific';
+        result.clinician_questions = [
+          'Iron deficiency is confirmed — should we look for the cause, such as a source of blood loss?',
+          'Do I need iron supplements as well as dietary changes, and at what dose?',
+        ];
         result.explanation_seed = `Hemoglobin ${hb.value} g/dL (below the ${cutoff} g/dL cutoff) with microcytic indices (MCV ${mcv.value}) and low iron stores (ferritin ${ferritin.value ?? 'n/a'} ng/mL) confirm ${severity} iron-deficiency anemia.`;
       } else if (ferritinHigh) {
         // CBC pattern and iron studies disagree.
@@ -299,12 +338,28 @@ function classifyAnemia(extractedValues, patientProfile) {
         result.deferral_reason = 'Microcytic red cells but iron stores are not low (ferritin normal/high) — the picture is inconsistent with simple iron deficiency (consider thalassemia or anemia of chronic disease).';
         result.recommendation = 'Refer to a physician; consider hemoglobin electrophoresis / inflammatory workup.';
         result.explanation_seed = `Microcytic anemia (MCV ${mcv.value}) with a non-low ferritin (${ferritin.value} ng/mL) does not fit iron deficiency; the cause is inconclusive and needs physician evaluation.`;
+        gateDiet(
+          result,
+          'Your iron stores are not low, so this is not iron deficiency and iron-focused eating would not address it. The cause needs a doctor to identify first.',
+          [
+            'My red cells are small but my ferritin is not low — could this be thalassemia trait or anemia of chronic disease?',
+            'Should I have a hemoglobin electrophoresis or an inflammatory workup?',
+          ],
+        );
       } else {
         result.status = 'SUSPECTED';
         result.type_label = TYPE_LABELS.iron_deficiency_suspected;
         result.confidence = 'moderate';
         result.recommendation = 'Iron studies are indeterminate. Physician review recommended to confirm iron-deficiency vs. other microcytic causes.';
         result.explanation_seed = `Microcytic anemia (MCV ${mcv.value}) fits an iron-deficiency pattern, but the available iron studies are indeterminate.`;
+        gateDiet(
+          result,
+          'Your iron studies came back indeterminate, so iron deficiency is not established. A doctor should confirm the cause before you change your diet around it.',
+          [
+            'My iron studies are indeterminate — what further testing would confirm or rule out iron deficiency?',
+            'What else could explain small red cells in my case?',
+          ],
+        );
       }
     } else {
       result.status = 'SUSPECTED';
@@ -312,6 +367,18 @@ function classifyAnemia(extractedValues, patientProfile) {
       result.confidence = (mchLow || rdwHigh) ? 'moderate' : 'low';
       result.recommendation = 'Order an iron panel (ferritin, TIBC, transferrin saturation, reticulocytes) to confirm iron-deficiency anemia.';
       result.explanation_seed = `Hemoglobin ${hb.value} g/dL with microcytic indices (MCV ${mcv.value}${mchLow ? `, low MCH ${mch.value}` : ''}${rdwHigh ? `, high RDW ${rdw.value}` : ''}) fits a ${severity} iron-deficiency pattern that is not yet confirmed by iron studies.`;
+      // The reviewed case: low Hb + small red cells + no iron panel. The pattern
+      // fits iron deficiency, but so do thalassemia trait, anemia of chronic
+      // disease, and bleeding from an undiagnosed source. No targeted nutrition.
+      gateDiet(
+        result,
+        'This report has no iron test on it, so iron deficiency has not been established. Several other causes look the same on a CBC, and some need investigating rather than eating differently.',
+        [
+          'Can I have an iron panel (ferritin, TIBC, transferrin saturation) to confirm whether this is iron deficiency?',
+          'Given my age and history, should we check for a source of blood loss?',
+          'Could this be thalassemia trait, anemia of chronic disease, or a B12/folate problem instead?',
+        ],
+      );
     }
   } else if (morphology === 'macrocytic') {
     result.type = 'b12_folate_deficiency';
@@ -320,6 +387,14 @@ function classifyAnemia(extractedValues, patientProfile) {
     result.confidence = 'moderate';
     result.recommendation = 'Check vitamin B12 and folate levels to evaluate a macrocytic (B12/folate-deficiency) anemia.';
     result.explanation_seed = `Hemoglobin ${hb.value} g/dL with a high MCV (${mcv.value}) indicates a ${severity} macrocytic anemia, commonly from B12 or folate deficiency; confirmatory levels are needed.`;
+    gateDiet(
+      result,
+      'Large red cells often mean a B12 or folate shortfall, but thyroid disease, alcohol, some medications and bone-marrow conditions produce the same picture. Confirmatory levels come before any diet built around it.',
+      [
+        'Should I have my B12 and folate levels measured?',
+        'Could my thyroid, a medication I take, or alcohol explain the high MCV?',
+      ],
+    );
   } else if (morphology === 'normocytic') {
     result.type = 'anemia_of_chronic_disease';
     result.status = 'SUSPECTED';
@@ -327,6 +402,14 @@ function classifyAnemia(extractedValues, patientProfile) {
     result.confidence = 'low';
     result.recommendation = 'Normocytic anemia has many causes (chronic disease, kidney disease, acute blood loss). Physician evaluation is recommended.';
     result.explanation_seed = `Hemoglobin ${hb.value} g/dL with a normal MCV (${mcv.value}) is a ${severity} normocytic anemia; common causes include chronic disease or kidney impairment and warrant physician review.`;
+    gateDiet(
+      result,
+      'Anemia with normal-sized red cells has many causes — chronic illness, kidney function, or recent blood loss among them. None of these is addressed by targeted eating, and identifying which one applies needs a doctor.',
+      [
+        'Should we check my kidney function and inflammatory markers?',
+        'Could I be losing blood somewhere without noticing?',
+      ],
+    );
   } else {
     // Anemia present but morphology unknown (no MCV) → cannot classify type.
     result.type = 'unspecified';
@@ -337,6 +420,14 @@ function classifyAnemia(extractedValues, patientProfile) {
     result.deferral_reason = 'Red-cell indices (MCV) are unavailable, so the anemia type cannot be classified.';
     result.recommendation = 'Obtain a full CBC with red-cell indices (MCV, MCH, RDW) and an iron panel; physician review recommended.';
     result.explanation_seed = `Hemoglobin ${hb.value} g/dL indicates ${severity} anemia, but without MCV the type cannot be determined; physician evaluation is recommended.`;
+    gateDiet(
+      result,
+      'This report is missing the red-cell measurements that separate one kind of anemia from another, so there is nothing specific enough to build a diet around.',
+      [
+        'Can I have a full CBC with red-cell indices (MCV, MCH, RDW) and an iron panel?',
+        'What is the most likely cause of my low hemoglobin given my history?',
+      ],
+    );
   }
 
   // 5. Conservative escalation: severe anemia always warrants physician review.

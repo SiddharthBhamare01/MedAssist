@@ -101,7 +101,11 @@ const PHASE2B_SYSTEM = `You are a medical nutrition advisor. Output ONLY valid J
 Output this exact structure:
 {"diet_plan":{"overview":"1 sentence","foods_to_eat":[{"food":"","reason":"","frequency":""}],"foods_to_avoid":[{"food":"","reason":""}],"meal_schedule":[{"meal":"Breakfast","suggestion":""},{"meal":"Lunch","suggestion":""},{"meal":"Dinner","suggestion":""},{"meal":"Snacks","suggestion":""}]},"recovery_ingredients":[{"ingredient":"","benefit":"","how_to_use":"","targets":[""]}]}
 
-Rules: min 4 foods_to_eat, 3 foods_to_avoid, all 4 meal_schedule entries, min 3 recovery_ingredients. Target the specific abnormal parameters listed. If an AUTHORITATIVE ANEMIA DETERMINATION is provided in the context, build the diet/recovery around it (e.g. iron-rich foods for an iron-deficiency pattern) but never restate or change its clinical status.`;
+Rules: min 4 foods_to_eat, 3 foods_to_avoid, all 4 meal_schedule entries, min 3 recovery_ingredients. Target the specific abnormal parameters listed. Never restate or change the clinical status of an AUTHORITATIVE ANEMIA DETERMINATION.
+
+DIETARY GUIDANCE SCOPE — the context states one of two scopes. Obey it exactly:
+- "condition_specific": build the diet and recovery around the stated determination (e.g. iron-rich foods for a CONFIRMED iron deficiency).
+- "general_only": the cause is NOT established. Give general balanced nutrition that supports overall recovery. Do NOT target the suspected deficiency, do NOT theme the plan around iron / B12 / folate, do NOT name supplements, and do NOT imply the diet treats the anemia. State in "overview" that the cause needs a doctor to confirm first.`;
 
 /**
  * Run the Blood Report Agent (multi-phase: tool calls → medical → lifestyle → treatment).
@@ -161,7 +165,8 @@ Call the tools now to gather reference ranges and drug data.`;
   const anemiaBlock = anemia.anemia_present || anemia.status === 'INCONCLUSIVE'
     ? `\nAUTHORITATIVE ANEMIA DETERMINATION (computed by a validated rule engine — do NOT change it, only explain it):
 Status: ${anemia.status} | Severity: ${anemia.severity || 'n/a'} | Morphology: ${anemia.morphology || 'n/a'} | ${anemia.type_label || ''}
-Basis: ${anemia.explanation_seed}${anemia.defer_to_physician ? `\nDefer to physician: ${anemia.deferral_reason}` : ''}`
+Basis: ${anemia.explanation_seed}${anemia.defer_to_physician ? `\nDefer to physician: ${anemia.deferral_reason}` : ''}
+DIETARY GUIDANCE SCOPE: ${anemia.dietary_guidance}${anemia.dietary_guidance_reason ? ` — ${anemia.dietary_guidance_reason}` : ''}`
     : '';
 
   const sharedContext = `Patient: ${profileText}
@@ -232,10 +237,25 @@ Tool data: ${toolSummary || 'none'}${anemiaBlock}`;
     }
   }
 
-  console.log(`[bloodReportAgent] Final — anemia:${anemia.status} diet:${!!lifestyle?.diet_plan} recovery:${lifestyle?.recovery_ingredients?.length ?? 0}`);
+  // Rule engine wins again: the dietary gate cannot depend on the model having
+  // obeyed the prompt. `recovery_ingredients` is the condition-targeting surface
+  // (each entry carries an explicit `targets` array), so when the determination
+  // is unconfirmed it is dropped outright rather than trusted.
+  const dietGated = anemia.dietary_guidance === 'general_only' &&
+    (anemia.anemia_present || anemia.status === 'INCONCLUSIVE');
+  if (dietGated && lifestyle?.recovery_ingredients?.length) {
+    console.log(`[bloodReportAgent] Diet gate — dropping ${lifestyle.recovery_ingredients.length} recovery_ingredients (anemia ${anemia.status}, cause unconfirmed)`);
+    lifestyle.recovery_ingredients = [];
+  }
+
+  console.log(`[bloodReportAgent] Final — anemia:${anemia.status} diet:${!!lifestyle?.diet_plan} scope:${anemia.dietary_guidance} recovery:${lifestyle?.recovery_ingredients?.length ?? 0}`);
 
   // ── Merge results with fallbacks ─────────────────────────────────────────
-  const doctorReferralNeeded = medical?.summary?.doctor_referral_needed || false;
+  // Any anemia the rule engine could not confirm goes to a clinician — the
+  // referral is the product's answer when the cause is unknown, not the diet.
+  const doctorReferralNeeded = medical?.summary?.doctor_referral_needed ||
+    dietGated ||
+    false;
   const analysis = {
     summary: medical?.summary || {
       overall_assessment: 'AI providers are temporarily overloaded — please retry in a few minutes.',
@@ -253,8 +273,35 @@ Tool data: ${toolSummary || 'none'}${anemiaBlock}`;
     })),
     diet_plan: lifestyle?.diet_plan || null,
     recovery_ingredients: lifestyle?.recovery_ingredients || [],
+    // Persisted from the rule engine, not the LLM, so the gate is auditable and
+    // the frontend has something authoritative to render.
+    dietary_guidance: anemia.dietary_guidance,
+    dietary_guidance_reason: anemia.dietary_guidance_reason,
+    clinician_questions: anemia.clinician_questions || [],
     anemia,
   };
+
+  if (dietGated) {
+    // The diet prose itself is still model-written, so the gate cannot rely on the
+    // model having disclosed it. Stamp the rule engine's scope and reason onto the
+    // plan so the disclosure travels with the data — and so a model that ignored
+    // the scope instruction is still labelled correctly downstream.
+    if (analysis.diet_plan) {
+      analysis.diet_plan.scope = 'general_only';
+      analysis.diet_plan.overview = anemia.dietary_guidance_reason;
+    }
+
+    // The referral is a rule-engine decision — make sure the summary the patient
+    // reads agrees with the flag stored on the report. The clinical reason leads:
+    // on the Phase-2a fallback path the existing reason is about provider overload,
+    // which is true but is not why this report needs a clinician.
+    analysis.summary.doctor_referral_needed = true;
+    const gateReason = anemia.dietary_guidance_reason ||
+      'The cause of this anemia is not established from the report alone and needs a clinician to confirm.';
+    analysis.summary.referral_reason = analysis.summary.referral_reason
+      ? `${gateReason} (${analysis.summary.referral_reason})`
+      : gateReason;
+  }
 
   // Save to DB
   try {
