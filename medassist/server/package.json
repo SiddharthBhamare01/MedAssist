@@ -7,7 +7,7 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "test": "node tests/integration.js",
-    "test:offline": "node tests/anemia/runClassifier.js && node tests/guardrail/runGuardrail.js && node tests/recovery/runForecast.js && node tests/ensemble/runDisagreement.js && node tests/interactions/runCurated.js",
+    "test:offline": "node tests/anemia/runClassifier.js && node tests/guardrail/runGuardrail.js && node tests/recovery/runForecast.js && node tests/ensemble/runDisagreement.js && node tests/interactions/runCurated.js && node tests/ocr/runValidator.js",
     "test:ocr": "node tests/ocr/runExtractionAccuracy.js"
   },
   "keywords": [],

@@ -36,7 +36,8 @@ Six of the nine items left open by CHECKPOINT-06. **Running total: 8 of 13 revie
   image goes to OCR with any printed identifiers, and Helicone proxies every model call.
 - **OCR accuracy harness built** (`tests/ocr/`) with labelling format and fabrication count.
   ⚠️ **The 100 photographs must be produced by hand** — the harness exits 2 rather than fake a pass.
-- `npm run test:offline` now runs all five suites: 29 + 7 + 29 + 30 + 16 + 16, all green.
+- `npm run test:offline` runs six suites: 29 + 7 + 29 + 30 + 16 + 16 + 21, all green.
+- **OCR fabrication gate** (24 Aug) — see "In progress / next" for the three layers now in place.
 
 ### Phase 2 faculty review — first four fixes (24 Aug, [CHECKPOINT-06](./CHECKPOINT-06-phase2-review-quick-fixes.md))
 
@@ -175,12 +176,17 @@ analysis of all 13 review points in
 - **⚠️ Production disagreement rate uncollected** — `utils/ensembleMetrics.js` logs it on every
   multi-provider run, but nobody has gathered a sample. Cheapest remaining item, and if the
   providers agree it justifies cutting the fan-out on cost, latency *and* PHI exposure at once.
-- **⚠️ Vision OCR fabricates values from an unreadable image** — a blank PNG returns a full set of
-  invented results copied from the few-shot example in the prompt, and the deterministic classifier
-  then builds a confident anemia verdict on them. Affects both the Gemini and OpenRouter vision
-  paths; pre-existing, not introduced by enabling Gemini. Needs a scanned/photographed sample
-  before a prompt fix can be validated. Detail in
-  [CHECKPOINT-05](./CHECKPOINT-05-ensemble-failover.md) §6b.
+- **⚠️ Vision OCR fabrication — gated, not yet proven fixed at the model.** A blank PNG returned a
+  full set of invented results copied from the few-shot example in the prompt, and the
+  deterministic classifier then built a confident anemia verdict on them. Three layers now stand
+  between that and the patient (24 Aug): the prompts carry placeholders instead of plantable
+  numbers plus an explicit "return [] if unreadable" rule; `utils/extractionValidator.js` refuses
+  empty, numberless, prompt-echoing, placeholder-padded and single-bare-number extractions; and
+  `POST /blood-report/upload` returns **422 with an actionable message instead of persisting**.
+  21/21 in `tests/ocr/runValidator.js`. ⚠️ **The gate is verified against synthetic output only** —
+  whether the vision model now returns `[]` for a genuinely blurred photograph is unmeasured and
+  needs the OCR photo set. The gate holds either way; it does not depend on the model obeying.
+  Detail in [CHECKPOINT-05](./CHECKPOINT-05-ensemble-failover.md) §6b.
 - **⚠️ Visual verification of the whole recovery journey UI** — chart, cutoff line, recovery card,
   collapse behavior, section order, merged anemia card. All verified by harness/build/live API, none
   seen rendered. The `RESPONDING`/`RECOVERED` states and the dashed projection line need a patient

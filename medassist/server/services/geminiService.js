@@ -26,43 +26,61 @@ const TEXT_PARSE_PROMPT = `You are a medical data extraction AI.
 Below is raw text extracted from a blood test report.
 Extract ALL blood test values and return a JSON array ONLY — no markdown, no explanation.
 
-Required structure per item:
+Required structure per item (these are placeholders describing the field, not values to copy):
 {
-  "parameter": "Hemoglobin",
-  "abbreviation": "Hb",
-  "value": "13.2",
-  "unit": "g/dL",
-  "normal_range": "13.5–17.5",
-  "status": "low"
+  "parameter": "<exact test name as printed>",
+  "abbreviation": "<abbreviation as printed, or empty string>",
+  "value": "<numeric value exactly as printed>",
+  "unit": "<unit exactly as printed, or empty string>",
+  "normal_range": "<reference range exactly as printed, or empty string>",
+  "status": "normal | low | high | critical_low | critical_high"
 }
 
 Rules:
 - "status" must be one of: "normal", "low", "high", "critical_low", "critical_high"
 - Determine status by comparing value to normal_range
-- Include ALL parameters visible in the text
-- If a field is missing or unclear, use "" (empty string) for that field
-- Return ONLY the JSON array, nothing else`;
+- Include ALL parameters present in the text
+- If a single field is missing or unclear, use "" (empty string) for that field
+- Return ONLY the JSON array, nothing else
+
+CRITICAL — when you cannot read the image:
+- Return exactly [] (an empty array). That is the CORRECT answer for a blurred,
+  blank, cropped, dark, or non-lab-report image.
+- NEVER invent, guess, infer, recall, or complete a value you cannot actually see.
+- NEVER copy the placeholder text above into your answer.
+- Do not fill gaps from what a typical report usually contains. An empty array is
+  always better than a plausible number that is not on the page.
+- Extract ONLY rows where you can actually read the printed characters.`;
 
 const VISION_PARSE_PROMPT = `You are a medical data extraction AI analyzing a blood test report.
-Look carefully at the entire image and extract ALL blood test values visible.
+Look carefully at the entire image and extract ALL blood test values you can actually read.
 Return a JSON array ONLY — no markdown, no explanation, no preamble.
 
-Required structure per item:
+Required structure per item (these are placeholders describing the field, not values to copy):
 {
-  "parameter": "Hemoglobin",
-  "abbreviation": "Hb",
-  "value": "13.2",
-  "unit": "g/dL",
-  "normal_range": "13.5–17.5",
-  "status": "low"
+  "parameter": "<exact test name as printed>",
+  "abbreviation": "<abbreviation as printed, or empty string>",
+  "value": "<numeric value exactly as printed>",
+  "unit": "<unit exactly as printed, or empty string>",
+  "normal_range": "<reference range exactly as printed, or empty string>",
+  "status": "normal | low | high | critical_low | critical_high"
 }
 
 Rules:
 - "status" must be one of: "normal", "low", "high", "critical_low", "critical_high"
 - Determine status by comparing value to normal_range
-- Include ALL parameters visible (CBC, LFT, KFT, lipid panel, thyroid, etc.)
-- If a field is missing or unclear, use "" (empty string) for that field
-- Return ONLY the JSON array, nothing else`;
+- Include ALL parameters legibly visible (CBC, LFT, KFT, lipid panel, thyroid, etc.)
+- If a single field is missing or unclear, use "" (empty string) for that field
+- Return ONLY the JSON array, nothing else
+
+CRITICAL — when you cannot read the image:
+- Return exactly [] (an empty array). That is the CORRECT answer for a blurred,
+  blank, cropped, dark, or non-lab-report image.
+- NEVER invent, guess, infer, recall, or complete a value you cannot actually see.
+- NEVER copy the placeholder text above into your answer.
+- Do not fill gaps from what a typical report usually contains. An empty array is
+  always better than a plausible number that is not on the page.
+- Extract ONLY rows where you can actually read the printed characters.`;
 
 // OpenRouter vision models in priority order (current 2026 slugs, cheapest-reliable first).
 // Older free 2024-era slugs (llama-3.2-vision, qwen2-vl) were retired and now 404.

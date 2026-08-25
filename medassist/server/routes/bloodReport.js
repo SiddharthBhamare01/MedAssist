@@ -4,6 +4,7 @@ const fs = require('fs');
 const verifyToken = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const { extractBloodValuesFromImage } = require('../services/geminiService');
+const { validateExtraction, formatValidation } = require('../utils/extractionValidator');
 const { runBloodReportAgent } = require('../agents/bloodReportAgent');
 const { getPatientProfile, updateSessionStatus } = require('../models/patientQueries');
 const { recomputeStatuses, classifyAnemia, readNumeric } = require('../services/anemiaClassifier');
@@ -28,6 +29,25 @@ router.post('/upload', verifyToken, upload.single('report'), async (req, res) =>
 
     // Delete the file immediately after OCR — Render's disk is ephemeral anyway
     fs.unlink(filePath, () => {});
+
+    // Gate: refuse output that was invented rather than read. A blurred or blank
+    // image used to yield a full set of plausible values copied from the prompt's
+    // own example, which was then persisted and used to build a confident,
+    // WHO-cited anemia determination on numbers that were never on the page.
+    // Nothing downstream can detect that, so it has to stop here.
+    const verdict = validateExtraction(extractedValues);
+    console.log(formatValidation(verdict));
+    if (!verdict.ok) {
+      // 422, not 500: the request was well-formed, the image was not usable.
+      return res.status(422).json({
+        error: verdict.message,
+        code: verdict.code,
+        // Diagnostics for the log/UI, never presented as results.
+        signals: verdict.signals,
+        extractedValues: [],
+        count: 0,
+      });
+    }
 
     // Deterministic rule layer: override CBC statuses computed by the OCR LLM
     // with rule-based statuses (gender-aware) so the upload view and the later
