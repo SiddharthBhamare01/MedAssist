@@ -235,12 +235,79 @@ ${abnormalLines}`;
 
 
 // Strip reasoning-model artifacts (same regex as translateSegment below).
+// Upper bound on a patient-facing explanation. The prompt asks for under 70
+// words; anything well past that is a signal the model is thinking out loud
+// rather than answering. Spanish runs longer than English, hence the slack.
+const MAX_EXPLANATION_WORDS = 100;
+
+// Phrases a model uses when reasoning *about* the task instead of doing it.
+// Observed in production: Cerebras gpt-oss-120b returned its full deliberation
+// ("We need to produce 2-3 sentences... Let's craft:... Count words:") in
+// `content` with no <think> wrapper, and it was served to the patient verbatim.
+const REASONING_MARKERS = /\b(we need to (produce|write|cover|craft)|let'?s (craft|try|rewrite|adjust|check|count)|word count|count words|total words|under \d+ words|must be (warm|under|okay)|that'?s (okay|fine|plain|still jargon)|check (jargon|no jargon)|sentence\s?\d|the instruction:|no medical jargon:|avoid terms like|maybe considered jargon|could we replace|make sure warm|is (plain|okay)\.|user asks)/i;
+
+function wordCount(text) {
+  return (String(text).trim().match(/\S+/g) || []).length;
+}
+
+/** True when the text reads as a model's private deliberation, not an answer. */
+function looksLikeReasoning(text) {
+  if (!text) return true;
+  if (REASONING_MARKERS.test(text)) return true;
+  // Enumerated word-counting ("This(1) test2 measures3 ...") is unmistakable.
+  if (/\b\w+\d+\s+\w+\d+\s+\w+\d+/.test(text)) return true;
+  return wordCount(text) > MAX_EXPLANATION_WORDS;
+}
+
+/** Strip a wrapping pair of quotes the model used to set off a drafted answer. */
+function unquote(text) {
+  const m = String(text).trim().match(/^["“'']([\s\S]+)["”'']$/);
+  return m ? m[1].trim() : text;
+}
+
+/**
+ * Reduce a raw completion to the patient-facing explanation, or null.
+ *
+ * Reasoning models leak in two shapes: tagged (<think>, harmony channels) and
+ * untagged prose. Tagged is stripped outright. For untagged, the real answer —
+ * when there is one — is the last clean paragraph, so paragraphs are scanned
+ * from the end and the first that reads as an answer wins. Returning null makes
+ * the caller fail over to the next provider rather than serve deliberation.
+ */
 function cleanExplanation(raw) {
-  return (raw || '')
-    .replace(/<think>[\s\S]*?<\/think>/gi, '')  // qwen-3 / gpt-oss style think tokens
+  // Only unpick harmony role words when harmony markers were actually present —
+  // otherwise a legitimate answer opening with "Final..." would lose its word.
+  const hadHarmonyMarkers = /<\|[^|>]*\|>/.test(raw || '');
+
+  let stripped = (raw || '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')          // qwen-3 / gpt-oss think tokens
+    .replace(/<\|channel\|>analysis<\|message\|>[\s\S]*?(?=<\|start\|>|<\|channel\|>final|$)/gi, '')
+    .replace(/<\|[^|>]*\|>/g, '');                      // leftover harmony markers
+
+  if (hadHarmonyMarkers) {
+    // Stripping the markers welds their role/channel words onto the answer
+    // ("assistantfinalYour result is…"). Drop that prefix.
+    stripped = stripped.replace(/^\s*(?:assistant|analysis|final|commentary|message)+/i, '');
+  }
+
+  stripped = stripped
     .replace(/^```(?:\w+)?\s*/i, '')
     .replace(/\s*```\s*$/i, '')
     .trim();
+
+  if (!stripped) return '';
+  if (!looksLikeReasoning(stripped)) return stripped;
+
+  // Deliberation detected — hunt for the drafted answer inside it.
+  const paragraphs = stripped.split(/\n\s*\n/).map((p) => unquote(p.trim())).filter(Boolean);
+  for (let i = paragraphs.length - 1; i >= 0; i--) {
+    const p = paragraphs[i];
+    if (looksLikeReasoning(p)) continue;
+    if (wordCount(p) < 15) continue;          // too short to be the explanation
+    if (!/[.!?]["”'']?$/.test(p)) continue;   // unfinished — the caller has a trim path
+    return p;
+  }
+  return '';  // nothing usable — fail over
 }
 
 // Last resort for a max_tokens-truncated answer: cut back to the last complete
@@ -280,9 +347,15 @@ router.post('/explain-finding', verifyToken, async (req, res) => {
   }
 
   // ── 2. Cache hit ─────────────────────────────────────────────────────────
+  // Rows written before the reasoning-leak fix can hold a model's deliberation.
+  // Re-validate on read so a poisoned cache heals itself instead of serving
+  // the same bad text forever.
   const cached = report?.finding_explanations?.[lang]?.[parameter];
   if (cached && req.query.force !== 'true') {
-    return res.json({ explanation: cached, cached: true });
+    if (!looksLikeReasoning(cached)) {
+      return res.json({ explanation: cached, cached: true });
+    }
+    console.warn(`[explain-finding] Cached explanation for "${parameter}" (${lang}) looks like model reasoning — regenerating`);
   }
 
   // ── 3. Resolve the finding — server-side when we have the report ─────────
@@ -344,9 +417,13 @@ Keep the whole answer under 70 words and always finish your final sentence.${int
       });
 
       const choice = response.choices[0];
-      const text = cleanExplanation(choice?.message?.content);
+      const rawText = choice?.message?.content;
+      const text = cleanExplanation(rawText);
       if (!text) {
-        console.warn(`[explain-finding] ${name} returned empty content for "${parameter}" (finish_reason: ${choice?.finish_reason}) — trying next provider`);
+        const why = rawText?.trim()
+          ? `content was model reasoning, not an answer (${wordCount(rawText)} words)`
+          : `returned empty content (finish_reason: ${choice?.finish_reason})`;
+        console.warn(`[explain-finding] ${name} rejected for "${parameter}" — ${why} — trying next provider`);
         continue;
       }
 
