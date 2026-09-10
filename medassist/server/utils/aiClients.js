@@ -96,12 +96,16 @@ function getProviders() {
     groq: {
       name: 'Groq',
       client: makeClient(process.env.GROQ_API_KEY, 'https://api.groq.com/openai/v1', {}, '/openai/v1'),
-      // Both slugs verified 2026-08-13: valid JSON in `content` (not reasoning_content),
-      // and both drive the real medicalTools definitions via tool_calls.
-      model: 'llama-3.3-70b-versatile',
-      fallbackModels: ['llama-3.3-70b-versatile', 'openai/gpt-oss-120b'],
+      // llama-3.3-70b-versatile was decommissioned by Groq — every call 404s with
+      // "does not exist or you do not have access to it", verified 2026-09-09
+      // against GET /openai/v1/models, which no longer lists it. It was the lead
+      // model here, so Groq was failing over on every single request.
+      // Both slugs below are in that live catalogue and were re-verified the same
+      // day: clean patient-facing prose in `content`, no reasoning leakage.
+      model: 'openai/gpt-oss-120b',
+      fallbackModels: ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b'],
       // gpt-oss-120b leads for analysis — same latency, markedly fuller output.
-      analysisModels: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile'],
+      analysisModels: ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b'],
     },
     // SambaNova — free tier ended. Every model 402s with balance_units: 0 and
     // PAYMENT_METHOD_REQUIRED, verified across all three keys on 2026-08-13. The model
