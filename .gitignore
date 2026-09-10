@@ -27,6 +27,10 @@ medassist/client/.env
 # Build outputs
 medassist/client/dist/
 
+# Python bytecode, left behind by the docs/*.py document generators
+__pycache__/
+*.pyc
+
 # Uploaded files (user data — never commit)
 medassist/server/uploads/
 uploads/
