@@ -139,6 +139,13 @@ export default function SharedReport() {
         {analysis?.diet_plan && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
             <h2 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">Diet Plan</h2>
+            {/* Same provenance line as the patient view, in the third person —
+                whoever opens a share link is often not the patient. */}
+            <p className="text-xs text-slate-500 leading-relaxed border-l-2 border-emerald-200 pl-3 mb-3">
+              Prepared from the values in this report and the details in the patient&rsquo;s profile,
+              including allergies and current medicines. The treating doctor can confirm what is
+              right for them.
+            </p>
             {analysis.diet_plan.overview && (
               <p className="text-sm text-slate-600 mb-3">{analysis.diet_plan.overview}</p>
             )}

@@ -1134,6 +1134,12 @@ export default function Analysis() {
           {analysis?.diet_plan && (
             <Section title={t('analysis.dietPlan')} collapsible>
               <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
+                {/* Where the plan came from, and who decides. Static UI copy rather
+                    than model output, so it cannot be reworded by a provider — and
+                    it is a locale key, so it follows the selected language. */}
+                <p className="text-xs text-slate-500 leading-relaxed border-l-2 border-emerald-200 pl-3">
+                  {t('analysis.dietBasis')}
+                </p>
                 {analysis.diet_plan.overview && (
                   <p className="text-slate-600 text-sm">{translatedData?.diet_overview ?? analysis.diet_plan.overview}</p>
                 )}
