@@ -208,7 +208,7 @@ ${abnormalLines}`;
         temperature: 0.7,
         max_tokens: 400,
       });
-      script = cleanExplanation(response.choices[0]?.message?.content);
+      script = cleanExplanation(response.choices[0]?.message?.content, MAX_NARRATION_WORDS);
       if (script) break;
       console.warn(`[narrate-report] ${name} returned empty content — trying next provider`);
     } catch (err) {
@@ -240,23 +240,43 @@ ${abnormalLines}`;
 // rather than answering. Spanish runs longer than English, hence the slack.
 const MAX_EXPLANATION_WORDS = 100;
 
+// Each route's ceiling sits above what its own prompt asks for, so a compliant
+// answer is never mistaken for deliberation. narrate-report asks for 200-250
+// words and report-chat for "under 120 words"; judging both against the
+// 100-word explain-finding default is what truncated every narration to a
+// single paragraph and made report-chat fail over to a 503.
+const MAX_NARRATION_WORDS = 320;
+const MAX_CHAT_WORDS = 140;
+
 // Phrases a model uses when reasoning *about* the task instead of doing it.
 // Observed in production: Cerebras gpt-oss-120b returned its full deliberation
 // ("We need to produce 2-3 sentences... Let's craft:... Count words:") in
 // `content` with no <think> wrapper, and it was served to the patient verbatim.
-const REASONING_MARKERS = /\b(we need to (produce|write|cover|craft)|let'?s (craft|try|rewrite|adjust|check|count)|word count|count words|total words|under \d+ words|must be (warm|under|okay)|that'?s (okay|fine|plain|still jargon)|check (jargon|no jargon)|sentence\s?\d|the instruction:|no medical jargon:|avoid terms like|maybe considered jargon|could we replace|make sure warm|is (plain|okay)\.|user asks)/i;
+// `we need to \w+` rather than a closed verb list: the list missed "we need to
+// answer", which is how the report-chat deliberation opens, and a closed list
+// has to be extended every time a model phrases it differently. Same reason for
+// the broader `must <verb>` — observed as "Must cite actual numbers".
+const REASONING_MARKERS = /\b(we need to \w+|let'?s (craft|try|rewrite|adjust|check|count)|word count|count words|total words|under \d+ words|must (be (warm|under|okay)|cite|avoid|keep|use|start|end)|that'?s (okay|fine|plain|still jargon)|check (jargon|no jargon)|sentence\s?\d|the instruction:|no medical jargon:|avoid terms like|maybe considered jargon|could we replace|make sure warm|is (plain|okay)\.|user asks)/i;
 
 function wordCount(text) {
   return (String(text).trim().match(/\S+/g) || []).length;
 }
 
-/** True when the text reads as a model's private deliberation, not an answer. */
-function looksLikeReasoning(text) {
+/**
+ * True when the text reads as a model's private deliberation, not an answer.
+ *
+ * `maxWords` is per-caller because the length signal is only meaningful
+ * relative to what that route's prompt asked for. narrate-report asks for
+ * 200-250 words; judging it against the 100-word default classified every
+ * correct narration as reasoning and reduced it to a single paragraph.
+ * The marker and enumeration checks are absolute and apply at every length.
+ */
+function looksLikeReasoning(text, maxWords = MAX_EXPLANATION_WORDS) {
   if (!text) return true;
   if (REASONING_MARKERS.test(text)) return true;
   // Enumerated word-counting ("This(1) test2 measures3 ...") is unmistakable.
   if (/\b\w+\d+\s+\w+\d+\s+\w+\d+/.test(text)) return true;
-  return wordCount(text) > MAX_EXPLANATION_WORDS;
+  return wordCount(text) > maxWords;
 }
 
 /** Strip a wrapping pair of quotes the model used to set off a drafted answer. */
@@ -274,7 +294,7 @@ function unquote(text) {
  * from the end and the first that reads as an answer wins. Returning null makes
  * the caller fail over to the next provider rather than serve deliberation.
  */
-function cleanExplanation(raw) {
+function cleanExplanation(raw, maxWords = MAX_EXPLANATION_WORDS) {
   // Only unpick harmony role words when harmony markers were actually present —
   // otherwise a legitimate answer opening with "Final..." would lose its word.
   const hadHarmonyMarkers = /<\|[^|>]*\|>/.test(raw || '');
@@ -296,13 +316,13 @@ function cleanExplanation(raw) {
     .trim();
 
   if (!stripped) return '';
-  if (!looksLikeReasoning(stripped)) return stripped;
+  if (!looksLikeReasoning(stripped, maxWords)) return stripped;
 
   // Deliberation detected — hunt for the drafted answer inside it.
   const paragraphs = stripped.split(/\n\s*\n/).map((p) => unquote(p.trim())).filter(Boolean);
   for (let i = paragraphs.length - 1; i >= 0; i--) {
     const p = paragraphs[i];
-    if (looksLikeReasoning(p)) continue;
+    if (looksLikeReasoning(p, maxWords)) continue;
     if (wordCount(p) < 15) continue;          // too short to be the explanation
     if (!/[.!?]["”'']?$/.test(p)) continue;   // unfinished — the caller has a trim path
     return p;
@@ -578,7 +598,7 @@ ${ingredientsList ? `Helpful recovery ingredients: ${ingredientsList}` : ''}`;
         temperature: 0.6,
         max_tokens: 300,
       });
-      reply = cleanExplanation(response.choices[0]?.message?.content);
+      reply = cleanExplanation(response.choices[0]?.message?.content, MAX_CHAT_WORDS);
       if (reply) break;
       console.warn(`[report-chat] ${name} returned empty content — trying next provider`);
     } catch (err) {
