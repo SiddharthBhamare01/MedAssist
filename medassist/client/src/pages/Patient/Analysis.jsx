@@ -1193,6 +1193,13 @@ export default function Analysis() {
           {analysis?.recovery_ingredients?.length > 0 && (
             <Section title={t('analysis.recoveryIngredients')} collapsible>
               <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
+                {/* Same provenance note as the diet card. This card carries the
+                    mark-as-taken control, so it also says what ticking one off
+                    does and does not mean — the list is dropped entirely when
+                    the anemia cause is unconfirmed (bloodReportAgent dietGated). */}
+                <p className="text-xs text-slate-500 leading-relaxed border-l-2 border-teal-200 pl-3">
+                  {t('analysis.recoveryBasis')}
+                </p>
                 {analysis.recovery_ingredients.map((item, i) => {
                   const taken = supplementLogs.has(item.ingredient);
                   const streak = supplementStreaks.get(item.ingredient) || 0;

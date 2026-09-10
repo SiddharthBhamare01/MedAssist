@@ -66,6 +66,7 @@
     "dietPlan": "Plan de Dieta",
     "dietBasis": "Preparado a partir de los valores de su informe más reciente y los datos de su perfil, incluidas sus alergias y sus medicamentos actuales. Su médico puede confirmar lo que es adecuado para usted.",
     "recoveryIngredients": "Ingredientes de Recuperación",
+    "recoveryBasis": "Seleccionados según los valores anormales de su informe más reciente y los datos de su perfil, incluidas sus alergias y sus medicamentos actuales. Marcarlos registra lo que ha tomado, no qué tan bien está funcionando; su médico puede confirmar lo que es adecuado para usted.",
     "followUp": "Seguimiento",
     "chat": "Pregunta Sobre Tus Resultados",
     "parameterProgress": "Progreso de Parámetros Anormales",

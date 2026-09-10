@@ -66,6 +66,7 @@
     "dietPlan": "Diet Plan",
     "dietBasis": "Prepared from the values in your latest report and the details in your profile, including your allergies and current medicines. Your doctor can confirm what is right for you.",
     "recoveryIngredients": "Recovery Ingredients",
+    "recoveryBasis": "Chosen against the abnormal values in your latest report and the details in your profile, including your allergies and current medicines. Marking them off records what you have taken, not how well it is working — your doctor can confirm what is right for you.",
     "followUp": "Follow-Up Care",
     "chat": "Ask About Your Results",
     "parameterProgress": "Abnormal Parameter Progress",
