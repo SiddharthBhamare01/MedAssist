@@ -39,9 +39,19 @@ const MAX_TTS_CHARS = 2000;
  * sizes satisfy that; a large jump after a short opener does not.
  */
 function chunkForSpeech(text, firstMax = 110, restMax = 220) {
+  // Mask the decimal point in a lab value before splitting on sentence ends.
+  // Every number in a report has one, and "hemoglobin is 10.4" was being cut
+  // after "10." — the chunks rejoin with a space and the voice reads
+  // "ten. four" instead of "ten point four".
+  // U+E000 is a private-use code point: it cannot occur in a narration, so
+  // restoring it afterwards can never corrupt real text. Built with
+  // String.fromCharCode so the sentinel stays visible to a reader.
+  const DECIMAL = String.fromCharCode(0xE000);
+  const masked = text.replace(/\s+/g, ' ').trim().replace(/(\d)\.(\d)/g, `$1${DECIMAL}$2`);
+
   const sentences = (
-    text.replace(/\s+/g, ' ').trim().match(/[^.!?]+[.!?]+|\S[^.!?]*$/g) || [text]
-  ).map((s) => s.trim()).filter(Boolean);
+    masked.match(/[^.!?]+[.!?]+|\S[^.!?]*$/g) || [masked]
+  ).map((s) => s.split(DECIMAL).join('.').trim()).filter(Boolean);
 
   const chunks = [];
   let buf = '';
@@ -153,8 +163,17 @@ router.post('/narrate-report', verifyToken, async (req, res) => {
       [reportId, req.user.userId]
     );
     const cachedScript = rows[0]?.narration_script;
-    if (cachedScript) {
+    if (cachedScript && isUsableNarration(cachedScript)) {
       return res.json({ chunks: chunkForSpeech(cachedScript), cached: true });
+    }
+    if (cachedScript) {
+      // Cached before the per-route word ceiling existed, when a correct
+      // 200-250 word narration was classified as deliberation and cut to one
+      // paragraph. The cache had no invalidation, so those rows played ~5
+      // seconds and then stopped, forever. Fall through and regenerate.
+      console.warn(
+        `[narrate-report] Discarding unusable cached script (${wordCount(cachedScript)} words) — regenerating`
+      );
     }
   } catch (err) {
     console.warn('[narrate-report] Script cache unavailable:', err.message);
@@ -206,7 +225,12 @@ ${abnormalLines}`;
           { role: 'user', content: scriptPrompt },
         ],
         temperature: 0.7,
-        max_tokens: 400,
+        // Reasoning models spend the budget before the narration starts: at 400
+        // gpt-oss-120b burned ~650 tokens deliberating and stopped on
+        // finish_reason "length" partway through, yielding an 82-word script
+        // where the prompt asks for 200-250. At 1400 it finishes on "stop" with
+        // a full 300-word narration.
+        max_tokens: 1400,
       });
       script = cleanExplanation(response.choices[0]?.message?.content, MAX_NARRATION_WORDS);
       if (script) break;
@@ -225,10 +249,17 @@ ${abnormalLines}`;
     return res.status(503).json({ error: 'Could not generate narration script. Try again.' });
   }
 
-  pool.query(
-    'UPDATE blood_reports SET narration_script = $1 WHERE id = $2 AND patient_id = $3',
-    [script, reportId, req.user.userId]
-  ).catch((e) => console.warn('[narrate-report] Could not cache script:', e.message));
+  // Only cache what is worth replaying. A short or deliberative script is still
+  // returned to the caller, but storing it is what made the old truncation
+  // permanent — the cache is served before the LLM is ever reached again.
+  if (isUsableNarration(script)) {
+    pool.query(
+      'UPDATE blood_reports SET narration_script = $1 WHERE id = $2 AND patient_id = $3',
+      [script, reportId, req.user.userId]
+    ).catch((e) => console.warn('[narrate-report] Could not cache script:', e.message));
+  } else {
+    console.warn(`[narrate-report] Not caching a ${wordCount(script)}-word script`);
+  }
 
   return res.json({ chunks: chunkForSpeech(script) });
 });
@@ -247,6 +278,24 @@ const MAX_EXPLANATION_WORDS = 100;
 // single paragraph and made report-chat fail over to a 503.
 const MAX_NARRATION_WORDS = 320;
 const MAX_CHAT_WORDS = 140;
+
+// A narration shorter than this is not a narration. The prompt asks for a
+// spoken 200-250 words covering greeting, finding, each abnormal value,
+// lifestyle and closing; anything near a third of that lost its body somewhere
+// and would play for a few seconds and stop.
+const MIN_NARRATION_WORDS = 120;
+
+/**
+ * Whether a narration script is fit to read to a patient.
+ *
+ * Applied on the way out of the cache as well as on the way in, because the
+ * cache predates this check and holds scripts written when there was none.
+ */
+function isUsableNarration(script) {
+  const words = wordCount(script || '');
+  if (words < MIN_NARRATION_WORDS) return false;
+  return !looksLikeReasoning(script, MAX_NARRATION_WORDS);
+}
 
 // Phrases a model uses when reasoning *about* the task instead of doing it.
 // Observed in production: Cerebras gpt-oss-120b returned its full deliberation
@@ -596,7 +645,10 @@ ${ingredientsList ? `Helpful recovery ingredients: ${ingredientsList}` : ''}`;
         model: provider.model,
         messages,
         temperature: 0.6,
-        max_tokens: 300,
+        // Same reasoning-token squeeze as narrate-report: at 300 half the runs
+        // ended on finish_reason "length", cutting the answer off mid-sentence.
+        // Replies land at ~105 words either way, well inside MAX_CHAT_WORDS.
+        max_tokens: 800,
       });
       reply = cleanExplanation(response.choices[0]?.message?.content, MAX_CHAT_WORDS);
       if (reply) break;
