@@ -34,4 +34,28 @@ function isTreatmentRequest(message) {
   return TREATMENT_SOFT.test(text) && !SELF_CARE_TOPIC.test(text);
 }
 
-module.exports = { isTreatmentRequest, TREATMENT_DEFERRAL };
+// ── Outgoing check ──────────────────────────────────────────────────────────
+// The guardrail above screens what the patient asks. Nothing screened what the
+// product says back, and the spoken narration is not a reply to a question — no
+// patient message ever passes through isTreatmentRequest on that route. An
+// observed narration closed with "a gentle iron supplement taken with food can
+// help raise your levels more quickly" — treatment advice, read aloud. The
+// dietary gate does not catch it: that gate governs whether food guidance may
+// target the condition, and this was outside food entirely.
+//
+// Deliberately narrower than TREATMENT_EXPLICIT: bare "mg" is dropped because
+// lab units (mg/dL, ng/mL) appear in every narration, and this must not fire on
+// a value being read out. It targets advice to take a thing, not the mention of
+// a unit.
+const TREATMENT_ADVICE_OUT = /\b(supplements?|tablets?|pills?|capsules?|medications?|medicines?|drugs?|prescriptions?|prescribed?|dosages?|doses?|injections?|infusions?|transfusions?|antibiotics?|steroids?|chemotherapy|suplementos?|pastillas?|píldoras?|cápsulas?|medicamentos?|medicinas?|fármacos?|recetad[oa]s?|dosis|inyecci[oó]n(?:es)?|infusi[oó]n(?:es)?|transfusi[oó]n(?:es)?|antibi[oó]ticos?|esteroides?)\b/i;
+
+/**
+ * True when generated patient-facing text recommends a medicine, supplement or
+ * procedure. Used to reject a script before it is spoken or cached, so the
+ * boundary does not depend on the model having obeyed its prompt.
+ */
+function containsTreatmentAdvice(text) {
+  return TREATMENT_ADVICE_OUT.test(String(text || ''));
+}
+
+module.exports = { isTreatmentRequest, containsTreatmentAdvice, TREATMENT_DEFERRAL };

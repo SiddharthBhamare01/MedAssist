@@ -4,7 +4,9 @@ const {
   getProviders, getAvailableProviders, getAvailableVoiceProviders,
   isProviderLimited, markProviderLimited, markProviderLimitedRPM,
 } = require('../utils/aiClients');
-const { isTreatmentRequest, TREATMENT_DEFERRAL } = require('../utils/treatmentGuardrail');
+const {
+  isTreatmentRequest, containsTreatmentAdvice, TREATMENT_DEFERRAL,
+} = require('../utils/treatmentGuardrail');
 
 /**
  * Bench a provider after a failure so the next request doesn't pay for the same
@@ -154,6 +156,13 @@ router.post('/narrate-report', verifyToken, async (req, res) => {
     return res.status(500).json({ error: 'Failed to fetch report' });
   }
 
+  // Logged on every call, cache hit included: a cached script was written under
+  // whatever scope applied then, and this is the only way to see which one a
+  // patient is actually being read.
+  console.log(
+    `[narrate-report] dietary scope: ${report.analysis?.anemia?.dietary_guidance || 'absent (pre-gate report)'}`
+  );
+
   // A report's analysis is immutable once written, so its narration is too —
   // serve the stored script and skip the LLM entirely on repeat plays.
   // Best-effort: if migration 008 hasn't run, regenerate rather than fail.
@@ -189,6 +198,16 @@ router.post('/narrate-report', verifyToken, async (req, res) => {
       ).join('\n')
     : '- All values are within the normal range.';
 
+  // The spoken narration has to obey the same dietary gate as the written plan.
+  // bloodReportAgent decides, in code, whether the cause is confirmed enough to
+  // justify condition-targeted nutrition; the narration was generated without
+  // ever being told, so it could theme its lifestyle tips around iron on a
+  // report the rule engine had explicitly refused to target.
+  const anemia = analysis.anemia || {};
+  const dietScope = anemia.dietary_guidance === 'condition_specific'
+    ? `The cause is CONFIRMED, so food suggestions may target it${anemia.type_label ? ` (${anemia.type_label})` : ''}.`
+    : `The cause is NOT confirmed${anemia.dietary_guidance_reason ? ` — ${anemia.dietary_guidance_reason}` : ''}. Keep the lifestyle tips to general balanced nutrition. Do NOT theme them around iron, B12 or folate, and do NOT imply food will fix the cause.`;
+
   const scriptPrompt = `You are a warm, empathetic doctor speaking directly to a patient after reviewing their blood test results. Write a clear, calm 2-minute spoken narration (about 200-250 words) in this exact order:
 
 1. GREETING — Start with a brief friendly greeting and tell the patient you have reviewed their blood report.
@@ -196,6 +215,13 @@ router.post('/narrate-report', verifyToken, async (req, res) => {
 3. ABNORMAL VALUES — Walk through the key abnormal findings one by one in plain English. For each one, say what the parameter does in the body, whether it is too high or too low, and what that means for the patient's health day-to-day.
 4. LIFESTYLE TIPS — Give one or two simple, practical lifestyle suggestions based on the findings.
 5. CLOSING — End with encouragement and a reminder to follow up with their doctor.
+
+SAFETY BOUNDARY — this is not negotiable:
+- NEVER name, recommend or discuss a medication, drug, supplement, dose or medical procedure. Not even "a gentle iron supplement", and not even framed as optional.
+- Food, drink and lifestyle guidance IS allowed — that is not treatment.
+- Anything about what to take belongs with their doctor. Say so and move on.
+
+DIETARY SCOPE — obey this exactly: ${dietScope}
 
 Do NOT use medical jargon. Do NOT say "your analysis shows" — speak naturally as if talking to the patient in person.
 Do NOT include any JSON, bullet points, section headers, or formatting — just flowing spoken sentences.
@@ -233,6 +259,13 @@ ${abnormalLines}`;
         max_tokens: 1400,
       });
       script = cleanExplanation(response.choices[0]?.message?.content, MAX_NARRATION_WORDS);
+      // The boundary is enforced here, not left to the prompt. A script that
+      // recommends a medicine or supplement is discarded and the next provider
+      // is asked, exactly as an empty one would be.
+      if (script && containsTreatmentAdvice(script)) {
+        console.warn(`[narrate-report] ${name} recommended a treatment — discarding, trying next provider`);
+        script = null;
+      }
       if (script) break;
       console.warn(`[narrate-report] ${name} returned empty content — trying next provider`);
     } catch (err) {
@@ -294,6 +327,7 @@ const MIN_NARRATION_WORDS = 120;
 function isUsableNarration(script) {
   const words = wordCount(script || '');
   if (words < MIN_NARRATION_WORDS) return false;
+  if (containsTreatmentAdvice(script)) return false;
   return !looksLikeReasoning(script, MAX_NARRATION_WORDS);
 }
 
