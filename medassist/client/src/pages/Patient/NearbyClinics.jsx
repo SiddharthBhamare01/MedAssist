@@ -96,8 +96,10 @@ function SkeletonCard() {
 export default function NearbyClinics() {
   const [status, setStatus]       = useState('idle');
   const [errorType, setErrorType] = useState('');
+  const [errorDetail, setErrorDetail] = useState(null);
   const [userLoc, setUserLoc]     = useState(null);
   const [places, setPlaces]       = useState([]);
+  const [degraded, setDegraded]   = useState(null);
   const [filter, setFilter]       = useState('All');
   const [radiusMiles, setRadiusMiles] = useState(10);
 
@@ -106,11 +108,20 @@ export default function NearbyClinics() {
     api.get(`/patient/clinics?lat=${lat}&lng=${lng}&radius=${Math.round(radiusMeters)}`)
       .then(res => {
         setPlaces(res.data.places || []);
+        // The server falls back to a narrower search when the full map search
+        // is down. A short list has to be labelled as a short list — telling a
+        // patient these are all the clinics near them when they are not is the
+        // kind of quiet overclaim this product is built to avoid.
+        setDegraded(res.data.degraded ? (res.data.notes || []) : null);
         setStatus('done');
       })
       .catch(err => {
-        const errCode = err.response?.data?.error || 'unknown';
-        setErrorType(errCode);
+        const data = err.response?.data || {};
+        setErrorType(data.error || 'unknown');
+        setErrorDetail({
+          mirrorFailures: data.mirror_failures || [],
+          fallbackError: data.fallback_error || null,
+        });
         setStatus('error');
         toast.error('Could not load nearby clinics.');
       });
@@ -238,8 +249,38 @@ export default function NearbyClinics() {
             {(errorType === 'overpass_failed' || errorType === 'unknown') && (
               <>
                 <p className="font-semibold text-slate-700 dark:text-slate-200">Could not fetch nearby places</p>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">All map mirrors failed. Check your connection and try again.</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  Both the map search and the backup search failed. That is usually the network
+                  rather than this app &mdash; the details below say which.
+                </p>
               </>
+            )}
+
+            {/* What actually failed, and why. A generic "all mirrors failed" cannot
+                tell a provider outage apart from a network that blocks the map API,
+                and those have completely different fixes. */}
+            {errorDetail?.mirrorFailures?.length > 0 && (
+              <div className="mt-3 text-left bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  Map service diagnostics
+                </p>
+                <ul className="mt-1.5 space-y-1">
+                  {errorDetail.mirrorFailures.map(f => (
+                    <li key={f.mirror} className="text-[11px] text-slate-500 dark:text-slate-400 font-mono leading-snug">
+                      <span className="text-slate-600 dark:text-slate-300">{f.mirror}</span> &mdash; {f.reason}
+                    </li>
+                  ))}
+                </ul>
+                {errorDetail.fallbackError && (
+                  <p className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400 font-mono leading-snug">
+                    <span className="text-slate-600 dark:text-slate-300">backup search</span> &mdash; {errorDetail.fallbackError}
+                  </p>
+                )}
+                <p className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
+                  If every line reads &ldquo;no response&rdquo;, the network this server is on is
+                  blocking the map API. On a different network the same code works.
+                </p>
+              </div>
             )}
           </div>
           <button
@@ -254,6 +295,21 @@ export default function NearbyClinics() {
       {/* ── Map + results ── */}
       {(status === 'loading' || status === 'done') && (
         <>
+          {/* Narrower-search notice — only when the server actually fell back */}
+          {degraded && (
+            <div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3">
+              <svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              <div>
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">This is a partial list</p>
+                {degraded.map((note, i) => (
+                  <p key={i} className="text-xs text-amber-700 dark:text-amber-300 mt-0.5 leading-relaxed">{note}</p>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Legend */}
           <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
             <span className="flex items-center gap-1.5">
@@ -372,6 +428,14 @@ export default function NearbyClinics() {
                         {place.specialization && (
                           <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${badgeClass}`}>
                             {place.specialization}
+                          </span>
+                        )}
+                        {/* What OSM says the place specialises in — kept apart from the
+                            category badge, because the two answer different questions and
+                            conflating them is what hid hospitals from the Hospital tab. */}
+                        {place.speciality && (
+                          <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                            {String(place.speciality).replace(/[_;]+/g, ' ')}
                           </span>
                         )}
                       </div>

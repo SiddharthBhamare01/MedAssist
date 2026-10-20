@@ -8,6 +8,20 @@ const {
   getPatientSessions,
 } = require('../models/patientQueries');
 const { getNearbyDoctors } = require('../services/osmService');
+const { canonicalKey, parseNumeric } = require('../services/anemiaClassifier');
+
+/**
+ * Which vital types a blood report can actually supply, and the canonical
+ * parameter that supplies them.
+ *
+ * Deliberately short, and deliberately explicit about the gaps. Blood pressure,
+ * weight, heart rate, oxygen saturation and temperature are measured on a body,
+ * not in a blood sample — no report will ever carry them, and the interface
+ * should say so rather than leave a patient wondering why their chart is empty.
+ */
+const VITAL_FROM_REPORT = {
+  glucose: { parameter: 'glucose', unit: 'mg/dL' },
+};
 
 // GET /api/patient/profile
 router.get('/profile', verifyToken, async (req, res) => {
@@ -201,6 +215,67 @@ router.get('/vitals', verifyToken, async (req, res) => {
   } catch (err) {
     console.error('Get vitals error:', err);
     res.status(500).json({ error: 'Failed to fetch vitals' });
+  }
+});
+
+// GET /api/patient/vitals/from-reports?type=glucose&days=90
+// Readings a blood report already carries for this vital type.
+//
+// The vitals page and the report pipeline had no connection at all: a glucose
+// value read off an uploaded report never reached the glucose chart, so a
+// patient who had uploaded reports was still asked to type the number in by
+// hand. This returns those readings so the chart can show both, labelled by
+// where each came from. It is read-only and derives nothing — no row is copied
+// into vitals_logs, because a report value and a reading the patient took are
+// not the same kind of evidence and merging them in storage would lose that.
+router.get('/vitals/from-reports', verifyToken, async (req, res) => {
+  const { type, days } = req.query;
+  const mapping = VITAL_FROM_REPORT[type];
+
+  if (!mapping) {
+    return res.json({
+      readings: [],
+      supported: false,
+      reason: 'A blood report does not measure this vital. Readings here are the ones you enter.',
+    });
+  }
+
+  try {
+    const params = [req.user.userId];
+    let sql = `SELECT id, created_at, extracted_values
+                 FROM blood_reports
+                WHERE patient_id = $1 AND session_id IS NULL`;
+    if (days) {
+      params.push(parseInt(days, 10));
+      sql += ` AND created_at >= NOW() - INTERVAL '1 day' * $${params.length}`;
+    }
+    sql += ' ORDER BY created_at DESC LIMIT 50';
+
+    const { rows } = await pool.query(sql, params);
+
+    const readings = [];
+    for (const row of rows) {
+      for (const v of row.extracted_values || []) {
+        const key = canonicalKey(v.parameter) || canonicalKey(v.abbreviation);
+        if (key !== mapping.parameter) continue;
+        const value = parseNumeric(v.value);
+        if (value == null) continue;
+        readings.push({
+          value,
+          unit: v.unit || mapping.unit,
+          status: v.status || null,
+          recorded_at: row.created_at,
+          report_id: row.id,
+          source: 'report',
+        });
+        break; // one reading per report — the first matching row wins
+      }
+    }
+
+    return res.json({ readings, supported: true, parameter: mapping.parameter });
+  } catch (err) {
+    console.error('Get report-derived vitals error:', err);
+    return res.status(500).json({ error: 'Failed to fetch report-derived readings' });
   }
 });
 
@@ -458,14 +533,20 @@ router.get('/clinics', verifyToken, async (req, res) => {
   }
 
   try {
-    const places = await getNearbyDoctors(lat, lng, radius);
-    return res.json({ places });
+    const { places, source, degraded, notes } = await getNearbyDoctors(lat, lng, radius);
+    return res.json({ places, source, degraded, notes });
   } catch (err) {
     console.error('[/clinics]', err.message);
-    const isCircuit = err.message.includes('circuit open');
+    const isCircuit = !!err.circuitOpen;
     return res.status(503).json({
       error: isCircuit ? 'circuit_open' : 'overpass_failed',
       message: err.message,
+      // Which mirror failed and why. Without this the page could only say "all
+      // map mirrors failed", which does not distinguish a provider outage from
+      // a network that filters the Overpass API — two problems with completely
+      // different fixes, neither of them in this codebase.
+      mirror_failures: err.mirrorFailures || [],
+      fallback_error: err.fallbackError || null,
     });
   }
 });
