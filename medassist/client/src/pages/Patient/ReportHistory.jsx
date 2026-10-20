@@ -6,34 +6,104 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import api from '../../services/api';
 import CompareModal from '../../components/CompareModal';
 
+/**
+ * Parameters the engine actually reasons about, and nothing else.
+ *
+ * This list used to carry HbA1c, glucose, total cholesterol, LDL, HDL,
+ * triglycerides and creatinine. The engine does not consider any of them: it
+ * reads a CBC, confirms iron deficiency against iron studies, and makes no
+ * claim about diabetes, lipids or renal function — the Phase 2 review's point
+ * about naming instruments whose inputs we never collect applies just as much
+ * to charting a trend we cannot interpret. Plotting a lipid panel next to a
+ * WHO-cited hemoglobin determination implied the product had an opinion about
+ * it, and it does not.
+ *
+ * The first group is the CBC core, which the rule engine recomputes
+ * deterministically (`CBC_RECOMPUTE_KEYS` in services/anemiaClassifier.js). The
+ * second is the iron-studies workup it reads to decide CONFIRMED vs SUSPECTED.
+ * Keys are the engine's canonical keys, so this stays in step with the server
+ * by construction. Hemoglobin stays first: it is the default selection and the
+ * fallback when a stored selection no longer resolves.
+ */
 const KEY_PARAMS = [
-  { key: 'hemoglobin', label: 'Hemoglobin', unit: 'g/dL', color: '#ef4444' },
-  { key: 'hba1c', label: 'HbA1c', unit: '%', color: '#f97316' },
-  { key: 'glucose', label: 'Glucose', unit: 'mg/dL', color: '#eab308' },
-  { key: 'cholesterol', label: 'Cholesterol', unit: 'mg/dL', color: '#8b5cf6' },
-  { key: 'ldl', label: 'LDL', unit: 'mg/dL', color: '#ec4899' },
-  { key: 'hdl', label: 'HDL', unit: 'mg/dL', color: '#10b981' },
-  { key: 'triglycerides', label: 'Triglycerides', unit: 'mg/dL', color: '#3b82f6' },
-  { key: 'creatinine', label: 'Creatinine', unit: 'mg/dL', color: '#6366f1' },
-  { key: 'wbc', label: 'WBC', unit: 'K/uL', color: '#14b8a6' },
-  { key: 'platelets', label: 'Platelets', unit: 'K/uL', color: '#f59e0b' },
+  // CBC core — status recomputed by the rule engine
+  { key: 'hemoglobin',  label: 'Hemoglobin',  unit: 'g/dL',     color: '#ef4444', group: 'CBC' },
+  { key: 'hematocrit',  label: 'Hematocrit',  unit: '%',        color: '#f97316', group: 'CBC' },
+  { key: 'rbc',         label: 'RBC',         unit: 'x10⁶/µL',  color: '#eab308', group: 'CBC' },
+  { key: 'mcv',         label: 'MCV',         unit: 'fL',       color: '#84cc16', group: 'CBC' },
+  { key: 'mch',         label: 'MCH',         unit: 'pg',       color: '#10b981', group: 'CBC' },
+  { key: 'mchc',        label: 'MCHC',        unit: 'g/dL',     color: '#14b8a6', group: 'CBC' },
+  { key: 'rdw',         label: 'RDW',         unit: '%',        color: '#06b6d4', group: 'CBC' },
+  { key: 'wbc',         label: 'WBC',         unit: 'x10³/µL',  color: '#3b82f6', group: 'CBC' },
+  { key: 'platelets',   label: 'Platelets',   unit: 'x10³/µL',  color: '#6366f1', group: 'CBC' },
+  // Iron studies and deficiency workup — read to confirm or withhold a cause
+  { key: 'ferritin',               label: 'Ferritin',       unit: 'ng/mL', color: '#8b5cf6', group: 'Iron studies' },
+  { key: 'iron',                   label: 'Serum Iron',     unit: 'µg/dL', color: '#a855f7', group: 'Iron studies' },
+  { key: 'tibc',                   label: 'TIBC',           unit: 'µg/dL', color: '#c026d3', group: 'Iron studies' },
+  { key: 'transferrin_saturation', label: 'Transferrin Sat',unit: '%',     color: '#db2777', group: 'Iron studies' },
+  { key: 'reticulocytes',          label: 'Reticulocytes',  unit: '%',     color: '#e11d48', group: 'Iron studies' },
+  { key: 'vitamin_b12',            label: 'Vitamin B12',    unit: 'pg/mL', color: '#0ea5e9', group: 'Iron studies' },
+  { key: 'folate',                 label: 'Folate',         unit: 'ng/mL', color: '#0891b2', group: 'Iron studies' },
 ];
 
-function matchParam(name, key) {
-  if (!name) return false;
-  const n = name.toLowerCase();
-  if (key === 'hba1c') return n.includes('hba1c') || n.includes('hb a1c') || n.includes('glycated') || n.includes('a1c');
-  if (key === 'hdl') return n.includes('hdl');
-  if (key === 'ldl') return n.includes('ldl');
-  if (key === 'cholesterol')
-    return (n.includes('cholesterol') || n.includes('chol')) && !n.includes('ldl') && !n.includes('hdl');
-  return n.includes(key);
+/**
+ * Fallback name matching for rows stored before the server began tagging each
+ * extracted value with its canonical key.
+ *
+ * Exact lookup against a normalised name, never substring containment. The old
+ * `name.includes(key)` approach is what made MCH match "MCHC" and "Mean
+ * Corpuscular Hemoglobin Concentration", Iron match "Total Iron Binding
+ * Capacity", and Hemoglobin match "Mean Corpuscular Hemoglobin" — every one of
+ * those plots the wrong series under a confident label.
+ */
+const NAME_TO_KEY = {
+  hb: 'hemoglobin', hgb: 'hemoglobin', hemoglobin: 'hemoglobin', haemoglobin: 'hemoglobin',
+  hct: 'hematocrit', pcv: 'hematocrit', hematocrit: 'hematocrit', haematocrit: 'hematocrit',
+  'packed cell volume': 'hematocrit',
+  rbc: 'rbc', 'rbc count': 'rbc', 'red blood cell': 'rbc', 'red blood cells': 'rbc',
+  'red blood cell count': 'rbc', erythrocyte: 'rbc', erythrocytes: 'rbc',
+  mcv: 'mcv', 'mean corpuscular volume': 'mcv', 'mean cell volume': 'mcv',
+  mch: 'mch', 'mean corpuscular hemoglobin': 'mch', 'mean corpuscular haemoglobin': 'mch',
+  'mean cell hemoglobin': 'mch',
+  mchc: 'mchc', 'mean corpuscular hemoglobin concentration': 'mchc',
+  'mean corpuscular haemoglobin concentration': 'mchc',
+  rdw: 'rdw', 'rdw cv': 'rdw', 'rdw sd': 'rdw', 'red cell distribution width': 'rdw',
+  wbc: 'wbc', 'wbc count': 'wbc', 'white blood cell': 'wbc', 'white blood cells': 'wbc',
+  'white blood cell count': 'wbc', leukocyte: 'wbc', leukocytes: 'wbc', tlc: 'wbc',
+  'total leukocyte count': 'wbc',
+  platelet: 'platelets', platelets: 'platelets', 'platelet count': 'platelets',
+  plt: 'platelets', thrombocyte: 'platelets', thrombocytes: 'platelets',
+  ferritin: 'ferritin', 'serum ferritin': 'ferritin',
+  iron: 'iron', 'serum iron': 'iron',
+  tibc: 'tibc', 'total iron binding capacity': 'tibc',
+  tsat: 'transferrin_saturation', 'transferrin saturation': 'transferrin_saturation',
+  'transferrin sat': 'transferrin_saturation',
+  reticulocyte: 'reticulocytes', reticulocytes: 'reticulocytes', retic: 'reticulocytes',
+  'reticulocyte count': 'reticulocytes',
+  b12: 'vitamin_b12', 'vitamin b12': 'vitamin_b12', 'vit b12': 'vitamin_b12', cobalamin: 'vitamin_b12',
+  folate: 'folate', 'folic acid': 'folate', 'serum folate': 'folate',
+};
+
+function normaliseName(name) {
+  return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/** The canonical key for one extracted row — the server's tag, else by name. */
+function keyFor(value) {
+  if (value?.canonical_key) return value.canonical_key;
+  return NAME_TO_KEY[normaliseName(value?.parameter)]
+      || NAME_TO_KEY[normaliseName(value?.abbreviation)]
+      || null;
+}
+
+function matchParam(value, key) {
+  return keyFor(value) === key;
 }
 
 function buildTrendData(reports, paramKey) {
   return reports
     .map((r) => {
-      const match = (r.extracted_values || []).find((v) => matchParam(v.parameter, paramKey));
+      const match = (r.extracted_values || []).find((v) => matchParam(v, paramKey));
       if (!match) return null;
       const num = parseFloat(match.value);
       if (isNaN(num)) return null;
@@ -65,13 +135,32 @@ export default function ReportHistory() {
   const availableParams = useMemo(
     () =>
       KEY_PARAMS.filter((p) =>
-        reports.some((r) => (r.extracted_values || []).some((v) => matchParam(v.parameter, p.key)))
+        reports.some((r) => (r.extracted_values || []).some((v) => matchParam(v, p.key)))
       ),
     [reports]
   );
 
-  const paramConfig = KEY_PARAMS.find((p) => p.key === selectedParam) || KEY_PARAMS[0];
-  const trendData = useMemo(() => buildTrendData(reports, selectedParam), [reports, selectedParam]);
+  // Hemoglobin is the default, but a report set without it (an iron panel on
+  // its own, say) would otherwise land on an empty chart with no hint that
+  // other parameters are available. Derived rather than synced into state:
+  // writing the fallback back with setState inside an effect causes a second
+  // render pass for something that is purely a function of what loaded.
+  const effectiveParam = useMemo(() => {
+    if (availableParams.some((p) => p.key === selectedParam)) return selectedParam;
+    return availableParams[0]?.key ?? selectedParam;
+  }, [availableParams, selectedParam]);
+
+  const paramConfig = KEY_PARAMS.find((p) => p.key === effectiveParam) || KEY_PARAMS[0];
+  const trendData = useMemo(() => buildTrendData(reports, effectiveParam), [reports, effectiveParam]);
+
+  // Keep the two groups apart in the selector: the CBC core is what the rule
+  // engine recomputes, the iron studies are what it reads to confirm a cause.
+  const paramGroups = useMemo(() => {
+    const order = ['CBC', 'Iron studies'];
+    return order
+      .map((group) => ({ group, params: availableParams.filter((p) => p.group === group) }))
+      .filter((g) => g.params.length > 0);
+  }, [availableParams]);
 
   function toggleCompare(id) {
     setCompareIds((prev) => {
@@ -137,23 +226,36 @@ export default function ReportHistory() {
           {/* Trend Chart */}
           {availableParams.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
-              <h2 className="text-base font-semibold text-slate-800 mb-4">Parameter Trends</h2>
+              <h2 className="text-base font-semibold text-slate-800">Parameter Trends</h2>
+              <p className="text-xs text-slate-400 mt-0.5 mb-4">
+                The CBC parameters this app classifies by rule, and the iron studies it uses to
+                confirm a cause. Values your report carries outside this set are shown on the
+                report itself but not charted here &mdash; the engine makes no clinical judgement
+                about them.
+              </p>
 
-              {/* Param selector pills */}
-              <div className="flex flex-wrap gap-2 mb-6">
-                {availableParams.map((p) => (
-                  <button
-                    key={p.key}
-                    onClick={() => setSelectedParam(p.key)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all border ${
-                      selectedParam === p.key
-                        ? 'text-white border-transparent shadow-sm'
-                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-teal-300 hover:text-teal-700'
-                    }`}
-                    style={selectedParam === p.key ? { backgroundColor: p.color, borderColor: p.color } : {}}
-                  >
-                    {p.label}
-                  </button>
+              {/* Param selector pills, grouped */}
+              <div className="space-y-2.5 mb-6">
+                {paramGroups.map(({ group, params }) => (
+                  <div key={group} className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 w-full sm:w-auto sm:min-w-[84px] shrink-0">
+                      {group}
+                    </span>
+                    {params.map((p) => (
+                      <button
+                        key={p.key}
+                        onClick={() => setSelectedParam(p.key)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all border ${
+                          effectiveParam === p.key
+                            ? 'text-white border-transparent shadow-sm'
+                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-teal-300 hover:text-teal-700'
+                        }`}
+                        style={effectiveParam === p.key ? { backgroundColor: p.color, borderColor: p.color } : {}}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
                 ))}
               </div>
 

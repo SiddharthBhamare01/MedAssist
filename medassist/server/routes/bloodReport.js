@@ -7,7 +7,7 @@ const { extractBloodValuesFromImage } = require('../services/geminiService');
 const { validateExtraction, formatValidation } = require('../utils/extractionValidator');
 const { runBloodReportAgent } = require('../agents/bloodReportAgent');
 const { getPatientProfile, updateSessionStatus } = require('../models/patientQueries');
-const { recomputeStatuses, classifyAnemia, readNumeric } = require('../services/anemiaClassifier');
+const { recomputeStatuses, classifyAnemia, readNumeric, canonicalKey } = require('../services/anemiaClassifier');
 const { forecastRecovery } = require('../services/recoveryForecast');
 const pool = require('../db/pool');
 
@@ -347,7 +347,16 @@ router.get('/history', verifyToken, async (req, res) => {
       return {
         id: r.id,
         created_at: r.created_at,
-        extracted_values: extracted,
+        // Tag each row with the engine's own canonical key. The trend chart used
+        // to guess at parameter identity with substring matching in the browser,
+        // which both missed rows and collided (MCH matched MCHC, Iron matched
+        // Total Iron Binding Capacity). Resolving it here means the chart groups
+        // parameters by exactly the same function the rule engine classifies
+        // them with, rather than by a second, weaker copy of that logic.
+        extracted_values: extracted.map((v) => ({
+          ...v,
+          canonical_key: canonicalKey(v.parameter) || canonicalKey(v.abbreviation) || null,
+        })),
         total_parameters: extracted.length,
         abnormal_count: extracted.filter((v) => v.status && v.status !== 'normal').length,
         analyzed: !!(r.analysis && (r.analysis.summary || r.analysis.abnormal_findings?.length > 0)),
