@@ -18,32 +18,44 @@ import CompareModal from '../../components/CompareModal';
  * WHO-cited hemoglobin determination implied the product had an opinion about
  * it, and it does not.
  *
- * The first group is the CBC core, which the rule engine recomputes
- * deterministically (`CBC_RECOMPUTE_KEYS` in services/anemiaClassifier.js). The
- * second is the iron-studies workup it reads to decide CONFIRMED vs SUSPECTED.
+ * WBC and platelets came out for the same reason, one step finer. They are on
+ * every CBC and the engine does recompute their status, but they measure the
+ * white cells and the clotting line — neither has anything to do with an
+ * anemia, and sitting them beside hemoglobin on an anemia product's trend
+ * chart invites a reading of them this app will not give.
+ *
+ * What is left is the two questions the engine answers: is there an anemia
+ * (red cell), and why (cause workup). `classifyAnemia` reads seven of these
+ * directly — hemoglobin, MCV, MCH, RDW, ferritin, TIBC and transferrin
+ * saturation. The rest are the same two questions measured another way, which
+ * is why they are charted but not read.
+ *
  * Keys are the engine's canonical keys, so this stays in step with the server
  * by construction. Hemoglobin stays first: it is the default selection and the
  * fallback when a stored selection no longer resolves.
  */
 const KEY_PARAMS = [
-  // CBC core — status recomputed by the rule engine
-  { key: 'hemoglobin',  label: 'Hemoglobin',  unit: 'g/dL',     color: '#ef4444', group: 'CBC' },
-  { key: 'hematocrit',  label: 'Hematocrit',  unit: '%',        color: '#f97316', group: 'CBC' },
-  { key: 'rbc',         label: 'RBC',         unit: 'x10⁶/µL',  color: '#eab308', group: 'CBC' },
-  { key: 'mcv',         label: 'MCV',         unit: 'fL',       color: '#84cc16', group: 'CBC' },
-  { key: 'mch',         label: 'MCH',         unit: 'pg',       color: '#10b981', group: 'CBC' },
-  { key: 'mchc',        label: 'MCHC',        unit: 'g/dL',     color: '#14b8a6', group: 'CBC' },
-  { key: 'rdw',         label: 'RDW',         unit: '%',        color: '#06b6d4', group: 'CBC' },
-  { key: 'wbc',         label: 'WBC',         unit: 'x10³/µL',  color: '#3b82f6', group: 'CBC' },
-  { key: 'platelets',   label: 'Platelets',   unit: 'x10³/µL',  color: '#6366f1', group: 'CBC' },
-  // Iron studies and deficiency workup — read to confirm or withhold a cause
-  { key: 'ferritin',               label: 'Ferritin',       unit: 'ng/mL', color: '#8b5cf6', group: 'Iron studies' },
-  { key: 'iron',                   label: 'Serum Iron',     unit: 'µg/dL', color: '#a855f7', group: 'Iron studies' },
-  { key: 'tibc',                   label: 'TIBC',           unit: 'µg/dL', color: '#c026d3', group: 'Iron studies' },
-  { key: 'transferrin_saturation', label: 'Transferrin Sat',unit: '%',     color: '#db2777', group: 'Iron studies' },
-  { key: 'reticulocytes',          label: 'Reticulocytes',  unit: '%',     color: '#e11d48', group: 'Iron studies' },
-  { key: 'vitamin_b12',            label: 'Vitamin B12',    unit: 'pg/mL', color: '#0ea5e9', group: 'Iron studies' },
-  { key: 'folate',                 label: 'Folate',         unit: 'ng/mL', color: '#0891b2', group: 'Iron studies' },
+  // Red cell — what defines an anemia and what types it. Hemoglobin against the
+  // WHO cutoff decides whether an anemia is present at all; MCV, MCH and RDW
+  // decide which kind. Hematocrit, RBC and MCHC are the same red-cell mass
+  // measured other ways, so they belong to the same question.
+  { key: 'hemoglobin',  label: 'Hemoglobin',  unit: 'g/dL',     color: '#ef4444', group: 'Red cell' },
+  { key: 'hematocrit',  label: 'Hematocrit',  unit: '%',        color: '#f97316', group: 'Red cell' },
+  { key: 'rbc',         label: 'RBC',         unit: 'x10⁶/µL',  color: '#eab308', group: 'Red cell' },
+  { key: 'mcv',         label: 'MCV',         unit: 'fL',       color: '#84cc16', group: 'Red cell' },
+  { key: 'mch',         label: 'MCH',         unit: 'pg',       color: '#10b981', group: 'Red cell' },
+  { key: 'mchc',        label: 'MCHC',        unit: 'g/dL',     color: '#14b8a6', group: 'Red cell' },
+  { key: 'rdw',         label: 'RDW',         unit: '%',        color: '#06b6d4', group: 'Red cell' },
+  // Cause workup — why the anemia is there. Iron studies confirm or withhold
+  // iron deficiency; B12 and folate cover the macrocytic causes; reticulocytes
+  // show whether the marrow is responding.
+  { key: 'ferritin',               label: 'Ferritin',       unit: 'ng/mL', color: '#8b5cf6', group: 'Cause workup' },
+  { key: 'iron',                   label: 'Serum Iron',     unit: 'µg/dL', color: '#a855f7', group: 'Cause workup' },
+  { key: 'tibc',                   label: 'TIBC',           unit: 'µg/dL', color: '#c026d3', group: 'Cause workup' },
+  { key: 'transferrin_saturation', label: 'Transferrin Sat',unit: '%',     color: '#db2777', group: 'Cause workup' },
+  { key: 'reticulocytes',          label: 'Reticulocytes',  unit: '%',     color: '#e11d48', group: 'Cause workup' },
+  { key: 'vitamin_b12',            label: 'Vitamin B12',    unit: 'pg/mL', color: '#0ea5e9', group: 'Cause workup' },
+  { key: 'folate',                 label: 'Folate',         unit: 'ng/mL', color: '#0891b2', group: 'Cause workup' },
 ];
 
 /**
@@ -68,11 +80,6 @@ const NAME_TO_KEY = {
   mchc: 'mchc', 'mean corpuscular hemoglobin concentration': 'mchc',
   'mean corpuscular haemoglobin concentration': 'mchc',
   rdw: 'rdw', 'rdw cv': 'rdw', 'rdw sd': 'rdw', 'red cell distribution width': 'rdw',
-  wbc: 'wbc', 'wbc count': 'wbc', 'white blood cell': 'wbc', 'white blood cells': 'wbc',
-  'white blood cell count': 'wbc', leukocyte: 'wbc', leukocytes: 'wbc', tlc: 'wbc',
-  'total leukocyte count': 'wbc',
-  platelet: 'platelets', platelets: 'platelets', 'platelet count': 'platelets',
-  plt: 'platelets', thrombocyte: 'platelets', thrombocytes: 'platelets',
   ferritin: 'ferritin', 'serum ferritin': 'ferritin',
   iron: 'iron', 'serum iron': 'iron',
   tibc: 'tibc', 'total iron binding capacity': 'tibc',
@@ -156,7 +163,7 @@ export default function ReportHistory() {
   // Keep the two groups apart in the selector: the CBC core is what the rule
   // engine recomputes, the iron studies are what it reads to confirm a cause.
   const paramGroups = useMemo(() => {
-    const order = ['CBC', 'Iron studies'];
+    const order = ['Red cell', 'Cause workup'];
     return order
       .map((group) => ({ group, params: availableParams.filter((p) => p.group === group) }))
       .filter((g) => g.params.length > 0);
@@ -228,10 +235,11 @@ export default function ReportHistory() {
             <div className="bg-white rounded-2xl border border-slate-200 shadow p-6">
               <h2 className="text-base font-semibold text-slate-800">Parameter Trends</h2>
               <p className="text-xs text-slate-400 mt-0.5 mb-4">
-                The CBC parameters this app classifies by rule, and the iron studies it uses to
-                confirm a cause. Values your report carries outside this set are shown on the
-                report itself but not charted here &mdash; the engine makes no clinical judgement
-                about them.
+                Only what bears on anemia: the red-cell values that decide whether you have one
+                and which kind, and the tests that point to a cause. Everything else your report
+                carries &mdash; including white cells and platelets &mdash; is shown on the report
+                itself but not charted here, because this app makes no clinical judgement about
+                it.
               </p>
 
               {/* Param selector pills, grouped */}
