@@ -407,7 +407,7 @@ router.get('/trajectory', verifyToken, async (req, res) => {
         id: r.id,
         created_at: r.created_at,
         // Epoch ms, not a formatted date: two CBCs can land on the same day and a
-        // pre-formatted string key collides in the chart (see Vitals.jsx).
+        // pre-formatted string key collides in the chart.
         ts: new Date(r.created_at).getTime(),
         hb,
         unit: hbNode.unit || 'g/dL',

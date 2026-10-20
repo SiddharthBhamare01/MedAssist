@@ -4,7 +4,6 @@
     "uploadReport": "Upload Report",
     "myReports": "My Reports",
     "journey": "Recovery Journey",
-    "vitals": "Vitals",
     "myProfile": "My Profile",
     "findLab": "Find a Lab / Clinic",
     "newAssist": "New Assist",
@@ -213,24 +212,6 @@
     "loadError": "Could not load your recovery journey",
     "provenanceTitle": "Where do these numbers come from?",
     "provenanceBody": "Every point and the cutoff line are rule-computed by the validated anemia engine — no AI guessing. This chart only displays values that were already computed; it makes no prediction. Thresholds are tied to:"
-  },
-  "vitals": {
-    "title": "My Vitals",
-    "subtitle": "Log and track your daily health readings",
-    "bloodPressure": "Blood Pressure",
-    "bloodGlucose": "Blood Glucose",
-    "weight": "Weight",
-    "heartRate": "Heart Rate",
-    "spo2": "SpO2",
-    "temperature": "Temperature",
-    "logReading": "Log Reading",
-    "systolic": "Systolic",
-    "diastolic": "Diastolic",
-    "normalRange": "Normal range",
-    "noData": "No readings logged yet",
-    "save": "Save",
-    "saving": "Saving…",
-    "correlation": "Correlation with Your Latest Blood Report"
   },
   "upload": {
     "title": "Upload Blood Report",

@@ -18,11 +18,6 @@ const Icons = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
     </svg>
   ),
-  heart: (
-    <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z" />
-    </svg>
-  ),
   pill: (
     <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
       <path strokeLinecap="round" strokeLinejoin="round" d="m10.5 6 6.5 6.5m-7.5.5 2 2M4.5 19.5l6-6m-3-3 6-6a3.182 3.182 0 0 1 4.5 0v0a3.182 3.182 0 0 1 0 4.5l-6 6a3.182 3.182 0 0 1-4.5 0v0a3.182 3.182 0 0 1 0-4.5Z" />
@@ -138,7 +133,6 @@ const PATIENT_LINKS = [
   { to: '/patient/upload-report',  key: 'nav.uploadReport', icon: Icons.plusCircle },
   { to: '/patient/history',        key: 'nav.myReports',    icon: Icons.chartBar },
   { to: '/patient/journey',        key: 'nav.journey',      icon: Icons.beaker },
-  { to: '/patient/vitals',         key: 'nav.vitals',       icon: Icons.heart },
   { to: '/patient/clinics',        key: 'nav.findLab',      icon: Icons.mapPin },
   { to: '/patient/profile',        key: 'nav.myProfile',    icon: Icons.idCard },
 ];

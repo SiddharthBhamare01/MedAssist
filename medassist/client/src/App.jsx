@@ -22,7 +22,6 @@ import ReportHistory from './pages/Patient/ReportHistory';
 import UploadReport from './pages/Patient/UploadReport';
 import Analysis from './pages/Patient/Analysis';
 import PatientProfile from './pages/Patient/Profile';
-import Vitals from './pages/Patient/Vitals';
 import NearbyClinics from './pages/Patient/NearbyClinics';
 import AnemiaJourney from './pages/Patient/AnemiaJourney';
 
@@ -93,7 +92,6 @@ export default function App() {
           {/* Patient */}
           <Route path="/patient/dashboard" element={<P><PatientDashboard /></P>} />
           <Route path="/patient/history" element={<P><ReportHistory /></P>} />
-          <Route path="/patient/vitals" element={<P><Vitals /></P>} />
           <Route path="/patient/journey" element={<P><AnemiaJourney /></P>} />
           <Route path="/patient/clinics" element={<P><NearbyClinics /></P>} />
           <Route path="/patient/profile" element={<P><PatientProfile /></P>} />

@@ -4,7 +4,6 @@
     "uploadReport": "Subir Reporte",
     "myReports": "Mis Reportes",
     "journey": "Ruta de Recuperación",
-    "vitals": "Signos Vitales",
     "myProfile": "Mi Perfil",
     "findLab": "Buscar Laboratorio",
     "newAssist": "Nueva Asistencia",
@@ -213,24 +212,6 @@
     "loadError": "No se pudo cargar tu ruta de recuperación",
     "provenanceTitle": "¿De dónde vienen estos números?",
     "provenanceBody": "Cada punto y la línea de umbral son calculados por reglas del motor de anemia validado — sin conjeturas de IA. Este gráfico solo muestra valores ya calculados; no hace ninguna predicción. Los umbrales se basan en:"
-  },
-  "vitals": {
-    "title": "Mis Signos Vitales",
-    "subtitle": "Registra y rastrea tus lecturas de salud diarias",
-    "bloodPressure": "Presión Arterial",
-    "bloodGlucose": "Glucosa en Sangre",
-    "weight": "Peso",
-    "heartRate": "Frecuencia Cardíaca",
-    "spo2": "SpO2",
-    "temperature": "Temperatura",
-    "logReading": "Registrar Lectura",
-    "systolic": "Sistólica",
-    "diastolic": "Diastólica",
-    "normalRange": "Rango normal",
-    "noData": "Sin lecturas registradas aún",
-    "save": "Guardar",
-    "saving": "Guardando…",
-    "correlation": "Correlación con Tu Último Reporte de Sangre"
   },
   "upload": {
     "title": "Subir Reporte de Sangre",
