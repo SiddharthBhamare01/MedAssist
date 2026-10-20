@@ -59,6 +59,14 @@ const SYNONYMS = {
   'reticulocyte count': 'reticulocytes', 'retic count': 'reticulocytes',
   b12: 'vitamin_b12', 'vitamin b12': 'vitamin_b12', 'vit b12': 'vitamin_b12', cobalamin: 'vitamin_b12',
   folate: 'folate', 'folic acid': 'folate', 'serum folate': 'folate',
+  // Glucose resolved only through the direct REFERENCE_RANGES key below, so it
+  // matched the bare word "Glucose" and nothing else — every "Fasting Blood
+  // Sugar" and "Glucose, Fasting" on a real report came back unrecognised.
+  glucose: 'glucose', 'blood glucose': 'glucose', 'plasma glucose': 'glucose',
+  'fasting glucose': 'glucose', 'fasting blood glucose': 'glucose', 'glucose fasting': 'glucose',
+  'random glucose': 'glucose', 'random blood glucose': 'glucose', 'glucose random': 'glucose',
+  'blood sugar': 'glucose', 'fasting blood sugar': 'glucose', 'random blood sugar': 'glucose',
+  fbs: 'glucose', rbs: 'glucose', fbg: 'glucose',
 };
 
 // Which parameters get their status recomputed deterministically (CBC core set).
